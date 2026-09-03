@@ -1,4 +1,4 @@
 (sym_lib_table
 	(version 7)
-	(lib (name "TPS54325") (type "KiCad") (uri "/Users/matsk/brain/uni/9Q/Datamaskinprosjekt/ul_TPS54325PWP/KiCADv6/2026-09-03_11-26-00.kicad_sym") (options "") (descr ""))
+	(lib (name "TPS54325") (type "KiCad") (uri "${KIPRJMOD}/assets/ul_TPS54325PWP/KiCADv6/2026-09-03_11-26-00.kicad_sym") (options "") (descr ""))
 )

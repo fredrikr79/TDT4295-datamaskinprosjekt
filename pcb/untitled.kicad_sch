@@ -2,7 +2,7 @@
 	(version 20260306)
 	(generator "eeschema")
 	(generator_version "10.0")
-	(uuid "603dd496-f9c4-4a31-9104-19eec41ebc98")
+	(uuid "5d13d6a0-6e49-44eb-9743-ba347a7482ce")
 	(paper "A4")
 	(lib_symbols
 		(symbol "TPS54325:TPS54325PWP"
@@ -426,7 +426,7 @@
 	)
 	(symbol
 		(lib_id "TPS54325:TPS54325PWP")
-		(at 193.04 67.31 0)
+		(at 105.41 90.17 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -435,9 +435,9 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "9c0f61fc-6636-47c5-af3c-3955fb17c009")
-		(property "Reference" "U2"
-			(at 240.03 74.93 0)
+		(uuid "a3c29e87-bad2-4f54-b0bb-de1374f81890")
+		(property "Reference" "U1"
+			(at 152.4 97.79 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -447,7 +447,7 @@
 			)
 		)
 		(property "Value" "TPS54325PWP"
-			(at 240.03 77.47 0)
+			(at 152.4 100.33 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -457,7 +457,7 @@
 			)
 		)
 		(property "Footprint" "PWP14_2P31X2P46"
-			(at 207.01 85.09 0)
+			(at 119.38 107.95 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -469,7 +469,7 @@
 			)
 		)
 		(property "Datasheet" "https://www.ti.com/lit/gpn/tps54325"
-			(at 193.04 67.31 0)
+			(at 105.41 90.17 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -481,7 +481,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 193.04 67.31 0)
+			(at 105.41 90.17 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -492,109 +492,57 @@
 			)
 		)
 		(pin "9"
-			(uuid "a980a7f4-0ce5-4d99-b0b5-8f68af01202d")
+			(uuid "b2bee9b7-5d5a-4df9-afac-4337bfd72201")
 		)
 		(pin "3"
-			(uuid "8f920a1c-88c4-47ff-9210-f1c4499f7cbb")
+			(uuid "ed338c3f-f943-4277-895e-2110187012a9")
 		)
 		(pin "5"
-			(uuid "713754dc-5687-4318-9b0e-827d0e7e53fc")
+			(uuid "5e5c51bf-968c-4083-8e52-2db243542bcd")
 		)
 		(pin "4"
-			(uuid "f04a8e81-cf49-401a-bb1f-18b1541823a1")
+			(uuid "7454433b-d396-4418-b153-c326b91e59d5")
 		)
 		(pin "14"
-			(uuid "6777636b-63a1-4870-87cc-90ff7e8836c5")
+			(uuid "d76f63f1-59cf-49df-8644-940aaa948c5b")
 		)
 		(pin "10"
-			(uuid "bd16bffa-9bac-4681-99eb-809afad45059")
+			(uuid "5d704776-1cc1-4e6e-9f5b-59fc256ad593")
 		)
 		(pin "15"
-			(uuid "8d5bff01-acf2-4f42-ad18-049b4a3f80e9")
+			(uuid "dbb9bd4c-ccd1-4a44-ae32-a70a161e226c")
 		)
 		(pin "12"
-			(uuid "7b861180-251f-45ce-969b-4d609a5f5309")
+			(uuid "0fa90bda-efaf-4dff-a49d-f9186ff1963b")
 		)
 		(pin "6"
-			(uuid "ee8e3c9f-5472-4111-a940-078ebe78d7d4")
+			(uuid "8aaf211a-bdc5-48d2-b1f6-52bf5582ad09")
 		)
 		(pin "13"
-			(uuid "19f2383a-83f8-4712-8a48-bf3eed8ab435")
+			(uuid "56a99983-f5ec-48db-9786-a2e7c63b01ef")
 		)
 		(pin "8"
-			(uuid "10cf1a6b-22fa-4dbf-bd19-ef657f802158")
+			(uuid "6b4809df-bc45-41df-8104-0c50a9c3d607")
 		)
 		(pin "1"
-			(uuid "2e5654bd-fc5d-42f9-8194-dca8632761ce")
+			(uuid "4c9127a7-1a08-4faa-a5d0-9da8e7df7c5f")
 		)
 		(pin "2"
-			(uuid "cd73269f-ea65-474f-b8a7-a25f79c9206f")
+			(uuid "096a0150-4c52-4710-8bc1-83134de615eb")
 		)
 		(pin "11"
-			(uuid "dc504973-fd4d-4649-9e74-6677f43c7085")
+			(uuid "3d49cb3e-b9f6-4f89-a864-0d07b102c147")
 		)
 		(pin "7"
-			(uuid "079630e0-21e0-487d-8ace-c72120799ecf")
+			(uuid "97995230-7880-4a31-966e-6b787541a70d")
 		)
 		(instances
 			(project "tdt4295"
-				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98"
-					(reference "U2")
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/9989e047-3a4b-42fb-8136-c8ce73468c70"
+					(reference "U1")
 					(unit 1)
 				)
 			)
 		)
 	)
-	(sheet
-		(at 25.4 38.1)
-		(size 25.4 12.7)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(stroke
-			(width 0.1524)
-			(type solid)
-		)
-		(fill
-			(color 0 0 0 0)
-		)
-		(uuid "634870db-7705-458e-b29f-8b3e7772e7aa")
-		(property "Sheetname" "Powersupply"
-			(at 25.4 37.3884 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left bottom)
-			)
-		)
-		(property "Sheetfile" "Powersupply.kicad_sch"
-			(at 25.4 51.3846 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(instances
-			(project "tdt4295"
-				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98"
-					(page "4")
-				)
-			)
-		)
-	)
-	(sheet_instances
-		(path "/"
-			(page "1")
-		)
-	)
-	(embedded_fonts no)
 )

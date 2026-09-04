@@ -5,14 +5,33 @@
 	(uuid "010bbf49-723c-42ea-b4b2-a653cca8b8cd")
 	(paper "A4")
 	(lib_symbols)
+	(wire
+		(pts
+			(xy 99.06 85.09) (xy 99.06 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "79e1edf3-67a2-4650-8238-c59d3fef8bc5")
+	)
+	(wire
+		(pts
+			(xy 91.44 85.09) (xy 91.44 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "80482158-d0f7-4605-9e45-3eb472d37056")
+	)
 	(sheet
-		(at 33.02 24.13)
+		(at 85.09 59.69)
 		(size 20.32 13.97)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(stroke
 			(width 0.1524)
 			(type solid)
@@ -22,7 +41,7 @@
 		)
 		(uuid "29fcc9f6-3628-4988-aed7-ebf94d0e9351")
 		(property "Sheetname" "Powersupply-upper"
-			(at 33.02 23.4184 0)
+			(at 84.836 55.88 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -33,7 +52,7 @@
 			)
 		)
 		(property "Sheetfile" "Powersupply-upper.kicad_sch"
-			(at 33.02 38.6846 0)
+			(at 85.09 56.896 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -41,6 +60,26 @@
 					(size 1.27 1.27)
 				)
 				(justify left top)
+			)
+		)
+		(pin "upper_left" bidirectional
+			(at 91.44 73.66 270)
+			(uuid "edead0a0-dcf8-4acf-b236-cd44d2d7d723")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(pin "upper_right" bidirectional
+			(at 99.06 73.66 270)
+			(uuid "64978179-8406-465f-84c9-4dfb5e2f3a4f")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
 			)
 		)
 		(instances
@@ -52,13 +91,12 @@
 		)
 	)
 	(sheet
-		(at 57.15 24.13)
+		(at 85.09 85.09)
 		(size 20.32 13.97)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(stroke
 			(width 0.1524)
 			(type solid)
@@ -68,7 +106,7 @@
 		)
 		(uuid "a39ac6f6-156d-4e0b-9cc4-d1c3d15eb944")
 		(property "Sheetname" "Powersupply-lower"
-			(at 57.15 23.4184 0)
+			(at 84.836 101.092 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -79,7 +117,7 @@
 			)
 		)
 		(property "Sheetfile" "Powersupply-lower.kicad_sch"
-			(at 57.15 38.6846 0)
+			(at 85.09 101.854 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -87,6 +125,26 @@
 					(size 1.27 1.27)
 				)
 				(justify left top)
+			)
+		)
+		(pin "lower_left" bidirectional
+			(at 91.44 85.09 90)
+			(uuid "1f654378-9e65-42b9-a493-edc9555bdb28")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(pin "lower_right" bidirectional
+			(at 99.06 85.09 90)
+			(uuid "e8bbcbf0-7d54-44d8-a8fc-31a19992ef73")
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
 			)
 		)
 		(instances

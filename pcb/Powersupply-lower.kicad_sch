@@ -2956,7 +2956,7 @@
 		)
 		(uuid "ffb3881a-b6ae-4723-a823-deec90feb9b8")
 	)
-	(hierarchical_label "out_left"
+	(hierarchical_label "lower_left"
 		(shape bidirectional)
 		(at 62.23 38.1 0)
 		(effects
@@ -2967,7 +2967,7 @@
 		)
 		(uuid "10a57d44-bdea-4364-a83b-165016e091d5")
 	)
-	(hierarchical_label "out_right"
+	(hierarchical_label "lower_right"
 		(shape bidirectional)
 		(at 200.66 27.94 0)
 		(effects

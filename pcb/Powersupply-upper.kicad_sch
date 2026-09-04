@@ -2076,6 +2076,28 @@
 			)
 		)
 	)
+	(hierarchical_label "upper_right"
+		(shape bidirectional)
+		(at 173.99 110.49 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "1f6e824d-78dc-4b37-a6ca-09c4ba0cab00")
+	)
+	(hierarchical_label "upper_left"
+		(shape bidirectional)
+		(at 64.77 109.22 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "5da7e02d-e3bc-4502-8ae3-42df7bdc215f")
+	)
 	(symbol
 		(lib_id "Device:R")
 		(at 168.91 85.09 270)

@@ -2946,6 +2946,38 @@
 		)
 		(uuid "fa462979-13b4-404b-83d8-354d2d009100")
 	)
+	(wire
+		(pts
+			(xy 200.66 27.94) (xy 200.66 48.26)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ffb3881a-b6ae-4723-a823-deec90feb9b8")
+	)
+	(hierarchical_label "out_left"
+		(shape bidirectional)
+		(at 62.23 38.1 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "10a57d44-bdea-4364-a83b-165016e091d5")
+	)
+	(hierarchical_label "out_right"
+		(shape bidirectional)
+		(at 200.66 27.94 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "7f3fdf40-7382-44fa-9c18-535d83756642")
+	)
 	(symbol
 		(lib_id "Device:FerriteBead")
 		(at 261.62 80.01 90)

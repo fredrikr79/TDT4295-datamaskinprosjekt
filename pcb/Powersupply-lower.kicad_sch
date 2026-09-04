@@ -1630,6 +1630,26 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "lp>2,9A, lrms>2.1A"
+		(exclude_from_sim no)
+		(at 228.6 77.216 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "990e78e1-0c40-4e75-a7e4-e9fc50fbbcf3")
+	)
+	(text "lp>2,8A, lrms>2.1A"
+		(exclude_from_sim no)
+		(at 69.088 75.946 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "ba7234e8-92cb-4cc0-8590-2b093f03936f")
+	)
 	(junction
 		(at 231.14 115.57)
 		(diameter 0)
@@ -1799,6 +1819,12 @@
 		(uuid "ee8d1110-9034-4123-a96f-3a803111c788")
 	)
 	(junction
+		(at 129.54 88.9)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "eea8bb6a-ac86-42e4-bbd4-1d54545b54b1")
+	)
+	(junction
 		(at 251.46 80.01)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -1863,16 +1889,6 @@
 			(type default)
 		)
 		(uuid "06633333-4715-4d11-90d9-3f3caf2876fb")
-	)
-	(wire
-		(pts
-			(xy 176.53 76.2) (xy 185.42 76.2)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "0ad42e7d-b4fa-4e77-9605-0210f456ee81")
 	)
 	(wire
 		(pts
@@ -2196,6 +2212,16 @@
 	)
 	(wire
 		(pts
+			(xy 129.54 88.9) (xy 135.89 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "638273a7-0f78-4c67-b81d-02e744248f34")
+	)
+	(wire
+		(pts
 			(xy 22.86 115.57) (xy 40.64 115.57)
 		)
 		(stroke
@@ -2426,7 +2452,7 @@
 	)
 	(wire
 		(pts
-			(xy 129.54 83.82) (xy 129.54 106.68)
+			(xy 129.54 83.82) (xy 129.54 88.9)
 		)
 		(stroke
 			(width 0)
@@ -2543,6 +2569,16 @@
 			(type default)
 		)
 		(uuid "b8319c00-0e79-4e0c-9263-0c09f67c7361")
+	)
+	(wire
+		(pts
+			(xy 129.54 88.9) (xy 129.54 106.68)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bafd4b2f-7bc1-40f1-ab72-bd9edae91ebc")
 	)
 	(wire
 		(pts
@@ -2816,6 +2852,16 @@
 	)
 	(wire
 		(pts
+			(xy 167.64 76.2) (xy 185.42 76.2)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f82689c4-21bd-4b1f-8ade-4434e1411d8a")
+	)
+	(wire
+		(pts
 			(xy 22.86 102.87) (xy 22.86 115.57)
 		)
 		(stroke
@@ -2823,16 +2869,6 @@
 			(type default)
 		)
 		(uuid "fa462979-13b4-404b-83d8-354d2d009100")
-	)
-	(label "lp > 2,9A, lrms>2.1A"
-		(at 226.06 77.47 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "2964e45c-192a-4160-b51e-ded7203c2390")
 	)
 	(symbol
 		(lib_id "Device:FerriteBead")
@@ -3253,10 +3289,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "5ae57d19-594b-4dc6-bc33-d6f8e9781744")
 		(property "Reference" "C10"
-			(at 234.95 87.6299 0)
+			(at 232.41 86.36 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3267,7 +3302,7 @@
 			)
 		)
 		(property "Value" "22u"
-			(at 234.95 90.1699 0)
+			(at 232.664 91.694 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3664,10 +3699,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "7c3ce863-762c-4c1d-87a8-dba04cd65ba4")
 		(property "Reference" "C8"
-			(at 190.5 73.6599 0)
+			(at 191.516 72.898 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3678,7 +3712,7 @@
 			)
 		)
 		(property "Value" "100n"
-			(at 190.5 76.1999 0)
+			(at 193.04 77.216 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3954,7 +3988,7 @@
 		(dnp no)
 		(uuid "9298162e-cc90-4b9c-bfee-22b777064844")
 		(property "Reference" "C11"
-			(at 248.92 87.63 0)
+			(at 247.396 86.614 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -3965,7 +3999,7 @@
 			)
 		)
 		(property "Value" "22u"
-			(at 251.46 90.17 0)
+			(at 247.142 91.694 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -4836,10 +4870,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "fd4fa4be-749c-4242-834b-e078cc8da9c6")
 		(property "Reference" "L2"
-			(at 223.52 74.93 90)
+			(at 220.726 81.28 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -4849,7 +4882,7 @@
 			)
 		)
 		(property "Value" "2.2u"
-			(at 223.52 77.47 90)
+			(at 225.552 81.28 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects

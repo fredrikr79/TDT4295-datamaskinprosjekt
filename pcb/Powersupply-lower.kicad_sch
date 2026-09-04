@@ -1630,6 +1630,26 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "1%\n"
+		(exclude_from_sim no)
+		(at 20.32 85.09 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "1e6a1cfe-109d-4d06-8e6a-adcb9ba5d69e")
+	)
+	(text "1%\n"
+		(exclude_from_sim no)
+		(at 248.92 104.394 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "2eae1cfc-f146-4a15-9e10-0b8adde3ff4d")
+	)
 	(text "lp>2,9A, lrms>2.1A"
 		(exclude_from_sim no)
 		(at 228.6 77.216 0)
@@ -1640,6 +1660,16 @@
 		)
 		(uuid "990e78e1-0c40-4e75-a7e4-e9fc50fbbcf3")
 	)
+	(text "1%\n"
+		(exclude_from_sim no)
+		(at 20.32 99.568 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "b52b47b2-fa72-4e68-b70e-8430df391ab2")
+	)
 	(text "lp>2,8A, lrms>2.1A"
 		(exclude_from_sim no)
 		(at 69.088 75.946 0)
@@ -1649,6 +1679,16 @@
 			)
 		)
 		(uuid "ba7234e8-92cb-4cc0-8590-2b093f03936f")
+	)
+	(text "1%\n"
+		(exclude_from_sim no)
+		(at 249.428 89.154 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "ea6dd013-dc6b-418e-ba6f-983dd441b91c")
 	)
 	(junction
 		(at 231.14 115.57)

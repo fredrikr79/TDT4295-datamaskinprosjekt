@@ -1,1 +1,6 @@
 documentation/slides/pdf
+.Xil
+/build
+fpga/build
+*.jou
+*.log

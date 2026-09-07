@@ -1,0 +1,38 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Vivado: Build",
+            "type": "shell",
+            "command": "${workspaceFolder}/fpga/scripts/vivado.sh",
+            "args": [
+                "-mode",
+                "batch",
+                "-source",
+                "${workspaceFolder}/fpga/scripts/build.tcl"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Vivado: Program FPGA",
+            "type": "shell",
+            "command": "${workspaceFolder}/fpga/scripts/vivado.sh",
+            "args": [
+                "-mode",
+                "batch",
+                "-source",
+                "${workspaceFolder}/fpga/scripts/program.tcl"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "FPGA: Build and Program",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Vivado: Build",
+                "Vivado: Program FPGA"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

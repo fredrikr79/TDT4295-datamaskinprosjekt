@@ -4,3 +4,4 @@ documentation/slides/pdf
 fpga/build
 *.jou
 *.log
+.vivado.env

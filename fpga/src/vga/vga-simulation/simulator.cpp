@@ -188,10 +188,11 @@ int main(int argc, char** argv) {
 
     // cycle accurate simulation loop
     while (!Verilated::gotFinish()) {
+        // THIS IS WHERE YOU ADD ADDITIONAL TICKS
         tick();
         tick();
-        // the clock frequency of VGA is half of that of the whole model
-        // so we sample from VGA every other clock
+        tick();
+        tick();
         sample_pixel();
     }
 

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
 module vga_controller(
-    input  wire clk_25, reset,
+    input  wire pixel_clk, reset,
     
     output reg h_sync, v_sync,
     output reg [9:0] coord_x, coord_y,
@@ -27,7 +27,7 @@ module vga_controller(
     reg active_area_next;
     
     // sequential logic
-    always @(posedge clk_25)
+    always @(posedge pixel_clk)
     begin
         if(reset)
         begin

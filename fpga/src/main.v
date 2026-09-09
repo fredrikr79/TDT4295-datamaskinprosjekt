@@ -11,7 +11,7 @@ module main(
     
         if (counter >= 26'd49_999_999) begin
              counter <= 0;
-             led = led + 1'b1;
+             led <= led + 1'b1;
         end
     end
 endmodule

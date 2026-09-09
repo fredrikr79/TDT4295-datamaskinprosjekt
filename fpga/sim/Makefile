@@ -7,13 +7,14 @@
 # -Wall makes fatal on Verilator 5.x. Two steps instead of --build, which only
 # exists in Verilator >= 4.204 (Ubuntu 22.04 ships 4.038).
 
-VGA := ../src/vga/vga-simulation
+VGA := ../src/vga
 OBJ := ../build/sim
+SIM := ../src/vga/vga-simulation
 
 run: $(OBJ)/Vdisplay
 	$<
 
-$(OBJ)/Vdisplay: $(VGA)/display.v $(VGA)/vga_controller.v $(VGA)/graphics.v $(VGA)/simulator.cpp
+$(OBJ)/Vdisplay: $(VGA)/display.v $(VGA)/vga_controller.v $(VGA)/graphics.v $(SIM)/simulator.cpp
 	verilator -Wall -Wno-fatal --cc --exe --Mdir $(OBJ) \
 		-LDFLAGS "-lglut -lGLU -lGL" $^
 	$(MAKE) -C $(OBJ) -f Vdisplay.mk Vdisplay

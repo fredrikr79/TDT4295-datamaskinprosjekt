@@ -7,21 +7,28 @@ module main(
     output wire bf // TODO: Implement full indicator signal
 );
 
+    // CMD parts
     wire [3:0] opcode;
     wire [3:0] options;
 
+    // Buffers
     reg [7:0] in_data;
+    reg [7:0] response;
     reg [255:0] data_buff = 256'd0;
 
+    // Buffer heads
     reg [2:0] rx_pos = 3'd0;
     reg [2:0] tx_pos = 3'd7;
-    reg [7:0] response;
 
+    // Flags
     reg full = 1'b0;
     reg rx_done;
-    reg tx_done;    
+    reg tx_done;
+    
+    // Data registers
     reg miso_bit;
 
+    // State decalarations
     reg [6:0] state;
     localparam [6:0]
         ST_READY   = 7'b0000000,
@@ -40,7 +47,7 @@ module main(
     assign ck_miso = miso_bit;
 
 
-    // Recieve data on MOSI 
+    // State machine description
     always @(posedge ck_sck) begin
 
         case (state)
@@ -56,7 +63,7 @@ module main(
                 end
             end
 
-            ST_DECODE: begin
+            ST_DECODE: begin // Command dispatches
                 case (opcode)
                     4'd0: begin // 
                         state <= ST_RX_DATA;

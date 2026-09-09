@@ -33,6 +33,36 @@
                 "Vivado: Program FPGA"
             ],
             "problemMatcher": []
+        },
+        {
+            "label": "Verilator: Compile",
+            "type": "shell",
+            "command": "make",
+            "args": ["compile"],
+            "options": {
+                "cwd": "${workspaceFolder}/fpga"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Verilator: Run",
+            "type": "shell",
+            "command": "make",
+            "args": ["run"],
+            "options": {
+                "cwd": "${workspaceFolder}/fpga"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Verilator: List source files",
+            "type": "shell",
+            "command": "make",
+            "args": ["list"],
+            "options": {
+                "cwd": "${workspaceFolder}/fpga"
+            },
+            "problemMatcher": []
         }
     ]
 }

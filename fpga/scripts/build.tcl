@@ -23,7 +23,10 @@ create_project bloata $vivado_dir \
     -force
 
 # Add Verilog files
-set verilog_files [glob -nocomplain [file join $src_dir *.v]]
+set verilog_files [concat \
+    [glob -nocomplain -directory $src_dir -types f *.v] \
+    [glob -nocomplain -directory $src_dir -types f *.sv] \
+]
 
 if {[llength $verilog_files] == 0} {
     puts "ERROR: No Verilog files found in $src_dir"

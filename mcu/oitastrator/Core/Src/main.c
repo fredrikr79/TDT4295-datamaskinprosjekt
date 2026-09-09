@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "myMain.h"
 
 /* USER CODE END Includes */
 
@@ -94,6 +95,8 @@ int main(void)
   MX_ICACHE_Init();
   /* USER CODE BEGIN 2 */
 
+  myMain();
+  // ANY code below should not run
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -103,9 +106,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-    HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }

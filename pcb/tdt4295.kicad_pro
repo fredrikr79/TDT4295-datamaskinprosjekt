@@ -429,7 +429,7 @@
         "uuid": "603dd496-f9c4-4a31-9104-19eec41ebc98"
       }
     ],
-    "used_designators": "STM32UF9NJH6Q_CUSTOM1-3,JP1,R1-6,R10-18,C1-11,C20-44,FB1-2,#PWR1-5,#PWR7-17,L1-2,L4-6,Y1-2,U1-5",
+    "used_designators": "J1,STM32UF9NJH6Q_CUSTOM1-3,R1-6,R10-22,JP1,FB1-2,#PWR1-5,#PWR7-24,C1-11,C20-53,L1-2,L4-6,Y1-3,U1-6",
     "variants": []
   },
   "sheets": [
@@ -452,6 +452,10 @@
     [
       "59405b24-6536-4799-b908-ee0def989f5c",
       "MCU"
+    ],
+    [
+      "3e6013bd-65e3-4bc7-b5b2-6059b6a31574",
+      "STM32U535CE"
     ]
   ],
   "text_variables": {},

@@ -22,10 +22,13 @@ create_project bloata $vivado_dir \
     -part xc7a35tcsg324-1 \
     -force
 
-# Add Verilog files
+# Add Verilog files (searches subdirectories too)
 proc find_verilog {dir} {
-    set found [glob -nocomplain [file join $dir *.v]]
-    foreach sub [glob -nocomplain -type d [file join $dir *]] {
+    set found [glob -nocomplain -types f \
+        [file join $dir *.v] \
+        [file join $dir *.sv] \
+    ]
+    foreach sub [glob -nocomplain -types d [file join $dir *]] {
         set found [concat $found [find_verilog $sub]]
     }
     return $found

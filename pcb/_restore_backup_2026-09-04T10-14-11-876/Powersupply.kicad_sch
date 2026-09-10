@@ -1,0 +1,100 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "010bbf49-723c-42ea-b4b2-a653cca8b8cd")
+	(paper "A4")
+	(lib_symbols)
+	(sheet
+		(at 33.02 24.13)
+		(size 20.32 13.97)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "29fcc9f6-3628-4988-aed7-ebf94d0e9351")
+		(property "Sheetname" "Powersupply-upper"
+			(at 33.02 23.4184 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "Powersupply-upper.kicad_sch"
+			(at 33.02 38.6846 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 57.15 24.13)
+		(size 20.32 13.97)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "a39ac6f6-156d-4e0b-9cc4-d1c3d15eb944")
+		(property "Sheetname" "Powersupply-lower"
+			(at 57.15 23.4184 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "Powersupply-lower.kicad_sch"
+			(at 57.15 38.6846 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
+					(page "2")
+				)
+			)
+		)
+	)
+)

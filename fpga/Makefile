@@ -1,4 +1,4 @@
-TOP_MODULE ?= tb_main
+TOP_MODULE ?= main
 
 SOURCE_DIRECTORIES ?= src test
 
@@ -7,7 +7,7 @@ BUILD_DIRECTORY := sim-build
 VCD_DIRECTORY := vcd
 TOP_VCD := $(VCD_DIRECTORY)/$(TOP_MODULE).vcd
 
-SOURCES := $(shell find $(SOURCE_DIRECTORIES) \-type f \( -name "*.v" -o -name "*.sv" \))
+SOURCES := $(shell find $(SOURCE_DIRECTORIES) \-type f \( -name "*.v" -o -name "*.sv" -o -name "*.cpp" \))
 
 .PHONY: default view run compile clean list vivado-all vivado-build vivado-program
 
@@ -24,8 +24,8 @@ compile:
 		$(SOURCES) \
 		--binary --timing --trace --Wall --Wno-fatal \
 		--top-module $(TOP_MODULE) \
-		-GDUMPFILEPATH=\"$(TOP_VCD)\" \
-		--Mdir $(BUILD_DIRECTORY)
+		--Mdir $(BUILD_DIRECTORY) \
+		-LDFLAGS "-lglut -lGLU -lGL"
 list:
 	@echo "$(SOURCES)"
 clean:

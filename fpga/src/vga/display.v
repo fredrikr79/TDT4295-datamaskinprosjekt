@@ -16,8 +16,9 @@ module display (
 
     // Generate pixel_clk signal
     localparam PIXEL_CLK_DIV_W = $clog2(PIXEL_CLK_DIV); // clog2 = ceiling log 2. Figures how many bits needed to represent CLK_DIV.
+
+    reg [PIXEL_CLK_DIV_W-1:0] div_count;
     initial div_count = 0;
-    reg [PIXEL_CLK_DIV_W-1:0] div_count = 0;
     always @(posedge clk)
     begin
         div_count <= div_count + 1'b1;

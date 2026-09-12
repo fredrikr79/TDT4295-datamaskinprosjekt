@@ -1,27 +1,39 @@
 module tb_main #(
-    parameter string DUMPFILEPATH = "" // this parameter is overwritten when compiling with make
-);
+    parameter string DUMPFILEPATH = ""  // this parameter is overwritten when compiling with make
+) (
+    input logic clk,
+    input logic reset,
+    input logic up,
+    input logic down,
+    input logic left,
+    input logic right,
 
-  reg clk;
-  wire [3:0] led;
-  reg [3:0] sw;
-  main #(
-    .INCREMENT_LIMIT(1)
-  ) dut (
+    output logic              h_sync,
+    output logic              v_sync,
+    output color_pkg::color_t color
+);
+  logic vga_hsync, vga_vsync;
+
+  main dut (
       .clk(clk),
-      .led(led),
-      .sw (sw)
+      .sw (reset),
+      .btn({right, left, down, up}),
+
+      .vga_r(color.red),
+      .vga_g(color.green),
+      .vga_b(color.blue),
+      .vga_hsync(vga_hsync),
+      .vga_vsync(vga_vsync)
   );
-  always #1 clk = ~clk;
   initial begin
-    $dumpfile(DUMPFILEPATH);
-    $dumpvars(0, tb_main);
+    if (DUMPFILEPATH != "") begin
+      $dumpfile(DUMPFILEPATH);
+      $dumpvars(0, tb);
+    end
   end
-  initial begin
-    sw = 1;
-    clk = 0;
-    repeat (2000) @(posedge clk);
-    $finish;
-  end
+
+
+  assign h_sync = ~vga_hsync;
+  assign v_sync = ~vga_vsync;
 endmodule
 

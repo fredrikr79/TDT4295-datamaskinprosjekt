@@ -35,30 +35,40 @@
             "problemMatcher": []
         },
         {
-            "label": "Verilator: Compile",
+            "label": "Verilator: Compile Graphics",
             "type": "shell",
             "command": "make",
-            "args": ["compile"],
+            "args": ["compile-graphics"],
             "options": {
                 "cwd": "${workspaceFolder}/fpga"
             },
             "problemMatcher": []
         },
         {
-            "label": "Verilator: Run",
+            "label": "Verilator: Run Graphics",
             "type": "shell",
             "command": "make",
-            "args": ["run"],
+            "args": ["run-graphics"],
             "options": {
                 "cwd": "${workspaceFolder}/fpga"
             },
             "problemMatcher": []
         },
         {
-            "label": "Verilator: List source files",
+            "label": "Verilator: Compile VCD",
             "type": "shell",
             "command": "make",
-            "args": ["list"],
+            "args": ["compile-vcd"],
+            "options": {
+                "cwd": "${workspaceFolder}/fpga"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Verilator: Run VCD",
+            "type": "shell",
+            "command": "make",
+            "args": ["run-vcd"],
             "options": {
                 "cwd": "${workspaceFolder}/fpga"
             },

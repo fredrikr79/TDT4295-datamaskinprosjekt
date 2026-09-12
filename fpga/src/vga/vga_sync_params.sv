@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 package vga_sync_params;
   // 640X480 VGA sync parameters
+// IF CHANGING THESE, REMEMBER TO CHANGE THE PARAMETERS IN simulator.cpp AS WELL
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned LeftPorch = 48;
   /* verilator lint_on UNUSEDPARAM */

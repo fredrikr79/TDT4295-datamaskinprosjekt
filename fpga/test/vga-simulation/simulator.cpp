@@ -18,6 +18,7 @@ double sc_time_stamp() {        // called by $time in Verilog
 bool gl_setup_complete = false;
 
 // 640X480 VGA sync parameters
+// IF CHANGING THESE, REMEMBER TO CHANGE THE PARAMETERS IN vga_sync_params.sv AS WELL
 const int LEFT_PORCH		= 	48;
 const int ACTIVE_WIDTH		= 	640;
 const int RIGHT_PORCH		= 	16;

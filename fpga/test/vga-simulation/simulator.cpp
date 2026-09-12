@@ -3,11 +3,11 @@
 #include <thread>
 #include <iostream>
 
-#include "Vdisplay.h"           // from Verilating "display.v"
+#include "Vtb_main.h"           // from Verilating "Vtb_main.v"
 
 using namespace std;
 
-Vdisplay* display;              // instantiation of the model
+Vtb_main* top_module;              // instantiation of the model
 
 uint64_t main_time = 0;         // current simulation time
 double sc_time_stamp() {        // called by $time in Verilog
@@ -103,10 +103,10 @@ bool pre_v_sync = 0;
 
 // set Verilog module inputs based on arrow key inputs
 void apply_input() {
-    display->up = keys[0];
-    display->down = keys[1];
-    display->left = keys[2];
-    display->right = keys[3];
+    top_module->up = keys[0];
+    top_module->down = keys[1];
+    top_module->left = keys[2];
+    top_module->right = keys[3];
     
     for(int i=0; i<4; i++)
         keys[i] = 0;
@@ -114,10 +114,10 @@ void apply_input() {
 
 // we only want the input to last for one or few clocks
 void discard_input() {
-    display->up = 0;
-    display->down = 0;
-    display->left = 0;
-    display->right = 0;
+    top_module->up = 0;
+    top_module->down = 0;
+    top_module->left = 0;
+    top_module->right = 0;
 }
 
 // read VGA outputs and update graphics buffer
@@ -126,27 +126,30 @@ void sample_pixel() {
     
     coord_x = (coord_x + 1) % TOTAL_WIDTH;
 
-    if(!display->h_sync && pre_h_sync){ // on negative edge of h_sync
+    if(!top_module->h_sync && pre_h_sync){ // on negative edge of h_sync
         // re-sync horizontal counter
         coord_x = RIGHT_PORCH + ACTIVE_WIDTH + HORIZONTAL_SYNC;
         coord_y = (coord_y + 1) % TOTAL_HEIGHT;
     }
 
-    if(!display->v_sync && pre_v_sync){ // on negative edge of v_sync
+    if(!top_module->v_sync && pre_v_sync){ // on negative edge of v_sync
         // re-sync vertical counter
         coord_y = TOP_PORCH + ACTIVE_HEIGHT + VERTICAL_SYNC;
         apply_input(); // inputs are pulsed once each new frame
     }
 
     if(coord_x < ACTIVE_WIDTH && coord_y < ACTIVE_HEIGHT){
-        int rgb = display->rgb;
-        graphics_buffer[coord_x][coord_y][0] = float((rgb & (1 << 0)) >> 0);
-        graphics_buffer[coord_x][coord_y][1] = float((rgb & (1 << 1)) >> 1);
-        graphics_buffer[coord_x][coord_y][2] = float((rgb & (1 << 2)) >> 2);
+        uint16_t packed_color = top_module->color;
+        uint8_t red   = (packed_color >> 8) & 0xF;
+        uint8_t green = (packed_color >> 4) & 0xF;
+        uint8_t blue  =  packed_color       & 0xF;
+        graphics_buffer[coord_x][coord_y][0] = float(red) / 15.0f;
+        graphics_buffer[coord_x][coord_y][1] = float(green) /15.0f;
+        graphics_buffer[coord_x][coord_y][2] = float(blue) / 15.0f;
     }
 
-    pre_h_sync = display->h_sync;
-    pre_v_sync = display->v_sync;
+    pre_h_sync = top_module->h_sync;
+    pre_v_sync = top_module->v_sync;
 }
 
 // simulate for a single clock
@@ -155,21 +158,21 @@ void tick() {
     main_time++;
 
     // rising edge
-    display->clk = 1;
-    display->eval();
+    top_module->clk = 1;
+    top_module->eval();
 
     // falling edge
-    display->clk = 0;
-    display->eval();
+    top_module->clk = 0;
+    top_module->eval();
 }
 
 // globally reset the model
 void reset() {
-    display->reset = 1;
-    display->clk = 0;
-    display->eval();
+    top_module->reset = 1;
+    top_module->clk = 0;
+    top_module->eval();
     tick();
-    display->reset = 0;
+    top_module->reset = 0;
 }
 
 int main(int argc, char** argv) {
@@ -181,7 +184,7 @@ int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);   // remember args
 
     // create the model
-    display = new Vdisplay;
+    top_module = new Vtb_main;
 
     // reset the model
     reset();
@@ -196,7 +199,7 @@ int main(int argc, char** argv) {
         sample_pixel();
     }
 
-    display->final();
-    delete display;
+    top_module->final();
+    delete top_module;
 }
 

@@ -35,40 +35,20 @@
             "problemMatcher": []
         },
         {
-            "label": "Verilator: Compile Graphics",
+            "label": "Verilator: Simulate VGA",
             "type": "shell",
             "command": "make",
-            "args": ["compile-graphics"],
+            "args": ["sim-vga"],
             "options": {
                 "cwd": "${workspaceFolder}/fpga"
             },
             "problemMatcher": []
         },
         {
-            "label": "Verilator: Run Graphics",
+            "label": "Verilator: Generate VCD",
             "type": "shell",
             "command": "make",
-            "args": ["run-graphics"],
-            "options": {
-                "cwd": "${workspaceFolder}/fpga"
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "Verilator: Compile VCD",
-            "type": "shell",
-            "command": "make",
-            "args": ["compile-vcd"],
-            "options": {
-                "cwd": "${workspaceFolder}/fpga"
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "Verilator: Run VCD",
-            "type": "shell",
-            "command": "make",
-            "args": ["run-vcd"],
+            "args": ["generate-vcd"],
             "options": {
                 "cwd": "${workspaceFolder}/fpga"
             },

@@ -2,8 +2,9 @@ documentation/slides/pdf
 .Xil
 /build
 fpga/build
+fpga/vcd-build
+fpga/vga-build
 fpga/vcd
-fpga/sim-build
 *.jou
 *.log
 .vivado.env

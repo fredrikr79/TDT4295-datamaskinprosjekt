@@ -2,41 +2,46 @@ TOP_MODULE ?= tb_main
 
 SOURCE_DIRECTORIES ?= src test
 
-SIM_BUILD_DIRECTORY := sim-build
+VCD_SIM_DIR := vcd-build
+VGA_SIM_DIR := vga-build
+VCD_SIM_BINARY := $(VCD_SIM_DIR)/V$(TOP_MODULE)
+VGA_SIM_BINARY := $(VGA_SIM_DIR)/V$(TOP_MODULE)
 
-VCD_DIRECTORY := vcd
-TOP_VCD := $(VCD_DIRECTORY)/$(TOP_MODULE).vcd
+VCD_DIR := vcd
+TOP_VCD := $(VCD_DIR)/$(TOP_MODULE).vcd
 
 SOURCES := $(shell find $(SOURCE_DIRECTORIES) \-type f \( -name "*.v" -o -name "*.sv" \))
 
-.PHONY: default gtkwave run-vcd compile-vcd run-graphics compile-graphics clean list vivado-all vivado-build vivado-program
+.PHONY: sim-vga sim-vcd generate-vcd clean vivado-all vivado-build vivado-program
 
 # Simulation
-default: run-graphics
-gtkwave: run-vcd
-	gtkwave $(TOP_VCD)
-run-vcd: compile-vcd $(VCD_DIRECTORY)
-	./$(SIM_BUILD_DIRECTORY)/V$(TOP_MODULE)
-run-graphics: compile-graphics
-	./$(SIM_BUILD_DIRECTORY)/V$(TOP_MODULE)
-compile-vcd: $(SIM_BUILD_DIRECTORY) $(SOURCES)
+sim-vga: $(VGA_SIM_BINARY)
+	./$<
+sim-vcd: $(TOP_VCD)
+	gtkwave $<
+generate-vcd: $(TOP_VCD)
+$(TOP_VCD): $(VCD_SIM_BINARY) $(VCD_DIR)
+	./$<
+$(VCD_SIM_BINARY): $(VCD_SIM_DIR) $(SOURCES)
 	verilator \
 		$(SOURCES) \
 		--binary --timing --trace --Wall --Wno-fatal \
 		--top-module $(TOP_MODULE) \
-		--Mdir $(SIM_BUILD_DIRECTORY) \
+		--Mdir $< \
 		-GDUMPFILEPATH=\"$(TOP_VCD)\"
-compile-graphics: $(SIM_BUILD_DIRECTORY) $(SOURCES) test/vga-simulation/simulator.cpp
+$(VGA_SIM_BINARY): $(VGA_SIM_DIR) $(SOURCES) test/vga-simulation/simulator.cpp
 	verilator \
 		$(SOURCES) test/vga-simulation/simulator.cpp \
 		--cc --exe --build --timing --trace --Wall --Wno-fatal \
 		--top-module $(TOP_MODULE) \
-		--Mdir $(SIM_BUILD_DIRECTORY) \
+		--Mdir $< \
 		-LDFLAGS "-lglut -lGLU -lGL"
-$(SIM_BUILD_DIRECTORY):
-	@mkdir -p $(SIM_BUILD_DIRECTORY)
-$(VCD_DIRECTORY):
-	@mkdir -p $(VCD_DIRECTORY)
+$(VGA_SIM_DIR):
+	@mkdir -p $@
+$(VCD_SIM_DIR):
+	@mkdir -p $@
+$(VCD_DIR):
+	@mkdir -p $@
 
 # Vivado synthesizing
 vivado-all: vivado-build vivado-program
@@ -46,4 +51,4 @@ vivado-build: scripts/vivado.sh scripts/build.tcl
 	sh scripts/vivado.sh -mode batch -source $(shell pwd)/scripts/build.tcl
 
 clean:
-	rm -rf $(SIM_BUILD_DIRECTORY) $(VCD_DIRECTORY) build
+	rm -rf $(VGA_SIM_DIR) $(VCD_SIM_DIR) $(VCD_DIR) build

@@ -5503,6 +5503,16 @@
 	)
 	(wire
 		(pts
+			(xy 236.22 90.17) (xy 283.21 90.17)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "334d2292-ca10-4126-b0d3-0e9e79631d15")
+	)
+	(wire
+		(pts
 			(xy 64.77 25.4) (xy 64.77 30.48)
 		)
 		(stroke
@@ -6073,6 +6083,16 @@
 	)
 	(wire
 		(pts
+			(xy 236.22 92.71) (xy 283.21 92.71)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9b35f241-905a-472c-89cf-9eccd4aea695")
+	)
+	(wire
+		(pts
 			(xy 182.88 50.8) (xy 190.5 50.8)
 		)
 		(stroke
@@ -6520,6 +6540,28 @@
 			(type default)
 		)
 		(uuid "ffe98e31-a45a-47c5-9ac0-1b6c00e82e1c")
+	)
+	(hierarchical_label "USB_FS_P"
+		(shape input)
+		(at 283.21 92.71 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "3c754c34-c9d6-4278-a282-a79e5b233b66")
+	)
+	(hierarchical_label "USB_FS_N"
+		(shape input)
+		(at 283.21 90.17 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "cf9d05ad-22e2-4066-8e30-3ca41c887965")
 	)
 	(symbol
 		(lib_id "Device:C")

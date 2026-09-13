@@ -7,4 +7,6 @@
 	(lib (name "12401826E412A") (type "KiCad") (uri "${KIPRJMOD}/assets/usb_c_12401826E412A/12401826E412A.kicad_sym") (options "") (descr ""))
 	(lib (name "ESDA25P35-1U1M") (type "KiCad") (uri "${KIPRJMOD}/assets/KiCADv6/2026-09-13_11-20-52.kicad_sym") (options "") (descr ""))
 	(lib (name "TCPP01-M12") (type "KiCad") (uri "${KIPRJMOD}/assets/ul_TCPP01-M12/KiCADv6/2026-09-13_11-30-28.kicad_sym") (options "") (descr ""))
+	(lib (name "SI7114ADN-T1-GE3") (type "KiCad") (uri "${KIPRJMOD}/assets/SI7114ADN-T1-GE3 /2026-09-13_13-23-52.kicad_sym") (options "") (descr ""))
+	(lib (name "BAT54KFILM") (type "KiCad") (uri "${KIPRJMOD}/assets/BAT54KFILM/2026-09-13_13-33-35.kicad_sym") (options "") (descr ""))
 )

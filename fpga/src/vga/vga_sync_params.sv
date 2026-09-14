@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 package vga_sync_params;
   // 640X480 VGA sync parameters
 // IF CHANGING THESE, REMEMBER TO CHANGE THE PARAMETERS IN simulator.cpp AS WELL

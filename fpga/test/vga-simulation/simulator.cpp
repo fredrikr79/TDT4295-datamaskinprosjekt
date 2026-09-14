@@ -175,6 +175,10 @@ void reset() {
     tick();
     top_module->reset = 0;
 }
+void enable() {
+    top_module->enable = 1;
+    top_module->eval();
+}
 
 int main(int argc, char** argv) {
     // create a new thread for graphics handling
@@ -189,6 +193,9 @@ int main(int argc, char** argv) {
 
     // reset the model
     reset();
+
+    // enable the model
+    enable();
 
     // cycle accurate simulation loop
     while (!Verilated::gotFinish()) {

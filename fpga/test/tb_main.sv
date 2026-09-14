@@ -3,6 +3,7 @@ module tb_main #(
 ) (
     input logic clk,
     input logic reset,
+    input logic enable,
     input logic up,
     input logic down,
     input logic left,
@@ -16,9 +17,8 @@ module tb_main #(
 
   main dut (
       .clk(clk),
-      .sw (reset),
+      .sw({reset, enable}),
       .btn({right, left, down, up}),
-
       .vga_r(color.red),
       .vga_g(color.green),
       .vga_b(color.blue),

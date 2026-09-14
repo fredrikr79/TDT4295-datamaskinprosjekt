@@ -1,6 +1,6 @@
 module main (
     input  wire       clk,
-    input  wire [3:3] sw,
+    input  wire [3:2] sw,
     input wire [3:0] btn,
     output wire [3:0] vga_r,
     vga_g,
@@ -10,14 +10,13 @@ module main (
 );
   wire h_sync, v_sync, active_area;
   wire [9:0] coord_x, coord_y;
-  reg enable = 'b1;
 
   color_pkg::color_t color;
 
   vga_controller vga_controller_unit (
       .clk(clk),
       .reset(sw[3]),
-      .enable(enable),
+      .enable(sw[2]),
       .h_sync(h_sync),
       .v_sync(v_sync),
       .coord_x(coord_x),
@@ -27,7 +26,7 @@ module main (
   vga_game_example vga_game_example (
       .clk(clk),
       .reset(sw[3]),
-      .enable(enable),
+      .enable(sw[2]),
       .up(btn[0]),
       .down(btn[1]),
       .left(btn[2]),

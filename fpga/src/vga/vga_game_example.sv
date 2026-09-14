@@ -1,5 +1,3 @@
-`timescale 1ns / 1ps
-
 module vga_game_example (
     input wire clk,
     reset,

@@ -429,7 +429,7 @@
         "uuid": "603dd496-f9c4-4a31-9104-19eec41ebc98"
       }
     ],
-    "used_designators": "Q1-2,CR1-2,J1-5,STM32UF9NJH6Q_CUSTOM1-3,R1-6,R10-34,JP1,U1-10,C1-11,C20-53,C61-102,FB1-2,Y1-4,#PWR1-5,#PWR7-24,#PWR34-84,L1-2,L4-6,L8",
+    "used_designators": "#FLG1,Q1-2,CR1-2,J1-7,STM32UF9NJH6Q_CUSTOM1-3,R1-6,R10-38,JP1,U1-10,C1-11,C20-53,C61-120,FB1-2,D1,Y1-5,#PWR1-5,#PWR7-24,#PWR34-97,L1-2,L4-6,L8",
     "variants": []
   },
   "sheets": [
@@ -458,12 +458,16 @@
       "STM32U535CE"
     ],
     [
-      "3d004502-2b74-4d9b-b7a9-01ce7366d066",
-      "STM32U595ZJT6"
+      "00be9b76-425d-4c6c-9c1d-55091adef36b",
+      "power_source"
     ],
     [
       "ffd64d7a-b064-4a59-840d-09058194ff51",
       "usb_c"
+    ],
+    [
+      "b303941b-340e-4d97-8c25-97b03edc3afe",
+      "power_mux"
     ]
   ],
   "text_variables": {},

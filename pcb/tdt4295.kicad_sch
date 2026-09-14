@@ -546,6 +546,52 @@
 		)
 	)
 	(sheet
+		(at 54.61 38.1)
+		(size 31.75 12.7)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "00be9b76-425d-4c6c-9c1d-55091adef36b")
+		(property "Sheetname" "power_source"
+			(at 54.61 37.3884 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "power_source.kicad_sch"
+			(at 54.61 51.3846 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98"
+					(page "7")
+				)
+			)
+		)
+	)
+	(sheet
 		(at 25.4 62.23)
 		(size 25.4 16.51)
 		(exclude_from_sim no)
@@ -633,6 +679,52 @@
 			(project "tdt4295"
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98"
 					(page "4")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 57.15 62.23)
+		(size 33.02 16.51)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "b303941b-340e-4d97-8c25-97b03edc3afe")
+		(property "Sheetname" "power_mux"
+			(at 57.15 61.5184 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "power_mux.kicad_sch"
+			(at 57.15 79.3246 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98"
+					(page "9")
 				)
 			)
 		)

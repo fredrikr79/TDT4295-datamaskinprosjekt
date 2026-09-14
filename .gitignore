@@ -8,3 +8,6 @@ fpga/vcd
 *.jou
 *.log
 .vivado.env
+.vscode/launch.json
+.vscode/settings.json
+.vscode/c_cpp_properties.json

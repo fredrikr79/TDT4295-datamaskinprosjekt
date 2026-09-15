@@ -468,6 +468,10 @@
     [
       "b303941b-340e-4d97-8c25-97b03edc3afe",
       "power_mux"
+    ],
+    [
+      "c9cc97c0-3b0e-4b29-8db3-c25b8aaa9824",
+      "FPGA"
     ]
   ],
   "text_variables": {},

@@ -638,6 +638,52 @@
 		)
 	)
 	(sheet
+		(at 114.3 95.25)
+		(size 33.655 13.335)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "5d0c1e3d-0683-4ef6-80cb-0d27afacad81")
+		(property "Sheetname" "SRAM"
+			(at 114.3 94.5384 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sram.kicad_sch"
+			(at 114.3 109.1696 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98"
+					(page "11")
+				)
+			)
+		)
+	)
+	(sheet
 		(at 25.4 38.1)
 		(size 25.4 12.7)
 		(exclude_from_sim no)

@@ -19,17 +19,17 @@ bool gl_setup_complete = false;
 
 // 640X480 VGA sync parameters
 // IF CHANGING THESE, REMEMBER TO CHANGE THE PARAMETERS IN vga_sync_params.sv AS WELL
-const int LEFT_PORCH		= 	48;
-const int ACTIVE_WIDTH		= 	640;
-const int RIGHT_PORCH		= 	16;
-const int HORIZONTAL_SYNC	=	96;
-const int TOTAL_WIDTH		=	800;
+const int LEFT_PORCH       = 40;
+const int ACTIVE_WIDTH     = 854;
+const int RIGHT_PORCH      = 8;
+const int HORIZONTAL_SYNC  = 32;
+const int TOTAL_WIDTH      = 934;
 
-const int TOP_PORCH			= 	33;
-const int ACTIVE_HEIGHT		= 	480;
-const int BOTTOM_PORCH		= 	10;
-const int VERTICAL_SYNC		=	2;
-const int TOTAL_HEIGHT		=	525;
+const int TOP_PORCH        = 6;
+const int ACTIVE_HEIGHT    = 480;
+const int BOTTOM_PORCH     = 15;
+const int VERTICAL_SYNC    = 8;
+const int TOTAL_HEIGHT     = 509;
 
 // pixels are buffered here
 float graphics_buffer[ACTIVE_WIDTH][ACTIVE_HEIGHT][3] = {};

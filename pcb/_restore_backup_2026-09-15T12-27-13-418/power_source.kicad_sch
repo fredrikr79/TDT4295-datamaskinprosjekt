@@ -1383,7 +1383,7 @@
 				(justify left)
 			)
 		)
-		(property "Extra" "5V"
+		(property "Extra" "4.5V - 18V"
 			(at 184.658 57.658 0)
 			(show_name no)
 			(do_not_autoplace no)

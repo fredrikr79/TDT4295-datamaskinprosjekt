@@ -199,12 +199,10 @@ int main(int argc, char** argv) {
 
     // cycle accurate simulation loop
     while (!Verilated::gotFinish()) {
-        // THIS IS WHERE YOU ADD ADDITIONAL TICKS
+        if (top_module->pixel_pulse) {
+            sample_pixel();
+        }
         tick();
-        tick();
-        tick();
-        tick();
-        sample_pixel();
     }
 
     top_module->final();

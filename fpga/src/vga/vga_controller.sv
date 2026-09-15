@@ -6,7 +6,8 @@ module vga_controller (
     v_sync,
     output reg unsigned [9:0] coord_x,
     coord_y,
-    output reg active_area
+    output reg active_area,
+    output reg pixel_pulse
 );
   import vga_sync_params::*;
 
@@ -14,7 +15,6 @@ module vga_controller (
   reg h_sync_next, v_sync_next;
   reg unsigned [9:0] coord_x_next, coord_y_next;
   reg active_area_next;
-  reg pixel_pulse;
 
   clock_enable_pulse #(
       .N(PixelClockIncrement)

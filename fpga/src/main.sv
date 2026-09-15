@@ -6,7 +6,7 @@ module main (
     vga_g,
     vga_b,
     output wire       vga_hsync,
-    vga_vsync
+    vga_vsync, pixel_pulse
 );
   wire h_sync, v_sync, active_area;
   wire [9:0] coord_x, coord_y;
@@ -21,7 +21,8 @@ module main (
       .v_sync(v_sync),
       .coord_x(coord_x),
       .coord_y(coord_y),
-      .active_area(active_area)
+      .active_area(active_area),
+      .pixel_pulse(pixel_pulse)
   );
   vga_game_example vga_game_example (
       .clk(clk),

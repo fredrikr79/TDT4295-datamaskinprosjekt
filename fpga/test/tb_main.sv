@@ -11,6 +11,7 @@ module tb_main #(
 
     output logic              h_sync,
     output logic              v_sync,
+    output logic pixel_pulse,
     output color_pkg::color_t color
 );
   logic vga_hsync, vga_vsync;
@@ -23,7 +24,8 @@ module tb_main #(
       .vga_g(color.green),
       .vga_b(color.blue),
       .vga_hsync(vga_hsync),
-      .vga_vsync(vga_vsync)
+      .vga_vsync(vga_vsync),
+      .pixel_pulse(pixel_pulse)
   );
   initial begin
     if (DUMPFILEPATH != "") begin

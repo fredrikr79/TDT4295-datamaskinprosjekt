@@ -2020,7 +2020,7 @@
 	)
 	(wire
 		(pts
-			(xy 137.16 62.23) (xy 137.16 66.04)
+			(xy 137.16 49.53) (xy 137.16 66.04)
 		)
 		(stroke
 			(width 0)
@@ -2037,6 +2037,16 @@
 			(type default)
 		)
 		(uuid "5ad535f0-5b1e-4e2e-ac66-bcf86af8e3fb")
+	)
+	(wire
+		(pts
+			(xy 148.59 54.61) (xy 148.59 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "68c34aec-96f3-47e3-8f54-1eee570a6d0d")
 	)
 	(wire
 		(pts
@@ -2250,16 +2260,6 @@
 	)
 	(wire
 		(pts
-			(xy 137.16 54.61) (xy 137.16 49.53)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "dc8181e2-4420-4698-9873-3d70ab71d811")
-	)
-	(wire
-		(pts
 			(xy 154.94 80.01) (xy 154.94 54.61)
 		)
 		(stroke
@@ -2277,16 +2277,6 @@
 			(type default)
 		)
 		(uuid "e40529a5-7dd1-4022-9497-355fb6ce76d4")
-	)
-	(wire
-		(pts
-			(xy 148.59 62.23) (xy 148.59 63.5)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "e6973db7-a99a-4f98-ac4b-9c305e5b0d42")
 	)
 	(wire
 		(pts
@@ -2703,88 +2693,6 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 148.59 58.42 0)
-		(mirror y)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "24dace56-4135-436f-a42e-d0033d35a5e2")
-		(property "Reference" "R30"
-			(at 143.002 56.896 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Value" "56k"
-			(at 142.494 59.944 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Footprint" "Resistor_THT:R_Array_SIP13"
-			(at 150.368 58.42 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 148.59 58.42 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Resistor"
-			(at 148.59 58.42 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "522b6915-09af-4eb9-9f55-6079db953f46")
-		)
-		(pin "1"
-			(uuid "b6e8bcbb-60c1-467f-a2b2-6e00ca5b6b99")
-		)
-		(instances
-			(project "tdt4295"
-				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/59405b24-6536-4799-b908-ee0def989f5c/ffd64d7a-b064-4a59-840d-09058194ff51"
-					(reference "R30")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:R")
 		(at 41.91 100.33 0)
 		(unit 1)
 		(body_style 1)
@@ -3191,88 +3099,6 @@
 			(project "tdt4295"
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/59405b24-6536-4799-b908-ee0def989f5c/ffd64d7a-b064-4a59-840d-09058194ff51"
 					(reference "U8")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 137.16 58.42 0)
-		(mirror y)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "bdc64add-cc04-4483-87d3-3c3cb76fb246")
-		(property "Reference" "R31"
-			(at 130.81 56.896 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Value" "56k"
-			(at 131.572 60.198 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Footprint" "Resistor_THT:R_Array_SIP13"
-			(at 138.938 58.42 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 137.16 58.42 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Resistor"
-			(at 137.16 58.42 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "d7dc25f4-a61c-456b-b1fa-cd9d28051d28")
-		)
-		(pin "1"
-			(uuid "e68a017f-07c3-4f80-8351-6d1b93b0a30d")
-		)
-		(instances
-			(project "tdt4295"
-				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/59405b24-6536-4799-b908-ee0def989f5c/ffd64d7a-b064-4a59-840d-09058194ff51"
-					(reference "R31")
 					(unit 1)
 				)
 			)

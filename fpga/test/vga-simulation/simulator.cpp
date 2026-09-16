@@ -19,17 +19,19 @@ bool gl_setup_complete = false;
 
 // 640X480 VGA sync parameters
 // IF CHANGING THESE, REMEMBER TO CHANGE THE PARAMETERS IN vga_sync_params.sv AS WELL
-const int LEFT_PORCH       = 40;
-const int ACTIVE_WIDTH     = 854;
-const int RIGHT_PORCH      = 8;
-const int HORIZONTAL_SYNC  = 32;
-const int TOTAL_WIDTH      = 934;
+const int ACTIVE_WIDTH		    = 	640;
+const int ACTIVE_HEIGHT		    = 	360;
+const int HORIZONTAL_FRONT_PORCH= 	32;
+const int HORIZONTAL_BACK_PORCH	= 	64;
 
-const int TOP_PORCH        = 6;
-const int ACTIVE_HEIGHT    = 480;
-const int BOTTOM_PORCH     = 15;
-const int VERTICAL_SYNC    = 8;
-const int TOTAL_HEIGHT     = 509;
+const int VERTICAL_FRONT_PORCH	= 	63;
+const int VERTICAL_BACK_PORCH	= 	71;
+
+const int HORIZONTAL_SYNC	    =	64;
+const int VERTICAL_SYNC		    =	3;
+
+const int TOTAL_WIDTH		    =	ACTIVE_WIDTH + HORIZONTAL_FRONT_PORCH + HORIZONTAL_SYNC + HORIZONTAL_BACK_PORCH;
+const int TOTAL_HEIGHT		    =	ACTIVE_HEIGHT + VERTICAL_FRONT_PORCH + VERTICAL_SYNC + VERTICAL_BACK_PORCH;
 
 // pixels are buffered here
 float graphics_buffer[ACTIVE_WIDTH][ACTIVE_HEIGHT][3] = {};
@@ -129,13 +131,13 @@ void sample_pixel() {
 
     if(!top_module->h_sync && pre_h_sync){ // on negative edge of h_sync
         // re-sync horizontal counter
-        coord_x = RIGHT_PORCH + ACTIVE_WIDTH + HORIZONTAL_SYNC;
+        coord_x = HORIZONTAL_FRONT_PORCH + ACTIVE_WIDTH + HORIZONTAL_SYNC;
         coord_y = (coord_y + 1) % TOTAL_HEIGHT;
     }
 
     if(!top_module->v_sync && pre_v_sync){ // on negative edge of v_sync
         // re-sync vertical counter
-        coord_y = TOP_PORCH + ACTIVE_HEIGHT + VERTICAL_SYNC;
+        coord_y = VERTICAL_BACK_PORCH + ACTIVE_HEIGHT + VERTICAL_SYNC;
         apply_input(); // inputs are pulsed once each new frame
     }
 

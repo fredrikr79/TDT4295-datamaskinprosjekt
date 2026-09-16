@@ -2,20 +2,23 @@ package vga_sync_params;
   // 640X480 VGA sync parameters
 // IF CHANGING THESE, REMEMBER TO CHANGE THE PARAMETERS IN simulator.cpp AS WELL
   /* verilator lint_off UNUSEDPARAM */
-  localparam int unsigned LeftPorch = 40;
-  /* verilator lint_on UNUSEDPARAM */
-  localparam int unsigned ActiveWidth = 854;
-  localparam int unsigned RightPorch = 8;
-  localparam int unsigned HorizontalSync = 32;
-  localparam int unsigned TotalWidth = 934;
+/* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ActiveWidth = 640;
+  localparam int unsigned ActiveHeight = 360;
+  localparam int unsigned HorizontalFrontPorch = 32; // Right Porch
+  localparam int unsigned HorizontalBackPorch = 48; // Left Porch
+  
+  localparam int unsigned VerticalFrontPorch = 63; // Bottom Porch
+  localparam int unsigned VerticalBackPorch = 71; // Top Porch
+  
+  localparam int unsigned HorizontalSync = 64;
+  localparam int unsigned VerticalSync = 3;
+  
+  localparam int unsigned TotalWidth = ActiveWidth + HorizontalFrontPorch + HorizontalSync + HorizontalBackPorch;
+  localparam int unsigned TotalHeight = ActiveHeight + VerticalFrontPorch + VerticalSync + VerticalBackPorch;
 
-  localparam int unsigned TopPorch = 6;
-  localparam int unsigned ActiveHeight = 480;
   /* verilator lint_off UNUSEDPARAM */
-  localparam int unsigned BottomPorch = 15;
   /* verilator lint_on UNUSEDPARAM */
-  localparam int unsigned VerticalSync = 8;
-  localparam int unsigned TotalHeight = 509;
 
   localparam int unsigned PixelClockIncrement = 4;
 endpackage

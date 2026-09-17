@@ -24,9 +24,12 @@ module tb_main #(
       .vga_g(color.green),
       .vga_b(color.blue),
       .vga_hsync(vga_hsync),
-      .vga_vsync(vga_vsync),
-      .pixel_pulse(pixel_pulse)
+      .vga_vsync(vga_vsync)
   );
+
+  // pixel_pulse is internal to main (no board pin), tap it for the simulator
+  assign pixel_pulse = dut.pixel_pulse;
+
   initial begin
     if (DUMPFILEPATH != "") begin
       $dumpfile(DUMPFILEPATH);

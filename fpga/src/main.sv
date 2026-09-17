@@ -6,9 +6,9 @@ module main (
     vga_g,
     vga_b,
     output wire       vga_hsync,
-    vga_vsync, pixel_pulse
+    vga_vsync
 );
-  wire h_sync, v_sync, active_area;
+  wire h_sync, v_sync, active_area, pixel_pulse;
   wire [9:0] coord_x, coord_y;
 
   color_pkg::color_t color;

@@ -2,7 +2,7 @@ module vga_controller (
     input wire clk,
     reset,
     enable,
-    pixel_pulse
+    pixel_pulse,
     output reg h_sync,
     v_sync,
     output reg unsigned [9:0] coord_x,

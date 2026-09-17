@@ -44,8 +44,8 @@ module vga_controller (
   end
 
   always_comb begin
-    h_sync_next = 32'(coord_x) >= HorizontalBackPorch + ActiveWidth &&
-        32'(coord_x) < HorizontalBackPorch + ActiveWidth + HorizontalSync;
+    h_sync_next = 32'(coord_x) >= HorizontalFrontPorch + ActiveWidth &&
+        32'(coord_x) < HorizontalFrontPorch + ActiveWidth + HorizontalSync;
     v_sync_next = 32'(coord_y) >= VerticalFrontPorch + ActiveHeight &&
         32'(coord_y) < VerticalFrontPorch + ActiveHeight + VerticalSync;
 

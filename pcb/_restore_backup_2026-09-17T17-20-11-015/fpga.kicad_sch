@@ -14,8 +14,8 @@
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "U2"
-				(at 22.86 8.89 0)
+			(property "Reference" "U"
+				(at 22.86 10.16 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
@@ -25,7 +25,7 @@
 				)
 			)
 			(property "Value" "410-251-B"
-				(at 22.86 6.35 0)
+				(at 22.86 7.62 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
@@ -148,6 +148,24 @@
 					)
 					(fill
 						(type none)
+					)
+				)
+				(pin power_out line
+					(at 0 0 0)
+					(length 7.62)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
 					)
 				)
 				(pin unspecified line
@@ -294,6 +312,24 @@
 						)
 					)
 				)
+				(pin power_out line
+					(at 45.72 -2.54 180)
+					(length 7.62)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "10"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
 				(pin power_in line
 					(at 45.72 0 180)
 					(length 7.62)
@@ -305,44 +341,6 @@
 						)
 					)
 					(number "11"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(symbol "410-251-B_1_1"
-				(pin power_in line
-					(at 0 0 0)
-					(length 7.62)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin power_in line
-					(at 45.72 -2.54 180)
-					(length 7.62)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "10"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -10140,16 +10138,6 @@
 	)
 	(wire
 		(pts
-			(xy 111.76 87.63) (xy 110.49 87.63)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8ee33c9b-ba5e-4cb5-a4d0-adede5a0fd46")
-	)
-	(wire
-		(pts
 			(xy 157.48 66.04) (xy 157.48 67.31)
 		)
 		(stroke
@@ -13707,7 +13695,7 @@
 	)
 	(symbol
 		(lib_id "power:+3V3")
-		(at 111.76 87.63 270)
+		(at 110.49 87.63 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -13717,7 +13705,7 @@
 		(dnp no)
 		(uuid "41ff2195-817a-404f-9e74-e5fe27d2f697")
 		(property "Reference" "#PWR04"
-			(at 107.95 87.63 0)
+			(at 106.68 87.63 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13728,7 +13716,7 @@
 			)
 		)
 		(property "Value" "+3V3"
-			(at 116.078 87.63 90)
+			(at 114.808 87.63 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -13739,7 +13727,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 111.76 87.63 0)
+			(at 110.49 87.63 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13750,7 +13738,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 111.76 87.63 0)
+			(at 110.49 87.63 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -13761,7 +13749,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3V3\""
-			(at 111.76 87.63 0)
+			(at 110.49 87.63 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

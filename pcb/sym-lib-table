@@ -2,5 +2,5 @@
 	(version 7)
 	(lib (name "TPS54325") (type "KiCad") (uri "${KIPRJMOD}/assets/ul_TPS54325PWP/KiCADv6/2026-09-03_11-26-00.kicad_sym") (options "") (descr ""))
 	(lib (name "TPS54294PWP") (type "KiCad") (uri "${KIPRJMOD}/assets/ul_TPS54294PWP/KiCADv6/2026-09-04_08-03-44.kicad_sym") (options "") (descr ""))
-	(lib (name "2026-09-16_13-52-00") (type "KiCad") (uri "${KIPRJMOD}/assets/410_251_B/KiCADv6/2026-09-16_13-52-00.kicad_sym") (options "") (descr ""))
+	(lib (name "ESDALC6V1_1U2") (type "KiCad") (uri "${KIPRJMOD}/assets/ESDALC6V1_1U2/2026-09-17_10-46-04.kicad_sym") (options "") (descr ""))
 )

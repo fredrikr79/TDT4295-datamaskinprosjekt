@@ -438,24 +438,12 @@
       "Root"
     ],
     [
-      "a39ac6f6-156d-4e0b-9cc4-d1c3d15eb944",
-      "Powersupply-lower"
-    ],
-    [
-      "29fcc9f6-3628-4988-aed7-ebf94d0e9351",
-      "Powersupply-upper"
-    ],
-    [
       "634870db-7705-458e-b29f-8b3e7772e7aa",
       "Powersupply"
     ],
     [
       "59405b24-6536-4799-b908-ee0def989f5c",
       "MCU"
-    ],
-    [
-      "3e6013bd-65e3-4bc7-b5b2-6059b6a31574",
-      "STM32U535CE"
     ],
     [
       "00be9b76-425d-4c6c-9c1d-55091adef36b",

@@ -6372,6 +6372,12 @@
 		(uuid "62cc77ef-f392-404d-b0cf-2ec3f0d94f4f")
 	)
 	(junction
+		(at 217.17 147.32)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "678386dc-5551-44ee-acc6-a1818be1fcf9")
+	)
+	(junction
 		(at 48.26 143.51)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -7559,6 +7565,16 @@
 	)
 	(wire
 		(pts
+			(xy 217.17 147.32) (xy 250.19 147.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5ede128e-a1d8-40f2-ac67-31e9c3ce96d4")
+	)
+	(wire
+		(pts
 			(xy 138.43 55.88) (xy 151.13 55.88)
 		)
 		(stroke
@@ -7689,7 +7705,7 @@
 	)
 	(wire
 		(pts
-			(xy 217.17 147.32) (xy 259.08 147.32)
+			(xy 208.28 147.32) (xy 217.17 147.32)
 		)
 		(stroke
 			(width 0)
@@ -9247,7 +9263,7 @@
 	)
 	(hierarchical_label "CC2"
 		(shape bidirectional)
-		(at 259.08 147.32 0)
+		(at 250.19 147.32 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -16416,52 +16432,6 @@
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/59405b24-6536-4799-b908-ee0def989f5c"
 					(reference "#PWR063")
 					(unit 1)
-				)
-			)
-		)
-	)
-	(sheet
-		(at 24.13 36.83)
-		(size 24.13 13.97)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(stroke
-			(width 0.1524)
-			(type solid)
-		)
-		(fill
-			(color 0 0 0 0)
-		)
-		(uuid "3e6013bd-65e3-4bc7-b5b2-6059b6a31574")
-		(property "Sheetname" "STM32U535CE"
-			(at 24.13 36.1184 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left bottom)
-			)
-		)
-		(property "Sheetfile" "STM32U535CE.kicad_sch"
-			(at 24.13 51.3846 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left top)
-			)
-		)
-		(instances
-			(project "tdt4295"
-				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/59405b24-6536-4799-b908-ee0def989f5c"
-					(page "6")
 				)
 			)
 		)

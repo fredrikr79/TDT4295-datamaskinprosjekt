@@ -592,6 +592,52 @@
 		)
 	)
 	(sheet
+		(at 111.76 83.82)
+		(size 50.165 31.75)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "55913984-0b9b-45b1-b632-d56e73135cfc")
+		(property "Sheetname" "fpga"
+			(at 111.76 83.1084 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "fpga.kicad_sch"
+			(at 111.76 116.1546 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
 		(at 25.4 62.23)
 		(size 25.4 16.51)
 		(exclude_from_sim no)

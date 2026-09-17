@@ -1,5 +1,5 @@
 module main (
-    input  wire       clk,
+    input  wire       clk, 
     input  wire [3:2] sw,
     input wire [3:0] btn,
     output wire [3:0] vga_r,
@@ -12,6 +12,18 @@ module main (
   wire [9:0] coord_x, coord_y;
 
   color_pkg::color_t color;
+  import main_pkg::*;
+
+
+  // Instantiate clocks
+  clock_enable_pulse #(
+      .N(PixelClockIncrement)
+  ) pixel_pulser (
+      .clk(clk),
+      .reset(sw[3]),
+      .enable(sw[2]),
+      .pulse(pixel_pulse)
+  );
 
   vga_controller vga_controller_unit (
       .clk(clk),

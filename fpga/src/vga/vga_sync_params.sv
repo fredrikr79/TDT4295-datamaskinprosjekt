@@ -24,6 +24,5 @@ package vga_sync_params;
   localparam int unsigned TotalWidth = ActiveWidth + HorizontalFrontPorch + HorizontalSync + HorizontalBackPorch;
   localparam int unsigned TotalHeight = ActiveHeight + VerticalFrontPorch + VerticalSync + VerticalBackPorch;
 
-  localparam int unsigned PixelClockIncrement = 4;
   /* verilator lint_on UNUSEDPARAM */
 endpackage

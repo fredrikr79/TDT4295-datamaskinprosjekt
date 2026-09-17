@@ -2,12 +2,12 @@ module vga_controller (
     input wire clk,
     reset,
     enable,
+    pixel_pulse
     output reg h_sync,
     v_sync,
     output reg unsigned [9:0] coord_x,
     coord_y,
-    output reg active_area,
-    output reg pixel_pulse
+    output reg active_area
 );
   import vga_sync_params::*;
 
@@ -15,15 +15,6 @@ module vga_controller (
   reg h_sync_next, v_sync_next;
   reg unsigned [9:0] coord_x_next, coord_y_next;
   reg active_area_next;
-
-  clock_enable_pulse #(
-      .N(PixelClockIncrement)
-  ) pixel_pulser (
-      .clk(clk),
-      .reset(reset),
-      .enable(enable),
-      .pulse(pixel_pulse)
-  );
 
   always_ff @(posedge clk) begin
     if (pixel_pulse) begin

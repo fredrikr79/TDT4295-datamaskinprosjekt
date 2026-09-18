@@ -64,6 +64,7 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+extern void myMain(void);
 
 /* USER CODE END 0 */
 
@@ -104,6 +105,8 @@ int main(void)
   MX_OCTOSPI1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  myMain(); // call main form my main
+  // while loop bellow shuld never be entered.
 
   /* USER CODE END 2 */
 
@@ -377,6 +380,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GREEN_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

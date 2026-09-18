@@ -28,6 +28,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
+# Include soucses.cmake
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sources.cmake)
+
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
@@ -44,17 +47,23 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    ${APP_SOURCES}
+    port/stm32/io_uart.c
+    port/stm32/platform_stm32.c
+    port/stm32/transport_ospi.c
+    port/stm32/diskio_sdmmc.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${APP_INCLUDES}
 )
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+    LOG_LEVEL=LOG_LEVEL_INFO
 )
 
 # Remove wrong libob.a library dependency when using cpp files

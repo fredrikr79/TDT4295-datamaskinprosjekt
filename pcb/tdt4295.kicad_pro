@@ -215,20 +215,20 @@
       "extra_units": "error",
       "field_name_whitespace": "warning",
       "footprint_filter": "ignore",
-      "footprint_link_issues": "ignore",
+      "footprint_link_issues": "warning",
       "four_way_junction": "ignore",
       "ground_pin_not_ground": "warning",
       "hier_label_mismatch": "error",
       "isolated_pin_label": "warning",
       "label_dangling": "error",
       "label_multiple_wires": "warning",
-      "lib_symbol_issues": "error",
-      "lib_symbol_mismatch": "ignore",
+      "lib_symbol_issues": "warning",
+      "lib_symbol_mismatch": "warning",
       "missing_bidi_pin": "warning",
       "missing_input_pin": "warning",
       "missing_power_pin": "error",
       "missing_unit": "warning",
-      "multiple_net_names": "error",
+      "multiple_net_names": "warning",
       "net_not_bus_member": "warning",
       "no_connect_connected": "warning",
       "no_connect_dangling": "warning",
@@ -429,7 +429,7 @@
         "uuid": "603dd496-f9c4-4a31-9104-19eec41ebc98"
       }
     ],
-    "used_designators": "R1-43,R46-48,JP1,J1-8,Q1-2,U1-10,D1-16,C1-120,L1-6,L8,FB1-2,CR1-2,#PWR1-98,#PWR100-102,Y1-5,STM32UF9NJH6Q_CUSTOM1-3,SW1,#FLG1-6",
+    "used_designators": "Y1-5,#PWR1-98,#PWR100-102,D1-16,Q1-2,SW1,C1-120,FB1-2,U1-10,CR1-2,#FLG1-5,JP1,R1-43,R46-48,STM32UF9NJH6Q_CUSTOM1-3,L1-6,L8,J1-8",
     "variants": []
   },
   "sheets": [

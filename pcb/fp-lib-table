@@ -1,4 +1,10 @@
 (fp_lib_table
 	(version 7)
 	(lib (name "custom_footprints") (type "KiCad") (uri "${KIPRJMOD}/custom_footprints.pretty") (options "") (descr ""))
+	(lib (name "S70KL1283DPBHV020") (type "Altium Designer") (uri "${KIPRJMOD}/assets/S70KL1283DPBHV020/Altium/BGA24C100P5X5_600X800X100.PcbLib") (options "") (descr ""))
+	(lib (name "TPS54325PWP.d") (type "KiCad") (uri "${KIPRJMOD}/assets/TPS54325PWP/footprints.pretty") (options "") (descr ""))
+	(lib (name "TPS54294PWP") (type "KiCad") (uri "${KIPRJMOD}/assets/ul_TPS54294PWP/KiCADv6/footprints.pretty") (options "") (descr ""))
+	(lib (name "410_251_B") (type "KiCad") (uri "${KIPRJMOD}/assets/410_251_B/KiCADv6/footprints.pretty") (options "") (descr ""))
+	(lib (name "LED_ARGB") (type "KiCad") (uri "${KIPRJMOD}/assets/APTF1616LSEEZGKQBKC/footprints.pretty") (options "") (descr ""))
+	(lib (name "USB4110_GF_A") (type "KiCad") (uri "${KIPRJMOD}/assets/USB4110_GF_A/footprints.pretty") (options "") (descr ""))
 )

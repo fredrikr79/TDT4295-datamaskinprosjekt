@@ -5762,6 +5762,12 @@
 		(uuid "731b1c38-13dc-4ceb-bcde-e80348fa7213")
 	)
 	(junction
+		(at 289.56 163.83)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "776e9a2a-7363-4d70-ab22-ed4b3ca018f9")
+	)
+	(junction
 		(at 35.56 166.37)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6309,6 +6315,16 @@
 	)
 	(wire
 		(pts
+			(xy 289.56 163.83) (xy 297.18 163.83)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "002101b0-628e-4d42-9dff-02154cb12e3a")
+	)
+	(wire
+		(pts
 			(xy 290.83 205.74) (xy 294.64 205.74)
 		)
 		(stroke
@@ -6729,7 +6745,7 @@
 	)
 	(wire
 		(pts
-			(xy 289.56 153.67) (xy 289.56 166.37)
+			(xy 289.56 153.67) (xy 289.56 163.83)
 		)
 		(stroke
 			(width 0)
@@ -6759,7 +6775,7 @@
 	)
 	(wire
 		(pts
-			(xy 279.4 163.83) (xy 297.18 163.83)
+			(xy 279.4 163.83) (xy 289.56 163.83)
 		)
 		(stroke
 			(width 0)
@@ -6986,6 +7002,16 @@
 			(type default)
 		)
 		(uuid "3bd12712-c293-4655-99ee-338b4c9e0a16")
+	)
+	(wire
+		(pts
+			(xy 289.56 163.83) (xy 289.56 166.37)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3c954f07-3739-4e78-9bfc-6545816f9065")
 	)
 	(wire
 		(pts
@@ -9178,7 +9204,7 @@
 		(uuid "35590b52-8d73-43a2-8bf1-b3b935e6a3a9")
 	)
 	(label "SD_DAT3"
-		(at 289.56 166.37 0)
+		(at 287.02 166.37 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -9258,7 +9284,7 @@
 		(uuid "9f4960ad-b700-4abc-9c41-65f657b82171")
 	)
 	(label "SD_DAT2"
-		(at 289.56 163.83 0)
+		(at 287.02 163.83 0)
 		(effects
 			(font
 				(size 1.27 1.27)

@@ -5982,8 +5982,8 @@
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "U"
-				(at 0 0 0)
+			(property "Reference" "U3"
+				(at 12.7 6.35 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
@@ -5994,7 +5994,7 @@
 				)
 			)
 			(property "Value" "S70KL1283DPBHV020"
-				(at 0 -45.72 0)
+				(at 12.7 2.54 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects

@@ -46,9 +46,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/myMain.c
-    Core/Src/fpgacon.c
     Core/Src/transport.c
     Core/Src/cli.c
+    Core/Src/fpga.c
 )
 
 # Add include paths

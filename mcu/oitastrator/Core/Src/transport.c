@@ -1,6 +1,16 @@
 #include "transport.h"
-#include "fpgacon.h"
 #include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+/* "Skip" byte: the first byte of EVERY transaction, so the FPGA gets one
+ * throw-away clock cycle.
+ *   write: SKIP, opcode, [x y len], [payload]
+ *   read : SKIP, [turnaround], data...   (no opcode -- what to read was
+ *          requested by an earlier write) */
+#ifndef TRANSPORT_SKIP_BYTE
+#define TRANSPORT_SKIP_BYTE  0x00u
+#endif
 
 HAL_StatusTypeDef transport_init(spi_backend_t *backend)
 {
@@ -46,28 +56,30 @@ extern OSPI_HandleTypeDef hospi1;
  *   as well means the pixel payload can be DMA'd straight from the
  *   caller's buffer, with no copy into a "header + payload" scratch buffer.
  */
-static void ospi_build_cmd(OSPI_RegularCmdTypeDef *cmd, const transport_hdr_t *hdr,
-                           uint16_t n, uint32_t dummy_cycles)
+static void ospi_cmd_common(OSPI_RegularCmdTypeDef *cmd)
 {
     *cmd = (OSPI_RegularCmdTypeDef){0};
 
-    cmd->OperationType = HAL_OSPI_OPTYPE_COMMON_CFG;   /* indirect mode (not memory-mapped) */
-    cmd->FlashId       = HAL_OSPI_FLASH_ID_1;          /* only matters in dual-quad, but must be valid */
-    cmd->DQSMode       = HAL_OSPI_DQS_DISABLE;         /* FPGA has no data strobe */
-    cmd->SIOOMode      = HAL_OSPI_SIOO_INST_EVERY_CMD; /* send the opcode on every transaction */
+    cmd->OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;   /* indirect mode (not memory-mapped) */
+    cmd->FlashId            = HAL_OSPI_FLASH_ID_1;          /* only matters in dual-quad, but must be valid */
+    cmd->DQSMode            = HAL_OSPI_DQS_DISABLE;         /* FPGA has no data strobe */
+    cmd->SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD; /* send the instruction on every transaction */
+    cmd->InstructionMode    = HAL_OSPI_INSTRUCTION_8_LINES;
+    cmd->InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
+    cmd->AddressMode        = HAL_OSPI_ADDRESS_NONE;
+    cmd->AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
+    cmd->DataDtrMode        = HAL_OSPI_DATA_DTR_DISABLE;
+}
 
-    if(OSPI_PADING){
-        cmd->Instruction     = (OSPI_PAD << 8) | hdr->opcode;
-        cmd->InstructionMode = HAL_OSPI_INSTRUCTION_8_LINES;
-        cmd->InstructionSize = HAL_OSPI_INSTRUCTION_16_BITS;
-        cmd->InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
-    } else {
-        /* Instruction phase: 1 byte opcode on 8 lines */
-        cmd->Instruction        = hdr->opcode;
-        cmd->InstructionMode    = HAL_OSPI_INSTRUCTION_8_LINES;
-        cmd->InstructionSize    = HAL_OSPI_INSTRUCTION_8_BITS;
-        cmd->InstructionDtrMode = HAL_OSPI_INSTRUCTION_DTR_DISABLE;
-    }
+/* Write: instruction = SKIP, opcode (16 bits, MSB first). */
+static void ospi_build_write(OSPI_RegularCmdTypeDef *cmd, const transport_hdr_t *hdr, uint16_t n)
+{
+    ospi_cmd_common(cmd);
+
+    // cmd->Instruction     = ((uint32_t)TRANSPORT_SKIP_BYTE << 8) | hdr->opcode;
+    // cmd->InstructionSize = HAL_OSPI_INSTRUCTION_16_BITS;
+    cmd->Instruction     = hdr->opcode;
+    cmd->InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS;
 
     if (hdr->has_args) {
         /* Address phase: 4 bytes, MSB first -> x_hi x_lo y_hi y_lo */
@@ -81,20 +93,30 @@ static void ospi_build_cmd(OSPI_RegularCmdTypeDef *cmd, const transport_hdr_t *h
         cmd->AlternateBytesMode    = HAL_OSPI_ALTERNATE_BYTES_8_LINES;
         cmd->AlternateBytesSize    = HAL_OSPI_ALTERNATE_BYTES_16_BITS;
         cmd->AlternateBytesDtrMode = HAL_OSPI_ALTERNATE_BYTES_DTR_DISABLE;
-    } else {
-        cmd->AddressMode        = HAL_OSPI_ADDRESS_NONE;
-        cmd->AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
     }
 
     if (n > 0u) {
-        cmd->DataMode    = HAL_OSPI_DATA_8_LINES;
-        cmd->DataDtrMode = HAL_OSPI_DATA_DTR_DISABLE;
-        cmd->NbData      = n;               /* HAL writes NbData - 1 into DLR */
-        cmd->DummyCycles = dummy_cycles;    /* clocks between header and data */
+        cmd->DataMode = HAL_OSPI_DATA_8_LINES;
+        cmd->NbData   = n;                  /* HAL writes NbData - 1 into DLR */
     } else {
-        cmd->DataMode    = HAL_OSPI_DATA_NONE;
-        cmd->DummyCycles = 0u;
+        cmd->DataMode = HAL_OSPI_DATA_NONE;
     }
+    cmd->DummyCycles = 0u;
+}
+
+/* Read: instruction = SKIP only (8 bits), then turnaround, then data.
+ * The HAL needs an instruction or address phase to start a read, so the
+ * skip byte doubles as that trigger. */
+static void ospi_build_read(OSPI_RegularCmdTypeDef *cmd, uint16_t n)
+{
+    ospi_cmd_common(cmd);
+
+    cmd->Instruction     = TRANSPORT_SKIP_BYTE;
+    cmd->InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS;
+
+    cmd->DataMode    = HAL_OSPI_DATA_8_LINES;
+    cmd->NbData      = n;
+    cmd->DummyCycles = TRANSPORT_TURNAROUND_CYCLES;   /* bus handover to the FPGA */
 }
 
 /* If a start failed halfway (e.g. Command() OK but Transmit_DMA() refused),
@@ -118,10 +140,11 @@ static HAL_StatusTypeDef ospi_backend_init(void)
     return (HAL_OSPI_GetState(&hospi1) == HAL_OSPI_STATE_READY) ? HAL_OK : HAL_ERROR;
 }
 
-static HAL_StatusTypeDef ospi_backend_write(const transport_hdr_t *hdr, const uint8_t *data, uint16_t n)
+static HAL_StatusTypeDef ospi_backend_write(const transport_hdr_t *hdr, const uint8_t *data)
 {
     OSPI_RegularCmdTypeDef cmd;
     HAL_StatusTypeDef st;
+    uint16_t n = hdr->len;
 
     if (hdr == NULL || (n > 0u && data == NULL)) {
         return HAL_ERROR;
@@ -130,7 +153,7 @@ static HAL_StatusTypeDef ospi_backend_write(const transport_hdr_t *hdr, const ui
         return HAL_BUSY;
     }
 
-    ospi_build_cmd(&cmd, hdr, n, 0u);
+    ospi_build_write(&cmd, hdr, n);
 
     /* Mark busy BEFORE starting, so a fast completion IRQ can't be lost. */
     ospi_backend.error = 0;
@@ -159,19 +182,21 @@ static HAL_StatusTypeDef ospi_backend_write(const transport_hdr_t *hdr, const ui
     return HAL_OK;               /* done -> 1 later, from a callback below */
 }
 
-static HAL_StatusTypeDef ospi_backend_read(const transport_hdr_t *hdr, uint8_t *buf, uint16_t n)
+static HAL_StatusTypeDef ospi_backend_read(const transport_hdr_t *hdr, uint8_t *buf)
 {
     OSPI_RegularCmdTypeDef cmd;
     HAL_StatusTypeDef st;
+    uint16_t n = hdr->len;
 
-    if (hdr == NULL || buf == NULL || n == 0u) {
+    (void)hdr;   /* unused: a read carries no opcode, may be NULL */
+    if (buf == NULL || n == 0u) {
         return HAL_ERROR;   /* a read needs a data phase */
     }
     if (!ospi_backend.done) {
         return HAL_BUSY;
     }
 
-    ospi_build_cmd(&cmd, hdr, n, TRANSPORT_TURNAROUND_CYCLES);
+    ospi_build_read(&cmd, n);
 
     ospi_backend.error = 0;
     ospi_backend.done  = 0;
@@ -239,101 +264,3 @@ void HAL_OSPI_ErrorCallback(OSPI_HandleTypeDef *hospi)     /* transfer or DMA er
 }
 
 #endif /* HAL_OSPI_MODULE_ENABLED */
-
-
-#ifdef TRANSPORT_ENABLE_BITBANG
-/* =======================================================================
- * Bit-bang backend -- no DMA, blocking, manual GPIO toggling. Produces the
- * same byte sequence as the OCTOSPI backend, so the FPGA can't tell the
- * difference (just slower). Only the pin-level helpers are left to fill in.
- * ======================================================================= */
-
-static void bb_cs(uint8_t active)       { (void)active; /* TODO: drive CS low (1) / high (0) */ }
-static void bb_bus_output(uint8_t out)  { (void)out;    /* TODO: switch D0..D7 to output (1) / input (0) */ }
-static void bb_clock_pulse(void)        {               /* TODO: CLK high, then low */ }
-static void bb_put_byte(uint8_t b)      { (void)b;      /* TODO: set D0..D7 = b, then bb_clock_pulse() */ }
-static uint8_t bb_get_byte(void)        { /* TODO: bb_clock_pulse(), sample D0..D7 */ return 0; }
-
-static void bb_send_header(const transport_hdr_t *hdr)
-{
-    bb_put_byte(hdr->opcode);
-    if (hdr->has_args) {
-        bb_put_byte((uint8_t)(hdr->x >> 8));
-        bb_put_byte((uint8_t)(hdr->x));
-        bb_put_byte((uint8_t)(hdr->y >> 8));
-        bb_put_byte((uint8_t)(hdr->y));
-        bb_put_byte((uint8_t)(hdr->len >> 8));
-        bb_put_byte((uint8_t)(hdr->len));
-    }
-}
-
-static HAL_StatusTypeDef bitbang_backend_init(void)
-{
-    /* Configure the GPIOs here if MX_GPIO_Init() hasn't already. */
-    bitbang_backend.error = 0;
-    bitbang_backend.done  = 1;
-    return HAL_OK;
-}
-
-static HAL_StatusTypeDef bitbang_backend_write(const transport_hdr_t *hdr, const uint8_t *data, uint16_t n)
-{
-    if (hdr == NULL || (n > 0u && data == NULL)) {
-        return HAL_ERROR;
-    }
-    bitbang_backend.error = 0;
-    bitbang_backend.done  = 0;
-
-    bb_bus_output(1);
-    bb_cs(1);
-    bb_send_header(hdr);
-    for (uint16_t i = 0; i < n; i++) {
-        bb_put_byte(data[i]);
-    }
-    bb_cs(0);
-
-    bitbang_backend.done = 1;   /* "callback" fires here, synchronously */
-    return HAL_OK;
-}
-
-static HAL_StatusTypeDef bitbang_backend_read(const transport_hdr_t *hdr, uint8_t *buf, uint16_t n)
-{
-    if (hdr == NULL || buf == NULL || n == 0u) {
-        return HAL_ERROR;
-    }
-    bitbang_backend.error = 0;
-    bitbang_backend.done  = 0;
-
-    bb_bus_output(1);
-    bb_cs(1);
-    bb_send_header(hdr);
-    bb_bus_output(0);                        /* release the bus... */
-    for (uint32_t i = 0; i < TRANSPORT_TURNAROUND_CYCLES; i++) {
-        bb_clock_pulse();                    /* ...and give the FPGA time to take it */
-    }
-    for (uint16_t i = 0; i < n; i++) {
-        buf[i] = bb_get_byte();
-    }
-    bb_cs(0);
-    bb_bus_output(1);
-
-    bitbang_backend.done = 1;
-    return HAL_OK;
-}
-
-static void bitbang_backend_abort(void)
-{
-    bb_cs(0);
-    bitbang_backend.error = 1;
-    bitbang_backend.done  = 1;
-}
-
-spi_backend_t bitbang_backend = {
-    .init  = bitbang_backend_init,
-    .write = bitbang_backend_write,
-    .read  = bitbang_backend_read,
-    .abort = bitbang_backend_abort,
-    .done  = 1,
-    .error = 0,
-};
-
-#endif /* TRANSPORT_ENABLE_BITBANG */

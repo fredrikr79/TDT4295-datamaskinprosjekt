@@ -3,39 +3,6 @@
 
 #include "stm32u5xx_hal.h"
 #include <stdint.h>
-
-/*
- * Layer 1: moves bytes between MCU and FPGA. Knows nothing about what the
- * bytes mean -- that's fpgacon.c's job.
- *
- * Each backend is wrapped in a compile-time guard so a backend with no
- * hardware behind it compiles out entirely:
- *
- * - HAL_OSPI_MODULE_ENABLED is defined by CubeMX (stm32u5xx_hal_conf.h)
- *   whenever OCTOSPI1 is enabled in the .ioc.
- * - TRANSPORT_ENABLE_BITBANG has no CubeMX equivalent, so it's a project
- *   toggle -- define it here or (better) as a compiler define.
- */
-// #define TRANSPORT_ENABLE_BITBANG
-
-/*
- * ---- Wire format (one transaction = one CS-low period) --------------------
- *
- * Every phase uses all 8 data lines, single data rate, 1 byte per clock:
- *
- *   write:  [opcode] [x_hi x_lo y_hi y_lo len_hi len_lo] [payload ...]
- *   read:   [opcode] [x_hi x_lo y_hi y_lo len_hi len_lo] [turnaround] [FPGA drives n bytes]
- *                     \_____ only if has_args != 0 _____/
- *
- * Inside the OCTOSPI backend this is mapped onto the peripheral's
- * instruction / address / alternate-bytes / data phases, but on the wire it
- * is just this byte sequence (big-endian) -- the FPGA only has to count
- * bytes after CS falls.
- *
- * TRANSPORT_TURNAROUND_CYCLES: clocks where nobody drives the bus, so the
- * FPGA can switch its IOs from input to output before it starts sending.
- * Must match the FPGA implementation.
- */
 #define TRANSPORT_TURNAROUND_CYCLES  4u
 
 typedef struct {
@@ -52,11 +19,11 @@ typedef struct {
     /* Send header, then n payload bytes from data (n may be 0, data may then
      * be NULL). Non-blocking: returns once the transfer has STARTED.
      * data must stay valid and unchanged until done == 1. */
-    HAL_StatusTypeDef (*write)(const transport_hdr_t *hdr, const uint8_t *data, uint16_t n);
+    HAL_StatusTypeDef (*write)(const transport_hdr_t *hdr, const uint8_t *data);
 
     /* Send header, wait TRANSPORT_TURNAROUND_CYCLES, then clock n bytes
      * (n >= 1) into buf. Non-blocking, same buffer rule as write(). */
-    HAL_StatusTypeDef (*read)(const transport_hdr_t *hdr, uint8_t *buf, uint16_t n);
+    HAL_StatusTypeDef (*read)(const transport_hdr_t *hdr, uint8_t *buf);
 
     /* Kill an in-flight transfer (used on timeouts). Afterwards done == 1
      * and error == 1. */
@@ -73,10 +40,7 @@ typedef struct {
 
 #ifdef HAL_OSPI_MODULE_ENABLED
 extern spi_backend_t ospi_backend;
-#endif
-
-#ifdef TRANSPORT_ENABLE_BITBANG
-extern spi_backend_t bitbang_backend;
+#define BACKEND  (&ospi_backend)
 #endif
 
 /* Calls the chosen backend's init() through the common interface. */

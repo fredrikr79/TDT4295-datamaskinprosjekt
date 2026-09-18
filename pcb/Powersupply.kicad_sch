@@ -3096,6 +3096,12 @@
 		(uuid "37c8a1f1-f681-4c78-a0b5-8d0d47277e38")
 	)
 	(junction
+		(at 251.46 124.4903)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "397f42a7-eb46-46de-bea3-f09c87d21a8d")
+	)
+	(junction
 		(at 38.1 162.56)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3603,7 +3609,7 @@
 	)
 	(wire
 		(pts
-			(xy 251.46 120.65) (xy 251.46 127)
+			(xy 251.46 120.65) (xy 251.46 124.4903)
 		)
 		(stroke
 			(width 0)
@@ -3750,6 +3756,16 @@
 			(type default)
 		)
 		(uuid "2bb55710-9383-401b-87ea-ee27c61cbb71")
+	)
+	(wire
+		(pts
+			(xy 251.46 124.4903) (xy 251.46 127)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2e137ffd-7470-4c54-a004-6914d2f510b2")
 	)
 	(wire
 		(pts
@@ -7977,6 +7993,85 @@
 			(project "tdt4295"
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
 					(reference "R11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 251.46 124.4903 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "b21f91e2-66f2-46ee-8513-12ed5aacf14f")
+		(property "Reference" "#FLG06"
+			(at 249.555 124.4903 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 247.65 124.4902 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm"
+			(at 251.46 124.4903 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 251.46 124.4903 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 251.46 124.4903 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "4258a7cb-6950-470c-9988-25fcfb1371b2")
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
+					(reference "#FLG06")
 					(unit 1)
 				)
 			)

@@ -28117,7 +28117,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 221.742 90)
 			(hide yes)
 			(show_name no)
@@ -29849,7 +29849,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 216.662 90)
 			(hide yes)
 			(show_name no)
@@ -29929,7 +29929,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 211.582 90)
 			(hide yes)
 			(show_name no)
@@ -30940,7 +30940,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 219.202 90)
 			(hide yes)
 			(show_name no)
@@ -32471,7 +32471,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 234.442 90)
 			(hide yes)
 			(show_name no)
@@ -32888,7 +32888,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 214.122 90)
 			(hide yes)
 			(show_name no)
@@ -33137,7 +33137,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 224.282 90)
 			(hide yes)
 			(show_name no)
@@ -33558,7 +33558,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 226.822 90)
 			(hide yes)
 			(show_name no)
@@ -33997,7 +33997,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 231.902 90)
 			(hide yes)
 			(show_name no)
@@ -35519,7 +35519,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 229.362 90)
 			(hide yes)
 			(show_name no)
@@ -35767,7 +35767,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 203.962 90)
 			(hide yes)
 			(show_name no)
@@ -37310,7 +37310,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 206.502 90)
 			(hide yes)
 			(show_name no)
@@ -37558,7 +37558,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 236.982 90)
 			(hide yes)
 			(show_name no)
@@ -38573,7 +38573,7 @@
 				)
 			)
 		)
-		(property "Footprint" "footprints:IC11_410-251-B_DGT"
+		(property "Footprint" "410_251_B:IC11_410-251-B_DGT"
 			(at 119.38 25.4 0)
 			(hide yes)
 			(show_name no)
@@ -39111,7 +39111,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder"
 			(at 129.54 209.042 90)
 			(hide yes)
 			(show_name no)

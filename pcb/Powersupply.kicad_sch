@@ -1341,8 +1341,8 @@
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "U"
-				(at 57.404 54.61 0)
+			(property "Reference" "U6"
+				(at 56.515 54.61 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
@@ -1352,7 +1352,7 @@
 				)
 			)
 			(property "Value" "TPS54294PWP"
-				(at 57.404 52.07 0)
+				(at 56.515 52.07 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
@@ -1531,7 +1531,7 @@
 						)
 					)
 				)
-				(pin bidirectional line
+				(pin power_in line
 					(at 40.64 39.37 0)
 					(length 7.62)
 					(name "PGND1"
@@ -1603,7 +1603,7 @@
 						)
 					)
 				)
-				(pin bidirectional line
+				(pin power_in line
 					(at 40.64 29.21 0)
 					(length 7.62)
 					(name "GND"
@@ -1693,7 +1693,7 @@
 						)
 					)
 				)
-				(pin bidirectional line
+				(pin power_in line
 					(at 72.39 39.37 180)
 					(length 7.62)
 					(name "PGND2"
@@ -1765,7 +1765,7 @@
 						)
 					)
 				)
-				(pin unspecified line
+				(pin power_in line
 					(at 55.88 19.05 90)
 					(length 7.62)
 					(name "EPAD"
@@ -1967,7 +1967,7 @@
 						)
 					)
 				)
-				(pin unspecified line
+				(pin passive line
 					(at 34.29 -26.67 0)
 					(length 7.62)
 					(name "SS"
@@ -2129,7 +2129,7 @@
 						)
 					)
 				)
-				(pin unspecified line
+				(pin power_in line
 					(at 50.8 -41.91 90)
 					(length 7.62)
 					(name "EPAD"
@@ -2167,7 +2167,7 @@
 						)
 					)
 				)
-				(pin unspecified line
+				(pin passive line
 					(at 67.31 -16.51 180)
 					(length 7.62)
 					(name "SW1"
@@ -2185,7 +2185,7 @@
 						)
 					)
 				)
-				(pin unspecified line
+				(pin passive line
 					(at 67.31 -19.05 180)
 					(length 7.62)
 					(name "SW2"
@@ -2993,6 +2993,17 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "blue?"
+		(exclude_from_sim no)
+		(at 48.26 69.85 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "008ab54f-6631-4a4b-8ae2-abd6afa1f9df")
+	)
 	(text "lp>2,9A, lrms>2.1A"
 		(exclude_from_sim no)
 		(at 226.06 124.206 0)
@@ -3022,6 +3033,17 @@
 			)
 		)
 		(uuid "65d166c4-028a-4bea-9c29-69bf5f20adc8")
+	)
+	(text "green?"
+		(exclude_from_sim no)
+		(at 48.26 82.55 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "82144607-75c7-4934-a2d7-004fcb7c8c57")
 	)
 	(text "1%\n"
 		(exclude_from_sim no)
@@ -3094,12 +3116,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "37c8a1f1-f681-4c78-a0b5-8d0d47277e38")
-	)
-	(junction
-		(at 251.46 124.4903)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "397f42a7-eb46-46de-bea3-f09c87d21a8d")
 	)
 	(junction
 		(at 38.1 162.56)
@@ -3198,6 +3214,12 @@
 		(uuid "71719452-5639-4257-9956-bf0dcc1cb3ed")
 	)
 	(junction
+		(at 251.46 127)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "73135b89-eed7-49e4-b6f7-c60ede5c6fd2")
+	)
+	(junction
 		(at 107.95 60.96)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3238,12 +3260,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "916f6df2-f9af-4406-a4e6-c80b2861a419")
-	)
-	(junction
-		(at 251.46 127)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "9acaf57a-6b20-42e3-8b40-702cf3c71338")
 	)
 	(junction
 		(at 78.74 104.14)
@@ -3328,6 +3344,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "ca31ecee-7953-4b6d-9ef0-530c8adb9714")
+	)
+	(junction
+		(at 251.46 123.19)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ccf28d59-0c97-4941-907d-dde1ad4a8485")
 	)
 	(junction
 		(at 67.31 33.02)
@@ -3609,16 +3631,6 @@
 	)
 	(wire
 		(pts
-			(xy 251.46 120.65) (xy 251.46 124.4903)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "14d9cd30-b1c3-4b58-b0f9-011ff9366cae")
-	)
-	(wire
-		(pts
 			(xy 107.95 53.34) (xy 107.95 60.96)
 		)
 		(stroke
@@ -3759,7 +3771,7 @@
 	)
 	(wire
 		(pts
-			(xy 251.46 124.4903) (xy 251.46 127)
+			(xy 251.46 120.65) (xy 251.46 123.19)
 		)
 		(stroke
 			(width 0)
@@ -4929,6 +4941,16 @@
 	)
 	(wire
 		(pts
+			(xy 251.46 123.19) (xy 251.46 127)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "db286776-ce7f-4ebf-a9c9-27b860e5e1b0")
+	)
+	(wire
+		(pts
 			(xy 121.92 139.7) (xy 20.32 139.7)
 		)
 		(stroke
@@ -5226,26 +5248,6 @@
 			(type default)
 		)
 		(uuid "fead5021-9076-4b13-905b-3fa841618c18")
-	)
-	(label "blue?"
-		(at 48.26 69.85 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "331c7790-6d73-46d7-96b1-36a497340eb9")
-	)
-	(label "green?"
-		(at 48.26 82.55 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e93d6b86-042e-4cdf-9377-c91c56f6c277")
 	)
 	(global_label "POWER_IN"
 		(shape input)
@@ -8000,7 +8002,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 251.46 124.4903 90)
+		(at 251.46 123.19 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8011,7 +8013,7 @@
 		(fields_autoplaced yes)
 		(uuid "b21f91e2-66f2-46ee-8513-12ed5aacf14f")
 		(property "Reference" "#FLG06"
-			(at 249.555 124.4903 0)
+			(at 249.555 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8022,7 +8024,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 247.65 124.4902 90)
+			(at 247.65 123.1899 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8033,7 +8035,7 @@
 			)
 		)
 		(property "Footprint" "Package_SO:TSSOP-28_4.4x9.7mm_P0.65mm"
-			(at 251.46 124.4903 0)
+			(at 251.46 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8044,7 +8046,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 251.46 124.4903 0)
+			(at 251.46 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8055,7 +8057,7 @@
 			)
 		)
 		(property "Description" "Special symbol for telling ERC where power comes from"
-			(at 251.46 124.4903 0)
+			(at 251.46 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

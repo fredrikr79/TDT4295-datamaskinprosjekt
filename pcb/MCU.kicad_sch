@@ -5395,6 +5395,39 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "MCU_STLINK_JTMS"
+		(exclude_from_sim no)
+		(at 217.17 101.6 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "18a4da80-0a65-4a9a-972d-1efbbb30cd1c")
+	)
+	(text "NRST"
+		(exclude_from_sim no)
+		(at 248.92 207.01 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "32c72957-a317-4510-aee3-f6ca01730eaf")
+	)
+	(text "SD_DAT0"
+		(exclude_from_sim no)
+		(at 217.17 172.72 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "54f19910-14f4-483f-924e-786da1166618")
+	)
 	(text "FORCE BOOT TO LOW, LOAD FIRMWARE INSTEAD\n"
 		(exclude_from_sim no)
 		(at 122.174 108.204 0)
@@ -5404,6 +5437,94 @@
 			)
 		)
 		(uuid "704c7ce8-05b3-40a6-907f-8c5d6a3f7e66")
+	)
+	(text "SD_DAT1"
+		(exclude_from_sim no)
+		(at 217.17 175.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "72072705-fa39-4ffc-ac81-913ea66c282b")
+	)
+	(text "MCU_VCP_RX"
+		(exclude_from_sim no)
+		(at 217.17 93.98 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "753b275f-ac6e-4326-aa11-d263bf3b9f2e")
+	)
+	(text "MCU_STLINK_JTDI"
+		(exclude_from_sim no)
+		(at 217.17 106.68 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "8a0e2a53-ee3e-4607-885f-f12728c55d13")
+	)
+	(text "SD_DAT2"
+		(exclude_from_sim no)
+		(at 287.02 163.83 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "906472e8-7301-40e3-a868-e58afbbdd967")
+	)
+	(text "MCU_STLINK_JTDO"
+		(exclude_from_sim no)
+		(at 217.17 119.38 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "99bfda4b-2184-4e7a-908f-3e0fa6bb06a1")
+	)
+	(text "MCU_STLINK_JCLK"
+		(exclude_from_sim no)
+		(at 217.17 104.14 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "c74cb3e6-f0d8-407c-b581-b38f35e28b46")
+	)
+	(text "MCU_VCP_TX"
+		(exclude_from_sim no)
+		(at 217.17 91.44 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e99c60ae-a45f-42a0-ab5e-a28498acc51a")
+	)
+	(text "SD_DAT3"
+		(exclude_from_sim no)
+		(at 287.02 166.37 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "fec8357f-a567-448e-87ac-e78e56c25821")
 	)
 	(junction
 		(at 204.47 38.1)
@@ -5524,12 +5645,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "62cc77ef-f392-404d-b0cf-2ec3f0d94f4f")
-	)
-	(junction
-		(at 217.17 147.32)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "678386dc-5551-44ee-acc6-a1818be1fcf9")
 	)
 	(junction
 		(at 52.07 158.75)
@@ -7111,16 +7226,6 @@
 	)
 	(wire
 		(pts
-			(xy 208.28 147.32) (xy 217.17 147.32)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "6d1cb5e1-97a2-4543-b9ff-5fae2ecd25cc")
-	)
-	(wire
-		(pts
 			(xy 241.3 101.6) (xy 217.17 101.6)
 		)
 		(stroke
@@ -8419,167 +8524,7 @@
 		)
 		(uuid "fbb02c1f-5bd3-4c65-abf1-df1655af5346")
 	)
-	(label "SD_DAT0"
-		(at 217.17 172.72 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "0220a75c-40e9-43c2-8b6c-c89959a5c02d")
-	)
-	(label "MCU_VDDUSB"
-		(at 217.17 40.64 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "09237472-1b9b-4fc6-95fc-355f93b1c4f9")
-	)
-	(label "MCU_VREF-"
-		(at 146.05 76.2 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "11145a38-f060-4285-a9f7-20b3083fc25e")
-	)
-	(label "MCU_VCP_RX"
-		(at 217.17 93.98 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "230f923e-76e4-4ec6-8c78-b4451a7c6430")
-	)
-	(label "MCU_VCP_TX"
-		(at 217.17 91.44 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "35590b52-8d73-43a2-8bf1-b3b935e6a3a9")
-	)
-	(label "SD_DAT3"
-		(at 287.02 166.37 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "3aa46163-f08a-4026-bb59-02687001a3b5")
-	)
-	(label "MCU_STLINK_JTDI"
-		(at 217.17 106.68 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "54e23825-ece7-4ae9-b918-3944400e028d")
-	)
-	(label "NRST"
-		(at 248.92 207.01 90)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "55baac61-64df-4612-9398-2ac91e3e12e4")
-	)
-	(label "MCU_VSS"
-		(at 173.99 243.84 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "702f4556-7ba4-40c0-9d15-aa06ad9fccf8")
-	)
-	(label "MCU_VREF+"
-		(at 151.13 72.39 90)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "718390ef-dae4-48d2-a1ae-5138dd1e1107")
-	)
-	(label "MCU_STLINK_JTMS"
-		(at 218.44 101.6 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "95721686-ede1-4920-8549-9764a7578fb7")
-	)
-	(label "MCU_STLINK_JTDO"
-		(at 217.17 119.38 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "964887f3-118d-48e5-a87a-fd1647cae499")
-	)
-	(label "MCU_STLINK_JCLK"
-		(at 217.17 104.14 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "9f4960ad-b700-4abc-9c41-65f657b82171")
-	)
-	(label "SD_DAT2"
-		(at 287.02 163.83 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "a5442e2e-37b4-4e9c-a822-34cef75d425d")
-	)
-	(label "SD_DAT1"
-		(at 217.17 175.26 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "cef93d93-1bc8-4a0e-957a-7449165c5030")
-	)
-	(label "MCU VCAP"
-		(at 146.05 220.98 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "dc793519-aac3-4b94-9139-c6f5846896ce")
-	)
-	(global_label "SP1_MOSI"
+	(global_label "SPI1_MOSI"
 		(shape bidirectional)
 		(at 226.06 86.36 0)
 		(fields_autoplaced yes)
@@ -8591,7 +8536,7 @@
 		)
 		(uuid "01d44397-b6a9-48e4-b617-8e7f0e035767")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 239.4093 86.36 0)
+			(at 240.0141 86.36 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8675,7 +8620,7 @@
 			)
 		)
 	)
-	(global_label "SP1_MISO"
+	(global_label "SPI1_MISO"
 		(shape bidirectional)
 		(at 226.06 83.82 0)
 		(fields_autoplaced yes)
@@ -8687,7 +8632,7 @@
 		)
 		(uuid "06158a0f-8223-4061-800f-9e2fd9950791")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 239.4093 83.82 0)
+			(at 240.0141 83.82 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9059,7 +9004,7 @@
 			)
 		)
 	)
-	(global_label "SP1_SCK"
+	(global_label "SPI1_SCK"
 		(shape input)
 		(at 226.06 71.12 0)
 		(fields_autoplaced yes)
@@ -9071,7 +9016,7 @@
 		)
 		(uuid "5aa226e6-cb8b-46e0-adac-2d9a82ff5b66")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 237.4513 71.12 0)
+			(at 238.0561 71.12 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

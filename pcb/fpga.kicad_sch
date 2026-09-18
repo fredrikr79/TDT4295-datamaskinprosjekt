@@ -5976,30 +5976,32 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "S70KL1283GABHI020:S70KL1283GABHI020"
+		(symbol "S70KL1283DPBHV020:S70KL1283DPBHV020"
 			(exclude_from_sim no)
 			(in_bom yes)
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "U3"
-				(at 12.7 5.08 0)
+			(property "Reference" "U"
+				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
 					(font
 						(size 1.8288 1.8288)
 					)
+					(justify left bottom)
 				)
 			)
-			(property "Value" "S70KL1283GABHI020"
-				(at 12.7 1.27 0)
+			(property "Value" "S70KL1283DPBHV020"
+				(at 0 -45.72 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
 					(font
 						(size 1.8288 1.8288)
 					)
+					(justify left bottom)
 				)
 			)
 			(property "Footprint" ""
@@ -6035,7 +6037,7 @@
 					)
 				)
 			)
-			(property "Manufacturer Order Number" "S70KL1283GABHI020"
+			(property "Manufacturer Order Number" "S70KL1283DPBHV020"
 				(at -5.588 -20.574 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -6071,7 +6073,7 @@
 					(justify left bottom)
 				)
 			)
-			(symbol "S70KL1283GABHI020_1_0"
+			(symbol "S70KL1283DPBHV020_1_0"
 				(rectangle
 					(start 25.4 0)
 					(end 0 -43.18)
@@ -6156,7 +6158,7 @@
 						)
 					)
 				)
-				(pin power_in inverted_clock
+				(pin bidirectional inverted_clock
 					(at -5.08 -25.4 0)
 					(length 5.08)
 					(name "CK_N"
@@ -33493,7 +33495,7 @@
 		)
 	)
 	(symbol
-		(lib_id "S70KL1283GABHI020:S70KL1283GABHI020")
+		(lib_id "S70KL1283DPBHV020:S70KL1283DPBHV020")
 		(at 152.4 88.9 0)
 		(unit 1)
 		(body_style 1)
@@ -33505,7 +33507,7 @@
 		(fields_autoplaced yes)
 		(uuid "d962a62a-cd05-419d-8806-2983a1745e68")
 		(property "Reference" "U3"
-			(at 165.1 83.82 0)
+			(at 165.1 82.55 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -33514,8 +33516,8 @@
 				)
 			)
 		)
-		(property "Value" "S70KL1283GABHI020"
-			(at 165.1 87.63 0)
+		(property "Value" "S70KL1283DPBHV020"
+			(at 165.1 86.36 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -33557,7 +33559,7 @@
 				)
 			)
 		)
-		(property "Manufacturer Order Number" "S70KL1283GABHI020"
+		(property "Manufacturer Order Number" "S70KL1283DPBHV020"
 			(at 146.812 109.474 0)
 			(hide yes)
 			(show_name no)

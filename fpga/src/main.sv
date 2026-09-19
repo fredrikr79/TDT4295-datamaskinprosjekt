@@ -1,19 +1,61 @@
-module main #(
-    parameter int INCREMENT_LIMIT = 49_999_999
-) (
-    input wire clk,
-    input wire [3:0] sw,
-    output reg [3:0] led
+module main (
+    input  wire       clk, 
+    input  wire [3:2] sw,
+    input wire [3:0] btn,
+    output wire [3:0] vga_r,
+    vga_g,
+    vga_b,
+    output wire       vga_hsync,
+    vga_vsync
 );
+  wire h_sync, v_sync, active_area, pixel_pulse;
+  wire [9:0] coord_x, coord_y;
 
-  reg [26:0] counter;
+  color_pkg::color_t color;
+  import main_pkg::*;
 
-  always @(posedge clk) begin
-    counter <= counter + 27'(sw);
-    if (counter >= 27'(INCREMENT_LIMIT)) begin
-      counter <= 0;
-      led <= led + 1'b1;
-    end
-  end
+
+  // Instantiate clocks
+  clock_enable_pulse #(
+      .N(PixelClockIncrement)
+  ) pixel_pulser (
+      .clk(clk),
+      .reset(sw[3]),
+      .enable(sw[2]),
+      .pulse(pixel_pulse)
+  );
+
+  vga_controller vga_controller_unit (
+      .clk(clk),
+      .reset(sw[3]),
+      .enable(sw[2]),
+      .h_sync(h_sync),
+      .v_sync(v_sync),
+      .coord_x(coord_x),
+      .coord_y(coord_y),
+      .active_area(active_area),
+      .pixel_pulse(pixel_pulse)
+  );
+  vga_game_example vga_game_example (
+      .clk(clk),
+      .reset(sw[3]),
+      .enable(sw[2]),
+      .up(btn[0]),
+      .down(btn[1]),
+      .left(btn[2]),
+      .right(btn[3]),
+      .coord_x(coord_x),
+      .coord_y(coord_y),
+      .active_area(active_area),
+      .color(color)
+  );
+  assign vga_r = color.red;
+  assign vga_g = color.green;
+  assign vga_b = color.blue;
+
+  // 640x480@60 needs NEGATIVE sync polarity; vga_controller drives its
+  // sync pulses active-high, so invert here.
+  assign vga_hsync = ~h_sync;
+  assign vga_vsync = ~v_sync;
 endmodule
 

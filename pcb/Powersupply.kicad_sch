@@ -3859,6 +3859,16 @@
 	)
 	(wire
 		(pts
+			(xy 104.14 40.64) (xy 118.11 40.64)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4813754a-04d3-4d79-8504-13b763ee1bfc")
+	)
+	(wire
+		(pts
 			(xy 228.6 127) (xy 228.6 132.08)
 		)
 		(stroke
@@ -4066,16 +4076,6 @@
 			(type default)
 		)
 		(uuid "66f2b44d-3071-4a36-a545-a086ffdb542b")
-	)
-	(wire
-		(pts
-			(xy 104.14 40.64) (xy 118.11 40.64)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "686f3025-f90b-43b4-80e2-495dda087a8d")
 	)
 	(wire
 		(pts
@@ -5536,7 +5536,8 @@
 	)
 	(symbol
 		(lib_id "Device:L")
-		(at 195.58 33.02 90)
+		(at 195.58 33.02 270)
+		(mirror x)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5546,7 +5547,7 @@
 		(dnp no)
 		(uuid "1973d6ca-ba41-47cc-82c2-cf9be0f4a7be")
 		(property "Reference" "L2"
-			(at 192.786 34.544 90)
+			(at 198.374 34.544 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5556,7 +5557,7 @@
 			)
 		)
 		(property "Value" "1.5u"
-			(at 198.628 34.544 90)
+			(at 192.532 34.544 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5599,7 +5600,7 @@
 			)
 		)
 		(property "Extra" "lp>3.5A, lrms>3.1A"
-			(at 195.834 30.48 90)
+			(at 195.326 30.48 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects

@@ -6091,12 +6091,6 @@
 		(uuid "2d6251a9-13f9-4db2-a3b7-6bd955767c82")
 	)
 	(junction
-		(at 289.56 166.37)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "355053ad-7aa8-4b15-8d5a-dc261f7d6d90")
-	)
-	(junction
 		(at 320.04 217.17)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6167,12 +6161,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "731b1c38-13dc-4ceb-bcde-e80348fa7213")
-	)
-	(junction
-		(at 289.56 163.83)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "776e9a2a-7363-4d70-ab22-ed4b3ca018f9")
 	)
 	(junction
 		(at 35.56 166.37)
@@ -6638,7 +6626,7 @@
 	)
 	(wire
 		(pts
-			(xy 289.56 163.83) (xy 297.18 163.83)
+			(xy 279.4 163.83) (xy 297.18 163.83)
 		)
 		(stroke
 			(width 0)
@@ -7048,16 +7036,6 @@
 	)
 	(wire
 		(pts
-			(xy 279.4 163.83) (xy 289.56 163.83)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2e36ad6e-b937-4757-8a31-31e6355c16a4")
-	)
-	(wire
-		(pts
 			(xy 139.7 220.98) (xy 139.7 224.79)
 		)
 		(stroke
@@ -7255,16 +7233,6 @@
 			(type default)
 		)
 		(uuid "3bd12712-c293-4655-99ee-338b4c9e0a16")
-	)
-	(wire
-		(pts
-			(xy 289.56 163.83) (xy 289.56 166.37)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3c954f07-3739-4e78-9bfc-6545816f9065")
 	)
 	(wire
 		(pts
@@ -12587,7 +12555,6 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "5a720576-6732-4a07-8cd5-3420c4001abd")
 		(property "Reference" "#PWR056"
 			(at 132.08 59.69 0)
@@ -12600,14 +12567,15 @@
 				)
 			)
 		)
-		(property "Value" "+3.3V"
-			(at 132.08 50.8 0)
+		(property "Value" "+3.3VA"
+			(at 132.08 51.562 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left)
 			)
 		)
 		(property "Footprint" ""
@@ -16355,7 +16323,6 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "fd80633c-082b-431a-b886-4d8439b4784b")
 		(property "Reference" "#PWR054"
 			(at 123.19 34.29 0)
@@ -16368,14 +16335,15 @@
 				)
 			)
 		)
-		(property "Value" "+3.3V"
-			(at 123.19 25.4 0)
+		(property "Value" "+3.3VA"
+			(at 124.714 26.924 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left)
 			)
 		)
 		(property "Footprint" ""

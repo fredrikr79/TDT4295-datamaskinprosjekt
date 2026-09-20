@@ -2964,7 +2964,7 @@
 				)
 			)
 		)
-		(property "Footprint" "USB4110-GF-A_GCT"
+		(property "Footprint" "USB4110_GF_A:USB4110-GF-A_GCT"
 			(at 215.9 92.71 0)
 			(hide yes)
 			(show_name no)

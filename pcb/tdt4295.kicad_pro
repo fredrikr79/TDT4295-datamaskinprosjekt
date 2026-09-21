@@ -299,6 +299,10 @@
         ""
       ],
       [
+        "footprint_link_issues|546100|952500|bc44bd68-7a0f-42ea-b769-c2cf07a406a6|00000000-0000-0000-0000-000000000000|||",
+        ""
+      ],
+      [
         "footprint_link_issues|927100|1041400|f747af51-9e0e-4a8e-80e8-99c43574c4e1|00000000-0000-0000-0000-000000000000|||",
         ""
       ],
@@ -755,7 +759,7 @@
         "uuid": "603dd496-f9c4-4a31-9104-19eec41ebc98"
       }
     ],
-    "used_designators": "J1-8,Q1-2,D1-16,U1-10,SW1-2,#FLG1-8,L1-6,L8,FB1-2,CR1-2,Y1-5,STM32UF9NJH6Q_CUSTOM1-3,#PWR1-98,#PWR100-102,R1-55,JP1,C1-120",
+    "used_designators": "L1-6,L8,FB1-2,R1-56,JP1,C1-120,J1-8,D1-16,U1-10,Q1-2,#FLG1-8,SW1-2,CR1-2,#PWR1-98,#PWR100-102,STM32UF9NJH6Q_CUSTOM1-3,Y1-5",
     "variants": []
   },
   "sheets": [

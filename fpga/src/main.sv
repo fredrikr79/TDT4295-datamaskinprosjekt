@@ -8,7 +8,7 @@ module main (
     output wire       vga_hsync,
     vga_vsync
 );
-  logic active_area;
+  logic active_area, pixel_pulse;
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
 

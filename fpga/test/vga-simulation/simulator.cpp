@@ -119,19 +119,6 @@ void discard_input() {
 void sample_pixel() {
   discard_input();
 
-<<<<<<< HEAD
-    if(!top_module->h_sync && pre_h_sync){ // on negative edge of h_sync
-        // re-sync horizontal counter
-        coord_x = HORIZONTAL_FRONT_PORCH + ACTIVE_WIDTH + HORIZONTAL_SYNC;
-        coord_y = (coord_y + 1) % TOTAL_HEIGHT;
-    }
-
-    if(!top_module->v_sync && pre_v_sync){ // on negative edge of v_sync
-        // re-sync vertical counter
-        coord_y = VERTICAL_FRONT_PORCH + ACTIVE_HEIGHT + VERTICAL_SYNC;
-        apply_input(); // inputs are pulsed once each new frame
-    }
-=======
   coord_x = (coord_x + 1) % TotalWidth;
 
   if (!top_module->h_sync && pre_h_sync) { // on negative edge of h_sync
@@ -139,7 +126,6 @@ void sample_pixel() {
     coord_x = RightPorch + ActiveWidth + HorizontalSync;
     coord_y = (coord_y + 1) % TotalHeight;
   }
->>>>>>> 73f4381 (Make new implementation of the vga circuit)
 
   if (!top_module->v_sync && pre_v_sync) { // on negative edge of v_sync
     // re-sync vertical counter

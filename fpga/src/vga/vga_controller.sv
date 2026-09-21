@@ -7,8 +7,7 @@ module vga_controller #(
     v_sync,
     output vga_sync_params::x_coordinate_t coord_x,
     output vga_sync_params::y_coordinate_t coord_y,
-    output logic active_area,
-    output logic pixel_pulse
+    output logic active_area, pixel_pulse
 );
   import vga_sync_params::*;
   clock_enable_pulse #(

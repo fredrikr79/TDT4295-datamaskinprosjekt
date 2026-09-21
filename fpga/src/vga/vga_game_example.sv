@@ -7,8 +7,8 @@ module vga_game_example (
     left,
     right,
     active_area,
-    input wire unsigned [9:0] coord_x,
-    coord_y,
+    input vga_sync_params::x_coordinate_t coord_x,
+    input vga_sync_params::y_coordinate_t coord_y,
     output color_pkg::color_t color
 );
   localparam int RADIUS = 25;
@@ -16,10 +16,12 @@ module vga_game_example (
   localparam color_pkg::color_t BACKGROUNDCOLOR = '{red: 'b0000, green: 'b1111, blue: 'b0000};
   localparam color_pkg::color_t DEFAULTCOLOR = '{red: 'b0000, green: 'b0000, blue: 'b0000};
   // signal declaration
-  reg unsigned [9:0] center_x, center_y;
+  vga_sync_params::x_coordinate_t center_x;
+  vga_sync_params::y_coordinate_t center_y;
 
   // next state regs
-  reg unsigned [9:0] center_x_next, center_y_next;
+  vga_sync_params::x_coordinate_t center_x_next;
+  vga_sync_params::y_coordinate_t center_y_next;
   // sequential logic
   always @(posedge clk) begin
     if (reset) begin
@@ -40,13 +42,13 @@ module vga_game_example (
     if (right) center_x_next = center_x + 1;
   end
   // check if the current pixel is inside our circle
-  reg signed [10:0] dx, dy;
-  reg in_circle;
+  logic signed [vga_sync_params::XCoordinateBits:0] dx;
+  logic signed [vga_sync_params::YCoordinateBits:0] dy;
+  logic in_circle;
   always_comb begin
     dx = center_x - coord_x;
     dy = center_y - coord_y;
     in_circle = dx * dx + dy * dy <= RADIUS * RADIUS;
-    // default value
     color = DEFAULTCOLOR;
     if (active_area) color = BACKGROUNDCOLOR;
     if (active_area && in_circle) color = CIRCLECOLOR;

@@ -5,5 +5,4 @@
 	(lib (name "APTF1616LSEEZGKQBKC") (type "KiCad") (uri "${KIPRJMOD}/assets/APTF1616LSEEZGKQBKC/2026-09-18_09-53-07.kicad_sym") (options "") (descr ""))
 	(lib (name "S70KL1283DPBHV02") (type "Altium") (uri "${KIPRJMOD}/assets/S70KL1283DPBHV020/Altium/S70KL1283DPBHV020.SchLib") (options "") (descr ""))
 	(lib (name "USB4110_GF_A") (type "KiCad") (uri "${KIPRJMOD}/assets/USB4110_GF_A/2026-09-18_12-33-40.kicad_sym") (options "") (descr ""))
-	(lib (name "410-251-B") (type "KiCad") (uri "${KIPRJMOD}/assets/410_251_B/KiCADv6/2026-09-16_13-52-00.kicad_sym") (options "") (descr ""))
 )

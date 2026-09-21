@@ -1,5 +1,0 @@
-(fp_lib_table
-	(version 7)
-	(lib (name "custom_footprints") (type "KiCad") (uri "${KIPRJMOD}/custom_footprints.pretty") (options "") (descr ""))
-	(lib (name "S70KS1283GABHB023") (type "Altium Designer") (uri "${KIPRJMOD}/assets/S70KS1283GABHB023/Altium/BGA24C100P5X5_600X800X100.PcbLib") (options "") (descr ""))
-)

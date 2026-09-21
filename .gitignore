@@ -2,8 +2,15 @@ documentation/slides/pdf
 .Xil
 /build
 fpga/build
+fpga/vcd-build
+fpga/vga-build
 fpga/vcd
-fpga/sim-build
+fpga/verible.filelist
+fpga/src/config_pkg.sv
+fpga/test/config.hpp
 *.jou
 *.log
 .vivado.env
+.vscode/launch.json
+.vscode/settings.json
+.vscode/c_cpp_properties.json

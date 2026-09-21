@@ -1,11 +1,10 @@
-
-FPGA Development Setup
+# FPGA Development Setup
 
 This project uses VS Code + TerosHDL + Verilator for development and AMD Vivado for Xilinx FPGA synthesis, implementation, bitstream generation, and JTAG programming.
 
 Vivado is run inside a Distrobox container, but the VS Code tasks do not depend on that setup directly.
 
-Project Structure
+## Project Structure
 
 fpga/
 ├── .vivado.env              # Machine-specific Vivado/Distrobox settings
@@ -21,7 +20,7 @@ fpga/
 └── src/
     └── main.v                 # Verilog source
 
-Requirements
+## Requirements
 
 VS Code
 
@@ -37,7 +36,7 @@ Arty A7-35T FPGA board for programming
 
 TerosHDL/VS Code handles editing, HDL analysis and development. Vivado handles the Xilinx-specific build and programming steps.
 
-Machine-Specific Vivado Setup
+## Machine-Specific Vivado Setup
 
 The file:
 
@@ -62,7 +61,7 @@ fpga/build/vivado/
 
 as its working directory so Vivado log/journal files do not appear in the repository root.
 
-Building the FPGA
+## Building the FPGA
 
 From the project root, run:
 
@@ -76,7 +75,7 @@ Vivado's generated project and temporary files are stored under:
 
 fpga/build/vivado/
 
-Programming the FPGA
+## Programming the FPGA
 
 Connect the Arty A7-35T via USB/JTAG, then run:
 
@@ -90,7 +89,19 @@ and programs the FPGA through Vivado Hardware Manager/JTAG.
 
 If Vivado reports that no hardware target is available, check that the board is connected and that the Distrobox environment has access to the Digilent JTAG device and hw_server.
 
-VS Code Tasks
+## VGA Simulation
+
+Simulate the VGA output with Verilator instead of building a bitstream. Opens a window
+showing what the design would drive onto the VGA connector; rebuilds take seconds.
+
+nix develop -c make -C fpga/sim run     # NixOS, or no verilator installed
+make -C fpga/sim run                    # verilator already on PATH
+make -C fpga/sim clean
+
+On Debian/Ubuntu, instead of Nix:
+  sudo apt-get install build-essential verilator libglu1-mesa-dev freeglut3-dev
+
+## VS Code Tasks
 
 The VS Code tasks provide the normal workflow without exposing the Distrobox details.
 
@@ -157,7 +168,7 @@ fpga/.vivado.env
 
 Keep the source, constraints, Tcl scripts, VS Code task configuration, and other project configuration under version control.
 
-Notes
+## Notes
 
 The Vivado part is configured for the Arty A7-35T:
 xc7a35tcsg324-1.

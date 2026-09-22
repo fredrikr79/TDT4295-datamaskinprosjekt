@@ -6048,6 +6048,16 @@
 		)
 		(uuid "704c7ce8-05b3-40a6-907f-8c5d6a3f7e66")
 	)
+	(text "spi redundancy"
+		(exclude_from_sim no)
+		(at 250.698 166.624 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "8e8cb671-627e-4b12-a1d0-372863b0abca")
+	)
 	(junction
 		(at 35.56 162.56)
 		(diameter 0)

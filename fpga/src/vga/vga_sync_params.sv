@@ -10,13 +10,6 @@ package vga_sync_params;
   typedef logic unsigned [XCoordinateBits-1:0] x_coordinate_t;
   typedef logic unsigned [YCoordinateBits-1:0] y_coordinate_t;
 
-  localparam int unsigned HorizontalSync = 96;
-  localparam int unsigned VerticalSync = 2;
-
-  localparam int unsigned TotalWidth = ActiveWidth + HorizontalFrontPorch + HorizontalSync + HorizontalBackPorch;
-  localparam int unsigned TotalHeight = ActiveHeight + VerticalFrontPorch + VerticalSync + VerticalBackPorch;
-
-  /* verilator lint_on UNUSEDPARAM */
   localparam int unsigned PixelClockRate  = TotalWidth * TotalHeight * FPS;
   localparam int unsigned PixelClockDelay = GlobalClockFrequency / PixelClockRate;
 endpackage

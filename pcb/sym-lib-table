@@ -2,4 +2,7 @@
 	(version 7)
 	(lib (name "TPS54325") (type "KiCad") (uri "${KIPRJMOD}/assets/ul_TPS54325PWP/KiCADv6/2026-09-03_11-26-00.kicad_sym") (options "") (descr ""))
 	(lib (name "TPS54294PWP") (type "KiCad") (uri "${KIPRJMOD}/assets/ul_TPS54294PWP/KiCADv6/2026-09-04_08-03-44.kicad_sym") (options "") (descr ""))
+	(lib (name "APTF1616LSEEZGKQBKC") (type "KiCad") (uri "${KIPRJMOD}/assets/APTF1616LSEEZGKQBKC/2026-09-18_09-53-07.kicad_sym") (options "") (descr ""))
+	(lib (name "S70KL1283DPBHV02") (type "Altium") (uri "${KIPRJMOD}/assets/S70KL1283DPBHV020/Altium/S70KL1283DPBHV020.SchLib") (options "") (descr ""))
+	(lib (name "USB4110_GF_A") (type "KiCad") (uri "${KIPRJMOD}/assets/USB4110_GF_A/2026-09-18_12-33-40.kicad_sym") (options "") (descr ""))
 )

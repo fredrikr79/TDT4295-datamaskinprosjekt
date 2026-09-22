@@ -5,6 +5,9 @@ fpga/build
 fpga/vcd-build
 fpga/vga-build
 fpga/vcd
+fpga/verible.filelist
+fpga/src/config_pkg.sv
+fpga/test/config.hpp
 *.jou
 *.log
 .vivado.env

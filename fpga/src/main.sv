@@ -8,8 +8,9 @@ module main (
     output wire       vga_hsync,
     vga_vsync
 );
-  wire h_sync, v_sync, active_area, pixel_pulse;
-  wire [9:0] coord_x, coord_y;
+  logic active_area, pixel_pulse;
+  vga_sync_params::x_coordinate_t coord_x;
+  vga_sync_params::y_coordinate_t coord_y;
 
   color_pkg::color_t color;
   import main_pkg::*;
@@ -29,8 +30,8 @@ module main (
       .clk(clk),
       .reset(sw[3]),
       .enable(sw[2]),
-      .h_sync(h_sync),
-      .v_sync(v_sync),
+      .h_sync(vga_hsync),
+      .v_sync(vga_vsync),
       .coord_x(coord_x),
       .coord_y(coord_y),
       .active_area(active_area),
@@ -53,9 +54,5 @@ module main (
   assign vga_g = color.green;
   assign vga_b = color.blue;
 
-  // 640x480@60 needs NEGATIVE sync polarity; vga_controller drives its
-  // sync pulses active-high, so invert here.
-  assign vga_hsync = ~h_sync;
-  assign vga_vsync = ~v_sync;
 endmodule
 

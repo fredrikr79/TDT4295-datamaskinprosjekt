@@ -6021,7 +6021,7 @@
 	)
 	(symbol
 		(lib_id "power:+1V0")
-		(at 220.98 80.01 90)
+		(at 220.98 74.93 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6031,7 +6031,7 @@
 		(dnp no)
 		(uuid "4677d7c9-eb3c-4b46-93cd-77753b723db5")
 		(property "Reference" "#PWR045"
-			(at 224.79 80.01 0)
+			(at 224.79 74.93 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6042,7 +6042,7 @@
 			)
 		)
 		(property "Value" "+1V0"
-			(at 214.63 80.01 90)
+			(at 214.63 74.93 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6052,7 +6052,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 220.98 80.01 0)
+			(at 220.98 74.93 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6063,7 +6063,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 220.98 80.01 0)
+			(at 220.98 74.93 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6074,7 +6074,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+1V0\""
-			(at 220.98 80.01 0)
+			(at 220.98 74.93 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7244,7 +7244,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 220.98 74.93 90)
+		(at 220.98 80.01 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7255,7 +7255,7 @@
 		(fields_autoplaced yes)
 		(uuid "921d9daa-75ae-4e92-8e96-c0e781e76ff5")
 		(property "Reference" "#PWR043"
-			(at 224.79 74.93 0)
+			(at 224.79 80.01 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7266,7 +7266,7 @@
 			)
 		)
 		(property "Value" "+3V3"
-			(at 217.17 74.9299 90)
+			(at 217.17 80.0099 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7277,7 +7277,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 220.98 74.93 0)
+			(at 220.98 80.01 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7288,7 +7288,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 220.98 74.93 0)
+			(at 220.98 80.01 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7299,7 +7299,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 220.98 74.93 0)
+			(at 220.98 80.01 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

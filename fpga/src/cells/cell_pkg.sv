@@ -1,5 +1,4 @@
 package cell_pkg;
-  /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned GridWidth = 640;
   localparam int unsigned GridHeight = 360;
 
@@ -12,6 +11,29 @@ package cell_pkg;
 
   typedef logic [MaterialBits-1:0] material_t;
   typedef material_t [CellsPerWord-1:0] cell_word_t; // same as logic [7:0][3:0]
+
+  localparam int unsigned CellIndexBits = $clog2(CellsPerWord);  // 3: which cell inside a word
+  localparam int unsigned WordXBits = $clog2(WordsPerRow);  // 7: which word inside a row
+
+  localparam int unsigned GridXBits = $clog2(GridWidth);  // 10 needed to represent 640
+  localparam int unsigned GridYBits = $clog2(GridHeight);  // 9 needed to represent 360
+  typedef logic unsigned [GridXBits-1:0] grid_x_t;
+  typedef logic unsigned [GridYBits-1:0] grid_y_t;
+
+  // Addressing convention. Everything that touches the grid -- world loader,
+  // simulation step, renderer -- has to agree on this:
+  //   addr                 = y * WordsPerRow + x / CellsPerWord
+  //   word[get_cell_index(x)]  = the cell at column x
+  // Cell index 0 is the LEFT-most of the eight pixels in a word
+
+  function automatic logic [AddrBits-1:0] get_word_addr(input grid_x_t x, input grid_y_t y);
+    automatic logic [WordXBits-1:0] word_x = x[GridXBits-1:CellIndexBits];  // x / CellsPerWord
+    return AddrBits'(y * WordsPerRow + word_x);
+  endfunction
+
+  function automatic logic [CellIndexBits-1:0] get_cell_index(input grid_x_t x);
+    return x[CellIndexBits-1:0];
+  endfunction
 
   // Material IDs
   localparam material_t MatAir = 4'd0;
@@ -68,6 +90,4 @@ package cell_pkg;
   function automatic logic can_displace(material_t mover, material_t target);
     return props(mover).falls && (props(target).density < props(mover).density);
   endfunction
-
-  /* verilator lint_on UNUSEDPARAM */
 endpackage

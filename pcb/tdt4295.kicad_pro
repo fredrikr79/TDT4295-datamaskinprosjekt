@@ -39,9 +39,9 @@
         "other_text_thickness": 0.15,
         "other_text_upright": false,
         "pads": {
-          "drill": 0.0,
-          "height": 1.45,
-          "width": 1.175
+          "drill": 0.8,
+          "height": 1.27,
+          "width": 1.27
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -329,10 +329,6 @@
       [
         "pin_to_pin|609600|736600|17272b0e-db05-498c-aad3-1adcb440fcf4|ca937409-4fac-4550-8599-619812407a5a|/603dd496-f9c4-4a31-9104-19eec41ebc98/00be9b76-425d-4c6c-9c1d-55091adef36b|/603dd496-f9c4-4a31-9104-19eec41ebc98/00be9b76-425d-4c6c-9c1d-55091adef36b|/603dd496-f9c4-4a31-9104-19eec41ebc98/00be9b76-425d-4c6c-9c1d-55091adef36b",
         ""
-      ],
-      [
-        "power_pin_not_driven|444500|2743200|98f7a87b-14d0-45cf-854f-7848f0a7d8ad|00000000-0000-0000-0000-000000000000|/603dd496-f9c4-4a31-9104-19eec41ebc98/55913984-0b9b-45b1-b632-d56e73135cfc|/603dd496-f9c4-4a31-9104-19eec41ebc98/55913984-0b9b-45b1-b632-d56e73135cfc|",
-        ""
       ]
     ],
     "meta": {
@@ -585,21 +581,6 @@
         "via_diameter": 0.6,
         "via_drill": 0.25,
         "wire_width": 6
-      },
-      {
-        "clearance": 0.15,
-        "diff_pair_gap": 0.25,
-        "diff_pair_width": 0.2,
-        "microvia_diameter": 0.3,
-        "microvia_drill": 0.1,
-        "name": "power",
-        "pcb_color": "rgba(0, 0, 0, 0.000)",
-        "priority": 0,
-        "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "track_width": 0.5,
-        "tuning_profile": "",
-        "via_diameter": 0.6,
-        "via_drill": 0.25
       }
     ],
     "meta": {
@@ -607,20 +588,7 @@
     },
     "net_colors": null,
     "netclass_assignments": null,
-    "netclass_patterns": [
-      {
-        "netclass": "power",
-        "pattern": "+*V*"
-      },
-      {
-        "netclass": "power",
-        "pattern": "GND"
-      },
-      {
-        "netclass": "power",
-        "pattern": "POWER_IN"
-      }
-    ]
+    "netclass_patterns": []
   },
   "pcbnew": {
     "last_paths": {
@@ -771,7 +739,7 @@
         "uuid": "603dd496-f9c4-4a31-9104-19eec41ebc98"
       }
     ],
-    "used_designators": "R1-60,JP1,C1-120,J1-8,Q1-2,D1-16,U1-10,SW1-2,#FLG1-8,L1-6,L8,FB1-2,CR1-2,STM32UF9NJH6Q_CUSTOM1-3,Y1-5,#PWR1-98,#PWR100-102",
+    "used_designators": "L1-6,L8,CR1-2,#FLG1-8,C1-120,FB1-2,SW1-2,U1-10,#PWR1-98,#PWR100-102,D1-16,Y1-5,J1-8,JP1,R1-60,STM32UF9NJH6Q_CUSTOM1-3,Q1-2",
     "variants": []
   },
   "sheets": [

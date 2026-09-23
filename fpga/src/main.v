@@ -1,216 +1,378 @@
-module main #(
-    parameter DEBUG = 1'd1
-)(
-    input  wire       ck_ss,
-    input  wire       ck_sck,
-    input  wire       ck_rst,
+    module main #(
+        parameter DEBUG = 1'd1
+    )(
+        input  wire       clk,        // Onboard 100MHz Clock (Pin E3) for the ILA Hub
+        input  wire       ck_ss,
+        input  wire       ck_sck,
+        input  wire       ck_rst,
 
+        // Octal SPI data bus
+        inout  wire [7:0] octo_spi,
+        inout  wire       acknack,
+
+        output wire [3:0] led,
+        output wire       led0_r,
+        output wire       led0_g,
+        output wire       led0_b,
+        output wire       ready,
+        
+        output wire       out_almost_empty,
+        output wire       out_empty,
+        output wire       in_almost_full,
+        output wire       in_full
+    );
+
+
+    // FSM STATES
+    localparam [7:0]
+        ST_BOOT      =  8'b00000100,
+        ST_READY     =  8'b00001010,
+        ST_RX        =  8'b00010111,   
+        ST_DECODE    =  8'b00011011,
+        ST_BUSY      =  8'b00110101,
+        ST_TX_IDLE   =  8'b00111001,   
+        ST_TX_SEND   =  8'b01010001,   
+        ST_MEMORY    =  8'b01011001,
+        ST_FAILED    =  8'b11111111;
+    // KNOWN COMMANDS
+    localparam [3:0]
+        ECHO = 4'hE;
+
+    // STATE / CMD TRACKERS
+    reg [7:0] state = ST_BOOT;
+    reg [3:0] opcode = 4'hz; 
+
+    // INPUT QUEUE 
+    wire in_w_en;
+    wire in_almost_empty;
+    wire in_empty;
+    wire [7:0] in_fifo;
+    wire in_wr_rst_busy;
+    wire in_rd_rst_busy;
+    wire in_wr_ack;
+
+    reg in_r_en = 1'b0;
+
+    fifo_generator_1 in_queue(
+        .din(rx_capture),
+        .dout(in_fifo),
+        .almost_full(in_almost_full),
+        .full(in_full),
+        .almost_empty(in_almost_empty),
+        .empty(in_empty),
+        .wr_en(in_w_en),
+        .rd_en(in_r_en),
+        .wr_ack(in_wr_ack),
+        .rst(~ck_rst_s),
+        .wr_clk(clk),
+        .rd_clk(clk),
+        .wr_rst_busy(in_wr_rst_busy),
+        .rd_rst_busy(in_rd_rst_busy)
+    );
+
+    // CDC synchronizations CLK -> CK_SCK
+    reg [2:0] ack_sync = 3'b000;
+    reg [2:0] tx_armed_sync = 3'b000;
+    always @(posedge ck_sck) begin
+        if (!ck_rst) begin
+            ack_sync      <= 3'b000;
+            rx_event      <= 1'b0;
+            tx_event      <= 1'b0;
+            tx_armed_sync <= 3'b000;
+            rx_capture <= 8'h00;
+        end else begin
+            
+            if (rx_wr_gate) begin
+                rx_capture <= octo_spi;
+                rx_event <= ~rx_event;
+            end
+            
+            if (tx_rd_gate) begin
+                tx_event <= ~tx_event;
+            end
+            
+            ack_sync <= {ack_sync[1:0], in_wr_ack};
+            tx_armed_sync <= {tx_armed_sync[1:0], tx_armed};
+        end
+    end
+
+    wire tx_armed_s = tx_armed_sync[2];
+    assign acknack = ack_sync[2];
+    
+    // FIFO requires wr_clk / rd_clk to be driven by 
+    reg [7:0] rx_capture = 8'h00;
+    reg       rx_event = 1'b0;
+    
+    wire rx_wr_gate = (~ck_ss) && ((state == ST_RX) | (state == ST_TX_IDLE));
+
+
+    // Sync event with clk domain
+    reg [2:0] rx_event_sync = 3'b000;
+    always @(posedge clk) begin
+        if(~ck_rst_s)
+            rx_event_sync <= 3'b000;
+        else
+            rx_event_sync <= {rx_event_sync[1:0], rx_event};
+    end
+
+    wire rx_event_trigger = rx_event_sync[2] ^ rx_event_sync[1];
+
+    // OUTPUT QUEUE
+    wire out_r_en;
+    wire out_almost_full;
+    wire out_full;
+    wire [7:0] out_data;
+    wire out_wr_rst_busy;
+    wire out_rd_rst_busy;
+    
+    reg out_w_en;
+    reg [7:0] out_fifo = 8'h00;
+
+    reg tx_armed = 1'b0;
+
+    assign octo_spi = (~ck_ss && tx_armed_s) ? tx_out : 8'bz;
+
+    fifo_generator_2 out_queue(
+        .din(out_fifo),
+        .dout(out_data),
+        .almost_full(out_almost_full),
+        .full(out_full),
+        .almost_empty(out_almost_empty),
+        .empty(out_empty),
+        .wr_en(out_w_en),
+        .rd_en(out_r_en),
+        .rst(~ck_rst_s),
+        .wr_clk(clk),
+        .rd_clk(clk),
+        .wr_rst_busy(out_wr_rst_busy),
+        .rd_rst_busy(out_rd_rst_busy)
+    );
+
+    // FIFO requires wr_clk / rd_clk to be driven by 
+    reg [7:0] tx_stage = 8'h00;
+    reg       tx_event = 1'b0;
+
+    reg [2:0] tx_event_sync = 3'b000;
+    always @(posedge clk) begin
+        if(~ck_rst_s)
+            tx_event_sync <= 3'b000;
+        else
+            tx_event_sync <= {tx_event_sync[1:0], tx_event};
+    end
+
+    wire tx_event_trigger = tx_event_sync[2] ^ tx_event_sync[1];
+    wire tx_stage_allowed = (state == ST_TX_SEND);
+    wire tx_rd_gate = (~ck_ss) && (state == ST_TX_SEND);
+
+    reg [7:0] tx_out = 8'h00;
+
+    always @(posedge clk) begin
+        if(~ck_rst_s) begin
+            tx_stage <= 8'h00;
+            tx_out   <= 8'h00;
+        end
+        if(tx_event_trigger) begin
+            tx_stage <= out_data;
+            tx_out <= tx_stage;
+        end    
+    end
+
+    // MCU WRITE CONDITIONS
+    assign in_w_en = rx_event_trigger && ~in_full;
+
+    // MCU READ CONDITIONS
+    assign out_r_en = tx_event_trigger && tx_stage_allowed && ~out_empty;
+
+    //FPGA CLOCK DOMAIN FSM
+    always @(posedge clk) begin
+        
+        if (~ck_rst_s) begin
+           // FSM
+            state          <= ST_BOOT;
+            opcode         <= 4'h0;
+
+            // Input FIFO control
+            in_r_en        <= 1'b0;
+
+            // Output FIFO control
+            out_w_en       <= 1'b0;
+            out_fifo       <= 8'h00;
+
+            // TX ownership
+            tx_armed       <= 1'b0;
+
+        end
+
+        else begin
+            
+            in_r_en <= 1'b0;
+            out_w_en <= 1'b0;
+
+            case (state)
+
+                ST_BOOT: begin
+                    if (~in_full && ~out_full && ~in_wr_rst_busy && ~in_rd_rst_busy && ~out_rd_rst_busy && ~out_wr_rst_busy) begin
+                        state <= ST_READY;
+                        opcode <= 4'h0;
+                        tx_armed <= 1'b0;
+                        in_r_en <= 1'b0;
+                        out_w_en <= 1'b0; 
+                    end
+                end
+                
+                ST_READY: begin
+                    if (~ck_ss_s) begin
+                        state <= ST_RX;
+                    end
+                end
+
+                ST_RX: begin
+                    if (ck_ss_s && !in_empty) begin
+                        in_r_en <= 1'b1; // CONSUME CMD (AGAIN)
+                        state <= ST_DECODE;
+                    end
+                end
+        
+                ST_DECODE: begin
+                    // USING FWFT FIFO's allowing us to peek at the read bus without popping.
+                    // Each dispatched command decides for itself if it should pop the command
+                    // By setting in_r_en <= 1'b1;
+                    opcode <= in_fifo[7:4];
+
+                    case (in_fifo[7:4])
+                    
+                        ECHO: begin
+                            state <= ST_BUSY;
+                        end
+                        
+                        default : begin
+                            state <= ST_FAILED;
+                        end
+                                
+                    endcase
+                end
+
+                ST_BUSY: begin
+                    case (opcode)
+                        ECHO: begin
+                            if(!out_full && !in_empty) begin
+                                out_fifo <= in_fifo;
+                                out_w_en <= 1'b1;
+                                in_r_en <= 1'b1;
+                            end
+                            else if (in_empty) begin
+                                state <= ST_TX_IDLE;
+                            end 
+                        end
+                        default: begin
+                            state <= ST_FAILED;
+                        end
+                    endcase
+                end
+                
+                ST_TX_IDLE: begin // Wait for TX stage payload from MCU
+                    if(~ck_ss_s && ~in_empty) begin
+                        in_r_en <= 1'b1; // TX byte consumed
+                        state <= ST_TX_SEND;     
+                    end
+                end
+
+                ST_TX_SEND: begin
+                    if (!out_empty_s)
+                        tx_armed <= 1'b1;
+                    if (ck_ss_s) begin
+                        tx_armed  <= 1'b0;
+                        state     <= ST_READY;
+                    end
+                end
+
+                ST_MEMORY: begin
+                    //TODO implement
+                    state <= ST_READY;
+                end
+
+                ST_FAILED: begin
+                    if(!out_full) begin
+                        out_fifo <= 8'hFF;
+                        out_w_en <= 1'b1;
+                        state <= ST_TX_IDLE;
+                    end
+                end
+
+                default: begin
+                    state <= ST_READY;
+                end
+            endcase
+
+        end
+    end
+
+    // CDC synchronizations CK_SCK -> CLK
+    reg [2:0] ck_ss_sync = 3'b000;   
+    reg [2:0] ck_rst_sync = 3'b000;
+    reg [2:0] out_empty_sync = 3'b000;
+    
+    wire ck_ss_s = ck_ss_sync[2];
+    wire ck_rst_s = ck_rst_sync[2];
+    wire out_empty_s = out_empty_sync[2];
+
+    always @(posedge clk) begin
+        if(~ck_rst) begin
+            ck_ss_sync <= 3'b111;
+            ck_rst_sync <= 3'b000;
+            out_empty_sync <= 3'b111;
+        end
+        else begin
+            ck_ss_sync <= {ck_ss_sync[1:0], ck_ss};
+            ck_rst_sync <= {ck_rst_sync[1:0], ck_rst}; 
+            out_empty_sync <= {out_empty_sync[1:0], out_empty}; 
+        end
+    end
+
+
+    assign ready =
+        (state == ST_READY) ||
+        (state == ST_TX_IDLE);
+        
     // DEBUG
-    input wire [3:0] sw,
-    input wire [3:0] btn,
+    assign led[0] = ready;
+    assign led[1] = ~in_empty;
+    assign led[2] = ~out_empty;
+    assign led[3] = (state == ST_FAILED);
 
-    // Octal SPI data bus
-    inout  wire [7:0]  octo_spi,
-
-    output wire [3:0] led,
-    output wire       led0_r,
-    output wire       led0_g,
-    output wire       led0_b,
-    output wire       ready,
-    output wire       bf
-);
-
-    // ------------------------------------------------------------
-    // CMD parts
-    // ------------------------------------------------------------
-    wire [3:0] opcode;
-    wire [3:0] options;
-
-    // ------------------------------------------------------------
-    // Buffers
-    // ------------------------------------------------------------
-    reg [7:0] in_data;
-    reg [7:0] response = 8'd0;
-    reg [255:0] data_buff = 256'd0;
-
-
-    // ------------------------------------------------------------
-    // Flags
-    // ------------------------------------------------------------
-    reg full = 1'b0;
-    reg rx_done = 1'b0;
-    reg tx_done = 1'b0;
-
-    // ------------------------------------------------------------
-    // Octal SPI output control
-    // ------------------------------------------------------------
-    reg [7:0] io_out;
-    reg       io_oe;
-
-    assign octo_spi = io_oe ? io_out : 8'hFF;
-
-    // ------------------------------------------------------------
-    // State declarations
-    // ------------------------------------------------------------
-    reg [6:0] state;
-
-
-    localparam [6:0]
-        ST_READY   = 7'b0000000,
-        ST_DECODE  = 7'b0000010,
-        ST_RX_DATA = 7'b0000011,
-        ST_TX      = 7'b0000100,
-        ST_FAILED  = 7'b1111111;
-
-    initial state = ST_READY;
-
-    // ------------------------------------------------------------
-    // Outputs
-    // ------------------------------------------------------------
-    assign ready  = (state == ST_READY || state == ST_TX);
-    assign bf     = full;
-    assign opcode = DEBUG ? sw : in_data[7:4];
-    assign options = in_data[3:0];
-    assign led = response[7:4];
     assign led0_r = state[2];
     assign led0_g = state[1];
     assign led0_b = state[0];
 
-    // State machine
-    always @(posedge ck_sck) begin
 
-        if (ck_rst == 1'b0) begin
-            state <= ST_READY;
-            in_data <= 8'b0;
-            response <= 8'b0;
-            data_buff <= 256'b0;
-            io_oe <= 1'b0;
-            io_out <= 8'b0;
+    //DEBUG 
+    generate
+        if (DEBUG) begin : gen_debug_ila
+            ila_1 ila_inst(
+                .clk(clk),
+                .probe0(octo_spi),
+                .probe1(state),
+                .probe2(ck_sck),
+                .probe3(ck_ss),
+                .probe4(ck_rst),
+                .probe5(acknack),
+                .probe6(ready),
+                .probe7(out_r_en),
+                .probe8(out_w_en),
+                .probe9(in_w_en),
+                .probe10(in_r_en),
+                .probe11(ck_ss_s),
+                .probe12(in_empty),
+                .probe13(out_empty),
+                .probe14(in_fifo),
+                .probe15(out_fifo),
+                .probe16(rx_capture),
+                .probe17(out_data),
+                .probe18(tx_out),
+                .probe19(opcode)
+            );
         end
-        
-        if (DEBUG && btn[0]) begin
+    endgenerate
 
-            // Manual state advance
-            case (state)
 
-                ST_READY: begin
-                    state <= ST_DECODE;
-                end
-
-                ST_DECODE: begin
-                    state <= ST_RX_DATA;
-                end
-
-                ST_RX_DATA: begin
-                    state <= ST_TX;
-                end
-
-                ST_TX: begin
-                    state <= ST_READY;
-                end
-
-                default: begin
-                    state <= ST_READY;
-                end
-
-            endcase
-        end else begin
-            
-            
-            case (state)
-            
-            ST_READY: begin
-                rx_done <= 1'b0;
-                tx_done <= 1'b0;
-                
-                if (!ck_ss) begin
-                    in_data <= octo_spi;
-                    state <= ST_DECODE;
-                end
-            end
-
-            // Command dispatch
-            ST_DECODE: begin
-                
-                case (opcode)
-                
-                    4'b0011: begin
-                        rx_done <= 1'b0;
-                        state   <= ST_RX_DATA;
-                    end
-                
-                    4'h01: begin
-                        response <= 8'b10101010;
-                        tx_done  <= 1'b0;
-                        state    <= ST_TX;
-                    end
-
-                    default: begin
-                        response <= 8'b11111111;
-                        tx_done  <= 1'b0;
-                        state    <= ST_TX;
-                    end
-                    
-                endcase
-            end
-            
-            // Receive data.
-            ST_RX_DATA: begin
-                
-                data_buff <= {data_buff[247:0], octo_spi};
-                
-                // Check received byte for FF terminator.
-                if (octo_spi == 8'hFF) begin
-                    rx_done <= 1'b1;
-                    state   <= ST_TX;
-                    tx_done <= 1'b0;
-                end
-                else begin
-                    rx_done <= 1'b0;
-                end
-                
-            end
-            
-            // Transmit response.
-            ST_TX: begin
-                if (tx_done) begin
-                    state <= ST_READY;
-                end
-            end
-            
-            ST_FAILED: begin
-                $display(
-                    "ERROR: A fatal error occurred, could not recover"
-                    );
-                    $finish(1);
-                end
-                
-                default: begin
-                    state <= ST_FAILED;
-                end
-                
-            endcase
-        end
-    end
-        
-    // Octal SPI transmit
-    always @(negedge ck_sck) begin
-
-        if (!ck_rst) begin
-            io_oe <= 1'b0;
-            io_out <= 8'b0;
-        end
-
-        else if (state == ST_TX && !ck_ss) begin
-
-            io_oe  <= 1'b1;
-            io_out <= response;
-
-        end
-        else begin
-            io_oe <= 1'b0;
-        end
-
-    end
-
-endmodule
+    endmodule

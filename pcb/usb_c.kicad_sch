@@ -2240,16 +2240,6 @@
 		)
 		(uuid "fadb3108-98cc-42e2-8523-75b9efd2120d")
 	)
-	(label "5V_IN"
-		(at 31.75 111.76 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "4e98197f-4e1c-42fc-a1d4-695ee0998cbb")
-	)
 	(global_label "fault_signal"
 		(shape bidirectional)
 		(at 93.98 116.84 0)
@@ -2317,6 +2307,41 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "POWER_IN"
+		(shape input)
+		(at 31.75 111.76 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "547b0fe5-3ea0-4836-94b2-def921b08e45")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 19.391 111.76 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Extra" "5V"
+			(at 28.702 114.3 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(color 15 0 171 1)
 				)
 				(justify right)
 			)

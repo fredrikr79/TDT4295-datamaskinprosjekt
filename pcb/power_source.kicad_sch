@@ -1381,40 +1381,15 @@
 		)
 		(uuid "f18521e0-d68f-44b1-9d71-ac6145b83322")
 	)
-	(global_label "POWER_IN"
-		(shape input)
+	(label "5V_IN"
 		(at 185.42 60.96 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left)
+			(justify left bottom)
 		)
-		(uuid "9a4edbb4-922e-4eae-99a3-35ca949e63b3")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 197.779 60.96 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Extra" "5V"
-			(at 184.658 57.658 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(color 15 0 171 1)
-				)
-				(justify left)
-			)
-		)
+		(uuid "1330dcff-5f15-4b0b-beaa-9e922f44ffb0")
 	)
 	(symbol
 		(lib_id "power:GND")

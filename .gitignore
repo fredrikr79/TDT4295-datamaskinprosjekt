@@ -5,3 +5,4 @@ fpga/build
 *.jou
 *.log
 .vivado.env
+/vtech

@@ -3,7 +3,7 @@
 
 #define RX_BUF_SIZE 64   /* power of two */
 
-extern UART_HandleTypeDef huart1;   /* whatever CubeMX named yours */
+extern UART_HandleTypeDef huart1;
 static UART_HandleTypeDef *u = &huart1;
 
 static uint8_t  rx_byte;

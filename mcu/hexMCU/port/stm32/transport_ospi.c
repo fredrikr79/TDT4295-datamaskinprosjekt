@@ -1,5 +1,5 @@
 /* =======================================================================
- * transport_ospi.c -- OCTOSPI + DMA backend (firmware build only).
+ * transport_ospi.c - OCTOSPI + DMA backend
  *
  * Requirements outside this file (CubeMX):
  *   - OCTOSPI1 global interrupt ENABLED in NVIC, and HAL_OSPI_IRQHandler()
@@ -24,7 +24,7 @@ extern OSPI_HandleTypeDef hospi1;
 
 /* Max time HAL_OSPI_Command() may spin waiting for BUSY to clear. The bus
  * should already be idle when we get here, so this only matters if
- * something is badly wrong -- keep it short instead of the HAL's 5 s. */
+ * something is badly wrong. */
 #define OSPI_CMD_TIMEOUT_MS  2u
 
 static spi_backend_t ospi_backend;

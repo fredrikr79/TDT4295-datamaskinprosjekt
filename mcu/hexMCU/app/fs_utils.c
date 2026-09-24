@@ -1,18 +1,18 @@
 /* ======================================================================
- * fs_utils.c -- ls / cd / cat / echo on the FAT volume.
+ * fs_utils.c -- ls cd cat head echo mkdir rm exist mv cp.
  *
- * Portable: talks only to ff.h, io.h and log.h. Whichever diskio_*.c is
- * linked decides whether this hits an SD card or card.img.
+ * Talks only to fs.h, io.h and log.h.
  *
- * All FatFs objects here are static on purpose. FIL contains a 512-byte
- * sector buffer (FF_FS_TINY == 0), which is more than the firmware's
- * default stack wants to give up. Only one command runs at a time, so
- * sharing them is fine -- but do NOT call two of these re-entrantly.
+ * Handles are static on purpose: the FatFs FIL holds a 512-byte sector
+ * buffer (FF_FS_TINY == 0), more than the firmware stack wants to give
+ * up. Only one command runs at a time,
+ * so sharing them is fine -- but do NOT call these re-entrantly.
  * ====================================================================== */
 #define LOG_TAG "fs"
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "fs_utils.h"
@@ -20,93 +20,39 @@
 #include "log.h"
 
 #define IO_BUF_SIZE   128
-#define PATH_MAX_LEN  128
 
-static FATFS   fs;              /* must outlive the mount */
-static FIL     file;
-static DIR     dir;
-static FILINFO fno;
-static char    iobuf[IO_BUF_SIZE];
-static bool    mounted;
+static fs_file_t   file;
+static fs_dir_t    dir;
+static fs_dirent_t ent;
+static fs_lines_t  lines;
+static char        iobuf[IO_BUF_SIZE];
+static char        target[FS_PATH_MAX];
 
-/* ======================================================================
- * Mount
- * ====================================================================== */
-
-const char *fs_result_str(FRESULT fr)
+/* Media-loss handling lives in the backend: on IO / NOT_READY it marks
+ * itself unmounted and the next command re-mounts. */
+static void fail(const char *what, const char *path, fs_err_t e)
 {
-    switch (fr) {
-    case FR_OK:              return "OK";
-    case FR_DISK_ERR:        return "DISK_ERR";
-    case FR_INT_ERR:         return "INT_ERR";
-    case FR_NOT_READY:       return "NOT_READY";
-    case FR_NO_FILE:         return "NO_FILE";
-    case FR_NO_PATH:         return "NO_PATH";
-    case FR_INVALID_NAME:    return "INVALID_NAME";
-    case FR_DENIED:          return "DENIED";
-    case FR_EXIST:           return "EXIST";
-    case FR_INVALID_OBJECT:  return "INVALID_OBJECT";
-    case FR_WRITE_PROTECTED: return "WRITE_PROTECTED";
-    case FR_INVALID_DRIVE:   return "INVALID_DRIVE";
-    case FR_NOT_ENABLED:     return "NOT_ENABLED";
-    case FR_NO_FILESYSTEM:   return "NO_FILESYSTEM";
-    case FR_TIMEOUT:         return "TIMEOUT";
-    case FR_LOCKED:          return "LOCKED";
-    case FR_NOT_ENOUGH_CORE: return "NOT_ENOUGH_CORE";
-    case FR_TOO_MANY_OPEN_FILES: return "TOO_MANY_OPEN_FILES";
-    case FR_INVALID_PARAMETER:   return "INVALID_PARAMETER";
-    default:                 return "?";
-    }
+    log_raw("%s '%s': %s\r\n", what, path, fs_strerror(e));
+    if (!fs_is_mounted())
+        log_raw("volume dropped, will re-mount on next command\r\n");
 }
 
-bool fs_is_mounted(void) { return mounted; }
-
-FRESULT fs_mount(void)
+/* Write a chunk to the console: bare LF becomes CRLF, control bytes
+ * become '.', so an accidental `cat SCENE0.BIN` does not spray escape
+ * sequences at your terminal. */
+static void put_printable(const char *s, uint32_t n)
 {
-    if (mounted) return FR_OK;
+    uint32_t start = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        char c = s[i];
+        bool printable = (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\r';
+        if (printable) continue;
 
-    /* "" = default drive, 1 = mount now rather than on first access, so
-     * a missing card shows up here instead of inside the first f_open. */
-    FRESULT fr = f_mount(&fs, "", 1);
-    if (fr == FR_OK) {
-        mounted = true;
-        LOG_INFO("volume mounted");
+        if (i > start) io_write(&s[start], (uint16_t)(i - start));
+        io_write(c == '\n' ? "\r\n" : ".", c == '\n' ? 2 : 1);
+        start = i + 1;
     }
-    return fr;
-}
-
-void fs_unmount(void)
-{
-    if (!mounted) return;
-    f_unmount("");
-    mounted = false;
-}
-
-static bool ready(void)
-{
-    FRESULT fr = fs_mount();
-    if (fr != FR_OK) {
-        log_raw("mount failed: %s (%d)\r\n", fs_result_str(fr), fr);
-        return false;
-    }
-    return true;
-}
-
-/* Report an error, and if it looks like the media went away, forget the
- * mount so the next command re-runs f_mount (and with it disk_initialize)
- * instead of failing forever against a card that is no longer there.
- *
- * Note the current directory resets to the root when that happens: cwd
- * lives in the FATFS object, which is re-initialised by the re-mount. */
-static void fail(const char *what, const char *path, FRESULT fr)
-{
-    log_raw("%s '%s': %s (%d)\r\n", what, path, fs_result_str(fr), fr);
-
-    if (fr == FR_DISK_ERR || fr == FR_NOT_READY || fr == FR_INVALID_OBJECT) {
-        mounted = false;          /* not fs_unmount(): the card is gone,
-                                   * there is nothing to flush to it */
-        LOG_WARN("volume dropped, will re-mount on next command");
-    }
+    if (n > start) io_write(&s[start], (uint16_t)(n - start));
 }
 
 /* ======================================================================
@@ -118,28 +64,26 @@ void fs_cmd_ls(int argc, char **argv)
     const char *path = (argc > 1) ? argv[1] : ".";
     unsigned    n_files = 0, n_dirs = 0;
     uint32_t    total = 0;
-    FRESULT     fr;
+    fs_err_t    e;
 
-    if (!ready()) return;
-
-    fr = f_opendir(&dir, path);
-    if (fr != FR_OK) { fail("opendir", path, fr); return; }
+    e = fs_opendir(&dir, path);
+    if (e != FS_OK) { fail("opendir", path, e); return; }
 
     for (;;) {
-        fr = f_readdir(&dir, &fno);
-        if (fr != FR_OK) { fail("readdir", path, fr); break; }
-        if (fno.fname[0] == '\0') break;          /* end of directory */
+        e = fs_readdir(&dir, &ent);
+        if (e != FS_OK) { fail("readdir", path, e); break; }
+        if (ent.name[0] == '\0') break;             /* end of directory */
 
-        if (fno.fattrib & AM_DIR) {
-            log_raw("  <DIR>       %s\r\n", fno.fname);
+        if (ent.is_dir) {
+            log_raw("  <DIR>       %s\r\n", ent.name);
             n_dirs++;
         } else {
-            log_raw("  %10lu  %s\r\n", (unsigned long)fno.fsize, fno.fname);
+            log_raw("  %10lu  %s\r\n", (unsigned long)ent.size, ent.name);
             n_files++;
-            total += fno.fsize;
+            total += ent.size;
         }
     }
-    f_closedir(&dir);
+    fs_closedir(&dir);
 
     log_raw("  %u file(s), %lu bytes, %u dir(s)\r\n",
             n_files, (unsigned long)total, n_dirs);
@@ -152,77 +96,90 @@ void fs_cmd_ls(int argc, char **argv)
 void fs_cmd_cd(int argc, char **argv)
 {
     const char *path = (argc > 1) ? argv[1] : "/";
-    FRESULT     fr;
+    fs_err_t    e;
 
-    if (!ready()) return;
+    e = fs_chdir(path);
+    if (e != FS_OK) { fail("cd", path, e); return; }
 
-    fr = f_chdir(path);
-    if (fr != FR_OK) { fail("cd", path, fr); return; }
-
-    /* Reuse iobuf: nothing else is in flight while a command runs. */
-    fr = f_getcwd(iobuf, sizeof iobuf);
-    if (fr != FR_OK) { fail("getcwd", path, fr); return; }
+    e = fs_getcwd(iobuf, sizeof iobuf);
+    if (e != FS_OK) { fail("getcwd", path, e); return; }
 
     log_raw("%s\r\n", iobuf);
 }
 
 /* ======================================================================
- * cat <file>
- *
- * Bare LF becomes CRLF so the output is readable in a serial terminal,
- * and control bytes are shown as '.' so an accidental `cat SCENE0.BIN`
- * does not spray escape sequences at your console.
+ * cat <file>          raw chunks through fs_read
  * ====================================================================== */
 
 void fs_cmd_cat(int argc, char **argv)
 {
-    FRESULT fr;
-    UINT    br;
+    uint32_t  br;
+    fs_err_t  e;
 
     if (argc != 2) { log_raw("usage: cat <file>\r\n"); return; }
-    if (!ready()) return;
 
-    fr = f_open(&file, argv[1], FA_READ);
-    if (fr != FR_OK) { fail("open", argv[1], fr); return; }
+    e = fs_open(&file, argv[1], FS_READ);
+    if (e != FS_OK) { fail("open", argv[1], e); return; }
 
     for (;;) {
-        fr = f_read(&file, iobuf, sizeof iobuf, &br);
-        if (fr != FR_OK) { fail("read", argv[1], fr); break; }
-        if (br == 0) break;                        /* EOF */
-
-        /* Write in runs so we are not doing one io_write per byte. */
-        UINT start = 0;
-        for (UINT i = 0; i < br; i++) {
-            char c = iobuf[i];
-            bool printable = (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\r';
-            if (printable) continue;
-
-            if (i > start) io_write(&iobuf[start], (uint16_t)(i - start));
-            io_write(c == '\n' ? "\r\n" : ".", c == '\n' ? 2 : 1);
-            start = i + 1;
-        }
-        if (br > start) io_write(&iobuf[start], (uint16_t)(br - start));
+        e = fs_read(&file, iobuf, sizeof iobuf, &br);
+        if (e != FS_OK) { fail("read", argv[1], e); break; }
+        if (br == 0) break;                         /* EOF */
+        put_printable(iobuf, br);
     }
 
-    f_close(&file);
+    fs_close(&file);
     io_write("\r\n", 2);
+}
+
+/* ======================================================================
+ * head <file> [n]     first n lines (default 10), numbered
+ *
+ * Mostly here to exercise fs_line_read on both backends.
+ * ====================================================================== */
+
+void fs_cmd_head(int argc, char **argv)
+{
+    unsigned long max = 10;
+    size_t        n;
+    fs_err_t      e;
+
+    if (argc < 2 || argc > 3) { log_raw("usage: head <file> [n]\r\n"); return; }
+    if (argc == 3) max = strtoul(argv[2], NULL, 0);
+
+    e = fs_open(&file, argv[1], FS_READ);
+    if (e != FS_OK) { fail("open", argv[1], e); return; }
+
+    fs_line_init(&lines, &file);
+    while (lines.lineno < max) {
+        e = fs_line_read(&lines, iobuf, sizeof iobuf, &n);
+        if (e == FS_EOF) break;
+        if (e != FS_OK && e != FS_ERR_TOO_LONG) { fail("read", argv[1], e); break; }
+
+        log_raw("%4lu  ", (unsigned long)lines.lineno);
+        put_printable(iobuf, (uint32_t)n);
+        log_raw("%s\r\n", e == FS_ERR_TOO_LONG ? " [...]" : "");
+    }
+
+    fs_close(&file);
 }
 
 /* ======================================================================
  * echo [-a] <file> <text...>
  *
- * Without -a the file is truncated. A newline is appended. The CLI
+ * Without -a the file is truncated. A newline is appended. Missing
+ * folders in <file> are created, like a save would do. The CLI
  * tokenizer collapses runs of whitespace, so the text is rejoined with
  * single spaces and there is no quoting.
  * ====================================================================== */
 
 void fs_cmd_echo(int argc, char **argv)
 {
-    bool     append = false;
-    int      i      = 1;
-    size_t   n      = 0;
-    FRESULT  fr;
-    UINT     bw;
+    bool      append = false;
+    int       i      = 1;
+    size_t    n      = 0;
+    uint32_t  bw;
+    fs_err_t  e;
 
     if (argc > 1 && strcmp(argv[1], "-a") == 0) { append = true; i = 2; }
     if (argc < i + 2) {
@@ -241,24 +198,160 @@ void fs_cmd_echo(int argc, char **argv)
     }
     iobuf[n++] = '\n';
 
-    if (!ready()) return;
+    e = fs_open(&file, path,
+                FS_WRITE | FS_MKPATH | (append ? FS_APPEND : FS_TRUNC));
+    if (e != FS_OK) { fail("open", path, e); return; }
 
-    fr = f_open(&file, path, append ? (FA_WRITE | FA_OPEN_APPEND)
-                                    : (FA_WRITE | FA_CREATE_ALWAYS));
-    if (fr != FR_OK) { fail("open", path, fr); return; }
+    e = fs_write(&file, iobuf, (uint32_t)n, &bw);
+    if (e != FS_OK)
+        fail("write", path, e);        /* FS_ERR_FULL on a full volume */
 
-    fr = f_write(&file, iobuf, (UINT)n, &bw);
-    if (fr != FR_OK) {
-        fail("write", path, fr);
-    } else if (bw != n) {
-        /* FR_OK with a short write means the volume is full. */
-        log_raw("short write: %u of %u bytes (disk full?)\r\n",
-                bw, (unsigned)n);
+    /* Close even after a failed write: it is what commits the directory
+     * entry for whatever did get written. */
+    fs_err_t ec = fs_close(&file);
+    if (ec != FS_OK)      fail("close", path, ec);
+    else if (e == FS_OK)  log_raw("wrote %lu bytes to %s\r\n",
+                                   (unsigned long)bw, path);
+}
+
+/* Shared by mkdir and rm: optional recursive flag, then one path. */
+static bool parse_r(int argc, char **argv, bool *rec, const char **path)
+{
+    *rec = argc == 3 && (strcmp(argv[1], "-r") == 0 ||
+                         strcmp(argv[1], "-p") == 0);
+    if (argc == 2 && argv[1][0] != '-') { *path = argv[1]; return true; }
+    if (*rec)                           { *path = argv[2]; return true; }
+    return false;
+}
+
+/* ======================================================================
+ * mkdir [-r] <dir>     -r (or -p): create missing parents too, and do
+ *                      not complain if it already exists
+ * ====================================================================== */
+
+void fs_cmd_mkdir(int argc, char **argv)
+{
+    const char *path;
+    bool        rec;
+
+    if (!parse_r(argc, argv, &rec, &path)) {
+        log_raw("usage: mkdir [-r] <dir>\r\n");
+        return;
     }
 
-    /* f_close flushes the directory entry. Skip it and the data is on
-     * the card but the file still reads as 0 bytes. */
-    fr = f_close(&file);
-    if (fr != FR_OK) fail("close", path, fr);
-    else             log_raw("wrote %u bytes to %s\r\n", bw, path);
+    fs_err_t e = rec ? fs_mkdir_p(path) : fs_mkdir(path);
+    if (e != FS_OK) fail("mkdir", path, e);
+}
+
+/* ======================================================================
+ * rm [-r] <path>       file or empty dir; -r: dir with everything in it
+ * ====================================================================== */
+
+void fs_cmd_rm(int argc, char **argv)
+{
+    const char *path;
+    bool        rec;
+
+    if (!parse_r(argc, argv, &rec, &path)) {
+        log_raw("usage: rm [-r] <path>\r\n");
+        return;
+    }
+
+    fs_err_t e = rec ? fs_remove_r(path) : fs_remove(path);
+    if (e == FS_ERR_DENIED && !rec)
+        log_raw("rm '%s': DENIED (not empty? use rm -r)\r\n", path);
+    else if (e != FS_OK)
+        fail("rm", path, e);
+}
+
+/* ======================================================================
+ * exist <path>         prints true / false, or the error if it cannot tell
+ * ====================================================================== */
+
+void fs_cmd_exist(int argc, char **argv)
+{
+    bool yes;
+
+    if (argc != 2) { log_raw("usage: exist <path>\r\n"); return; }
+
+    fs_err_t e = fs_exists(argv[1], &yes);
+    if (e != FS_OK) { fail("exist", argv[1], e); return; }
+    log_raw("%s\r\n", yes ? "true" : "false");
+}
+
+/* Like the shell: if dst is an existing directory, the result goes
+ * inside it under src's own name ("mv a.txt save" -> "save/a.txt").
+ * Returns the path to use: dst itself, or target. NULL if too long. */
+static const char *into_dir(const char *src, const char *dst)
+{
+    bool is_dir = fs_stat(dst, &ent) == FS_OK && ent.is_dir;
+    if (!is_dir) return dst;
+
+    size_t sl = strlen(src);
+    while (sl > 1 && src[sl - 1] == '/') sl--;           /* "a/" -> "a" */
+    size_t b = sl;
+    while (b > 0 && src[b - 1] != '/') b--;              /* basename   */
+
+    size_t dl = strlen(dst);
+    while (dl > 1 && dst[dl - 1] == '/') dl--;
+    bool slash = !(dl == 1 && dst[0] == '/');
+
+    if (dl + (slash ? 1 : 0) + (sl - b) >= sizeof target) return NULL;
+    memcpy(target, dst, dl);
+    if (slash) target[dl++] = '/';
+    memcpy(&target[dl], &src[b], sl - b);
+    target[dl + sl - b] = '\0';
+    return target;
+}
+
+/* ======================================================================
+ * mv <src> <dst>       rename or move; folders move with their contents
+ * ====================================================================== */
+
+void fs_cmd_mv(int argc, char **argv)
+{
+    if (argc != 3) { log_raw("usage: mv <src> <dst>\r\n"); return; }
+
+    const char *dst = into_dir(argv[1], argv[2]);
+    if (dst == NULL) { log_raw("mv: path too long\r\n"); return; }
+
+    fs_err_t e = fs_move(argv[1], dst);
+    if (e == FS_ERR_EXIST)
+        log_raw("mv '%s': EXIST (rm it first)\r\n", dst);
+    else if (e == FS_ERR_INVALID)
+        log_raw("mv: cannot move '%s' into itself\r\n", argv[1]);
+    else if (e != FS_OK)
+        fail("mv", argv[1], e);
+}
+
+/* ======================================================================
+ * cp [-r] <src> <dst>  copy a file; -r: a folder with everything in it
+ * ====================================================================== */
+
+void fs_cmd_cp(int argc, char **argv)
+{
+    bool rec = argc == 4 && strcmp(argv[1], "-r") == 0;
+    if (!(argc == 3 && argv[1][0] != '-') && !rec) {
+        log_raw("usage: cp [-r] <src> <dst>\r\n");
+        return;
+    }
+    const char *src = argv[rec ? 2 : 1];
+
+    fs_err_t e = fs_stat(src, &ent);
+    if (e != FS_OK) { fail("cp", src, e); return; }
+    if (ent.is_dir && !rec) {
+        log_raw("cp '%s': is a directory (use cp -r)\r\n", src);
+        return;
+    }
+
+    const char *dst = into_dir(src, argv[rec ? 3 : 2]);
+    if (dst == NULL) { log_raw("cp: path too long\r\n"); return; }
+
+    e = rec ? fs_copy_r(src, dst) : fs_copy(src, dst);
+    if (e == FS_ERR_EXIST)
+        log_raw("cp '%s': EXIST (rm it first)\r\n", dst);
+    else if (e == FS_ERR_INVALID)
+        log_raw("cp: cannot copy '%s' into itself\r\n", src);
+    else if (e != FS_OK)
+        fail("cp", src, e);
 }

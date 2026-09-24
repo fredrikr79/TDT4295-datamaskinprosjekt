@@ -1,9 +1,6 @@
 /* ======================================================================
- * cli.c -- portable serial console.
+ * cli.c - portable serial console.
  *
- * Talks only to io.h, log.h, platform.h and transport.h.
- * MUST NOT include main.h or any stm32*.h -- this file is compiled
- * unchanged by both the firmware build and the host build.
  * On linux you could access virtual com thrue sudo minicom -b 115200 -D /dev/ttyACM0   
  * ====================================================================== */
 #define LOG_TAG "cli"
@@ -24,7 +21,7 @@
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
-#define RD_BUF_SIZE   256         /* max bytes for read / echo */
+#define RD_BUF_SIZE   1024         /* max bytes for read / echo */
 #define PROMPT        "> "
 #define PROMPT_LEN    (sizeof PROMPT - 1)
 
@@ -33,7 +30,7 @@
 #define FPGA_IRQ_TIMEOUT_MS       1000  /* waiting for FPGA_READY interrupt */
 
 /* Opcode for the echo command: FPGA stores the payload and sends it back
- * on the next read. TODO: match whatever the FPGA spec assigns. */
+ * on the next read. */
 #define FECHO_OPCODE              0xEEu
 
 /* Instruction for "hand me what I asked for" reads. */
@@ -598,7 +595,13 @@ static const cli_cmd_t cmds[] = {
     { "ls",      fs_cmd_ls,    "ls [path]           list a directory" },
     { "cd",      fs_cmd_cd,    "cd [path]           change directory" },
     { "cat",     fs_cmd_cat,   "cat <file>          print a file" },
+    { "head",    fs_cmd_head,  "head <file> [n]     first n lines" },
     { "echo",    fs_cmd_echo,  "echo [-a] <f> <txt> write text to a file" },
+    { "mkdir",   fs_cmd_mkdir, "mkdir [-r] <dir>    make a dir (-r: parents too)" },
+    { "rm",      fs_cmd_rm,    "rm [-r] <path>      delete (-r: dir + contents)" },
+    { "exist",   fs_cmd_exist, "exist <path>        true/false" },
+    { "mv",      fs_cmd_mv,    "mv <src> <dst>      rename / move" },
+    { "cp",      fs_cmd_cp,    "cp [-r] <src> <dst> copy (-r: dir + contents)" },
     { "exit",    cmd_exit,     "exit the emulator (host only)" },
 };
 #define NUM_CMDS (sizeof cmds / sizeof cmds[0])

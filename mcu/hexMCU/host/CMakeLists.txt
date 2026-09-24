@@ -10,8 +10,10 @@ endif()
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/sources.cmake)
 
+# Host always uses FatFs on card.img, whatever the firmware uses.
 add_executable(hexmcu_host
     ${APP_SOURCES}
+    ${FATFS_SOURCES}
     ${APP_ROOT}/port/host/host_main.c
     ${APP_ROOT}/port/host/io_stdio.c
     ${APP_ROOT}/port/host/platform_host.c
@@ -21,17 +23,16 @@ add_executable(hexmcu_host
 
 target_include_directories(hexmcu_host PRIVATE
     ${APP_INCLUDES}
+    ${FATFS_INCLUDES}
     ${APP_ROOT}/port/host
 )
 
 target_compile_definitions(hexmcu_host PRIVATE
     LOG_LEVEL=LOG_LEVEL_DEBUG
+    DEFAULT_CARD_IMAGE="${CMAKE_CURRENT_SOURCE_DIR}/card.img"
 )
 
 target_compile_options(hexmcu_host PRIVATE
     -Wall -Wextra -g -fsanitize=address,undefined)
 target_link_options(hexmcu_host PRIVATE
     -fsanitize=address,undefined)
-
-target_compile_definitions(hexmcu_host PRIVATE
-    DEFAULT_CARD_IMAGE="${CMAKE_CURRENT_SOURCE_DIR}/card.img")

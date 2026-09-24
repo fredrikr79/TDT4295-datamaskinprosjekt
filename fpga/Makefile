@@ -45,10 +45,10 @@ $(VCD_DIR):
 
 # Vivado synthesizing
 vivado-all: vivado-build vivado-program
-vivado-program: scripts/vivado.sh scripts/program.tcl build/main.bit
-	sh scripts/vivado.sh -mode batch -source $(shell pwd)/scripts/program.tcl
-vivado-build: scripts/vivado.sh scripts/build.tcl
-	sh scripts/vivado.sh -mode batch -source $(shell pwd)/scripts/build.tcl
+vivado-program: scripts/vivado.sh scripts/program.tcl build/main.bit .vivado.env
+	sh scripts/vivado.sh -mode batch -source $(CURDIR)/scripts/program.tcl
+vivado-build: scripts/vivado.sh scripts/build.tcl $(SOURCES) .vivado.env
+	sh scripts/vivado.sh -mode batch -source $(CURDIR)/scripts/build.tcl
 
 # Generate verible file for lsp
 verible.filelist:

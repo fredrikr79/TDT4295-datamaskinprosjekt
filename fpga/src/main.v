@@ -42,6 +42,11 @@
     reg [7:0] state = ST_BOOT;
     reg [3:0] opcode = 4'hz; 
 
+    // RESET
+    reg rst_en = 1'b0; // programatic reset
+    wire reset = ~ck_rst || rst_en;
+    wire reset_s = ~ck_rst_s || rst_en;
+
     // INPUT QUEUE 
     wire in_w_en;
     wire in_almost_empty;
@@ -63,7 +68,7 @@
         .wr_en(in_w_en),
         .rd_en(in_r_en),
         .wr_ack(in_wr_ack),
-        .rst(~ck_rst_s),
+        .rst(reset_s),
         .wr_clk(clk),
         .rd_clk(clk),
         .wr_rst_busy(in_wr_rst_busy),
@@ -71,14 +76,10 @@
     );
 
     // CDC synchronizations CLK -> CK_SCK
-    reg [2:0] ack_sync = 3'b000;
-    reg [2:0] tx_armed_sync = 3'b000;
     always @(posedge ck_sck) begin
-        if (!ck_rst) begin
-            ack_sync      <= 3'b000;
+        if (reset_s) begin
             rx_event      <= 1'b0;
             tx_event      <= 1'b0;
-            tx_armed_sync <= 3'b000;
             rx_capture <= 8'h00;
         end else begin
             
@@ -91,9 +92,18 @@
                 tx_event <= ~tx_event;
             end
             
-            ack_sync <= {ack_sync[1:0], in_wr_ack};
-            tx_armed_sync <= {tx_armed_sync[1:0], tx_armed};
         end
+    end
+    
+    reg [2:0] tx_armed_sync = 3'b000;
+    reg [2:0] ack_sync = 3'b000;
+    always @(posedge clk) begin
+        if (reset) begin
+            ack_sync      <= 3'b000;
+            tx_armed_sync <= 3'b000;
+        end
+        ack_sync <= {ack_sync[1:0], in_wr_ack};
+        tx_armed_sync <= {tx_armed_sync[1:0], tx_armed};
     end
 
     wire tx_armed_s = tx_armed_sync[2];
@@ -103,13 +113,13 @@
     reg [7:0] rx_capture = 8'h00;
     reg       rx_event = 1'b0;
     
-    wire rx_wr_gate = (~ck_ss) && ((state == ST_RX) | (state == ST_TX_IDLE));
+    wire rx_wr_gate = (~ck_ss) && ((state == ST_READY) | (state == ST_RX) | (state == ST_TX_IDLE));
 
 
     // Sync event with clk domain
     reg [2:0] rx_event_sync = 3'b000;
     always @(posedge clk) begin
-        if(~ck_rst_s)
+        if(reset_s)
             rx_event_sync <= 3'b000;
         else
             rx_event_sync <= {rx_event_sync[1:0], rx_event};
@@ -141,7 +151,7 @@
         .empty(out_empty),
         .wr_en(out_w_en),
         .rd_en(out_r_en),
-        .rst(~ck_rst_s),
+        .rst(reset_s),
         .wr_clk(clk),
         .rd_clk(clk),
         .wr_rst_busy(out_wr_rst_busy),
@@ -149,12 +159,11 @@
     );
 
     // FIFO requires wr_clk / rd_clk to be driven by 
-    reg [7:0] tx_stage = 8'h00;
     reg       tx_event = 1'b0;
 
     reg [2:0] tx_event_sync = 3'b000;
     always @(posedge clk) begin
-        if(~ck_rst_s)
+        if(reset_s)
             tx_event_sync <= 3'b000;
         else
             tx_event_sync <= {tx_event_sync[1:0], tx_event};
@@ -165,28 +174,20 @@
     wire tx_rd_gate = (~ck_ss) && (state == ST_TX_SEND);
 
     reg [7:0] tx_out = 8'h00;
+    reg tx_first_loaded = 1'b0;
 
-    always @(posedge clk) begin
-        if(~ck_rst_s) begin
-            tx_stage <= 8'h00;
-            tx_out   <= 8'h00;
-        end
-        if(tx_event_trigger) begin
-            tx_stage <= out_data;
-            tx_out <= tx_stage;
-        end    
-    end
+    wire tx_load = (state == ST_TX_SEND) && !out_empty_s && in_empty && !tx_first_loaded && !out_empty;
 
     // MCU WRITE CONDITIONS
     assign in_w_en = rx_event_trigger && ~in_full;
 
     // MCU READ CONDITIONS
-    assign out_r_en = tx_event_trigger && tx_stage_allowed && ~out_empty;
+    assign out_r_en = (tx_load || tx_event_trigger) && ~out_empty;
 
     //FPGA CLOCK DOMAIN FSM
     always @(posedge clk) begin
         
-        if (~ck_rst_s) begin
+        if (reset_s) begin
            // FSM
             state          <= ST_BOOT;
             opcode         <= 4'h0;
@@ -205,6 +206,18 @@
 
         else begin
             
+            if(reset_s) begin
+                tx_out   <= 8'h00;
+                tx_first_loaded <= 1'b0;
+            end
+            if(tx_load) begin
+                tx_out <= out_data;
+                tx_first_loaded <= 1'b1;
+            end    
+            else if(tx_event_trigger) begin
+                tx_out <= out_data;
+            end
+
             in_r_en <= 1'b0;
             out_w_en <= 1'b0;
 
@@ -278,11 +291,16 @@
                 end
 
                 ST_TX_SEND: begin
-                    if (!out_empty_s)
+                    if (!out_empty_s && in_empty)
                         tx_armed <= 1'b1;
                     if (ck_ss_s) begin
-                        tx_armed  <= 1'b0;
-                        state     <= ST_READY;
+                        if (!in_empty)
+                            in_r_en <= 1'b1; // Remove stale data from IDLE Stage
+                        else if(in_empty) begin
+                            tx_armed  <= 1'b0;
+                            tx_first_loaded <= 1'b0;
+                            state <= ST_READY; // Reset device
+                        end
                     end
                 end
 
@@ -317,7 +335,7 @@
     wire out_empty_s = out_empty_sync[2];
 
     always @(posedge clk) begin
-        if(~ck_rst) begin
+        if(reset) begin
             ck_ss_sync <= 3'b111;
             ck_rst_sync <= 3'b000;
             out_empty_sync <= 3'b111;

@@ -281,7 +281,7 @@
 
                 ST_RX: begin
                     if (ck_ss_s && !in_empty) begin
-                        in_r_en <= 1'b1; // CONSUME CMD (AGAIN)
+                        in_r_en <= 1'b1; // CONSUME CMD
                         state <= ST_DECODE;
                     end
                 end

@@ -92,9 +92,21 @@ static bool ready(void)
     return true;
 }
 
+/* Report an error, and if it looks like the media went away, forget the
+ * mount so the next command re-runs f_mount (and with it disk_initialize)
+ * instead of failing forever against a card that is no longer there.
+ *
+ * Note the current directory resets to the root when that happens: cwd
+ * lives in the FATFS object, which is re-initialised by the re-mount. */
 static void fail(const char *what, const char *path, FRESULT fr)
 {
     log_raw("%s '%s': %s (%d)\r\n", what, path, fs_result_str(fr), fr);
+
+    if (fr == FR_DISK_ERR || fr == FR_NOT_READY || fr == FR_INVALID_OBJECT) {
+        mounted = false;          /* not fs_unmount(): the card is gone,
+                                   * there is nothing to flush to it */
+        LOG_WARN("volume dropped, will re-mount on next command");
+    }
 }
 
 /* ======================================================================

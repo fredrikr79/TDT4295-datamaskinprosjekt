@@ -35,6 +35,6 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t pin)
 
 bool plat_exit(int code)
 {
-    exit(code);      /* does not return */
-    return true;
+    (void)code;
+    return false;
 }

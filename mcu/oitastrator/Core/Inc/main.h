@@ -62,6 +62,8 @@ void Error_Handler(void);
 #define FPGA_READY_EXTI_IRQn EXTI4_IRQn
 #define LED_GREEN_Pin GPIO_PIN_5
 #define LED_GREEN_GPIO_Port GPIOA
+#define FPGA_ACK_Pin GPIO_PIN_10
+#define FPGA_ACK_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

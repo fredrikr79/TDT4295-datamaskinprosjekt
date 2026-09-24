@@ -45,8 +45,8 @@ static transport_status_t from_hal(HAL_StatusTypeDef st)
  *   The HAL rejects any command with neither an instruction nor an address
  *   phase (OSPI_ConfigCmd() -> HAL_ERROR, ErrorCode = INVALID_PARAM), and a
  *   read is triggered by writing IR or AR. So a pure "data only" transfer
- *   is impossible through the HAL -- the opcode goes in the instruction
- *   phase. Putting x/y and len in the address / alternate-bytes phases
+ *   is impossible through the HAL -- the opcode always goes in the
+ *   instruction phase, for reads too. Putting x/y and len in the address / alternate-bytes phases
  *   as well means the pixel payload can be DMA'd straight from the
  *   caller's buffer, with no copy into a "header + payload" scratch buffer.
  */
@@ -65,30 +65,39 @@ static void ospi_cmd_common(OSPI_RegularCmdTypeDef *cmd)
     cmd->DataDtrMode        = HAL_OSPI_DATA_DTR_DISABLE;
 }
 
-/* Write: instruction = opcode. */
-static void ospi_build_write(OSPI_RegularCmdTypeDef *cmd,
-                             const transport_hdr_t *hdr, uint16_t n)
+/* Header phases, shared by write and read:
+ *   instruction    = opcode (1 byte)
+ *   address        = x, y   (4 bytes, MSB first)  if TRANSPORT_F_XY
+ *   alternate bytes = len_field (2 bytes, MSB first) if TRANSPORT_F_LEN */
+static void ospi_build_hdr(OSPI_RegularCmdTypeDef *cmd,
+                           const transport_hdr_t *hdr)
 {
     ospi_cmd_common(cmd);
 
-    /* Once the skip byte is folded into the instruction phase this becomes
-     * a 16-bit instruction: (SKIP << 8) | opcode. */
     cmd->Instruction     = hdr->opcode;
     cmd->InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS;
 
-    if (hdr->has_args) {
-        /* Address phase: 4 bytes, MSB first -> x_hi x_lo y_hi y_lo */
+    if (hdr->fields & TRANSPORT_F_XY) {
         cmd->Address        = ((uint32_t)hdr->x << 16) | hdr->y;
         cmd->AddressMode    = HAL_OSPI_ADDRESS_8_LINES;
         cmd->AddressSize    = HAL_OSPI_ADDRESS_32_BITS;
         cmd->AddressDtrMode = HAL_OSPI_ADDRESS_DTR_DISABLE;
+    }
 
-        /* Alternate-bytes phase: 2 bytes, MSB first -> len_hi len_lo */
-        cmd->AlternateBytes        = hdr->len;
+    if (hdr->fields & TRANSPORT_F_LEN) {
+        /* Works with or without the address phase in front of it. */
+        cmd->AlternateBytes        = hdr->len_field;
         cmd->AlternateBytesMode    = HAL_OSPI_ALTERNATE_BYTES_8_LINES;
         cmd->AlternateBytesSize    = HAL_OSPI_ALTERNATE_BYTES_16_BITS;
         cmd->AlternateBytesDtrMode = HAL_OSPI_ALTERNATE_BYTES_DTR_DISABLE;
     }
+}
+
+/* Write: header, then n payload bytes (none if n == 0). */
+static void ospi_build_write(OSPI_RegularCmdTypeDef *cmd,
+                             const transport_hdr_t *hdr, uint16_t n)
+{
+    ospi_build_hdr(cmd, hdr);
 
     if (n > 0u) {
         cmd->DataMode = HAL_OSPI_DATA_8_LINES;
@@ -99,15 +108,12 @@ static void ospi_build_write(OSPI_RegularCmdTypeDef *cmd,
     cmd->DummyCycles = 0u;
 }
 
-/* Read: instruction = SKIP only (8 bits), then turnaround, then data.
- * The HAL needs an instruction or address phase to start a read, so the
- * skip byte doubles as that trigger. */
-static void ospi_build_read(OSPI_RegularCmdTypeDef *cmd, uint16_t n)
+/* Read: header, turnaround, then n data bytes. The instruction phase is
+ * always present, which is also what the HAL needs to start a read. */
+static void ospi_build_read(OSPI_RegularCmdTypeDef *cmd,
+                            const transport_hdr_t *hdr, uint16_t n)
 {
-    ospi_cmd_common(cmd);
-
-    cmd->Instruction     = TRANSPORT_SKIP_BYTE;
-    cmd->InstructionSize = HAL_OSPI_INSTRUCTION_8_BITS;
+    ospi_build_hdr(cmd, hdr);
 
     cmd->DataMode    = HAL_OSPI_DATA_8_LINES;
     cmd->NbData      = n;
@@ -195,7 +201,7 @@ static transport_status_t ospi_backend_read(const transport_hdr_t *hdr,
     if (n == 0u)            return TRANSPORT_ERR;   /* a read needs a data phase */
     if (!ospi_backend.done) return TRANSPORT_BUSY;
 
-    ospi_build_read(&cmd, n);
+    ospi_build_read(&cmd, hdr, n);
 
     ospi_backend.error = 0;
     ospi_backend.done  = 0;

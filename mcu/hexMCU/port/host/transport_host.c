@@ -54,13 +54,15 @@ static uint64_t now_ns(void)
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
 
-/* Header is opcode (1) + optionally x,y,len (6), plus the skip byte. */
+/* Header is the opcode, then optionally x,y (4) and the len field (2),
+ * each switched on by its own bit in hdr->fields. Same for both
+ * directions; a read adds the turnaround cycles below. */
 static uint64_t transfer_ns(const transport_hdr_t *hdr, bool is_read)
 {
-    uint64_t bytes = 1u                              /* skip byte      */
-                   + (is_read ? 0u : 1u)             /* opcode         */
-                   + (hdr->has_args ? 6u : 0u)       /* x, y, len      */
-                   + (uint64_t)hdr->len;             /* payload        */
+    uint64_t bytes = 1u                                          /* opcode */
+                   + ((hdr->fields & TRANSPORT_F_XY)  ? 4u : 0u) /* x, y   */
+                   + ((hdr->fields & TRANSPORT_F_LEN) ? 2u : 0u) /* len f. */
+                   + (uint64_t)hdr->len;                         /* data   */
 
     /* bits / (MHz * lanes) -> microseconds, then to ns */
     double us = (double)(bytes * 8u) / (cfg_clock_mhz * (double)cfg_lanes);

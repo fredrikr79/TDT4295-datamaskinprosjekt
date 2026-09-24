@@ -128,10 +128,7 @@ module tb_main;
 
     task spi_stop;
         begin
-            @(negedge sck_src);
-
             sck_enable = 1'b0;
-
             $display("[%0t] SPI CLOCK DISABLED", $time);
         end
     endtask
@@ -158,7 +155,6 @@ module tb_main;
             // Data is sampled by DUT on this edge.
             @(posedge ck_sck);
 
-            // Keep bus stable for the rest of the cycle.
             @(negedge ck_sck);
 
             mcu_oct_oe = 1'b0;
@@ -309,6 +305,7 @@ module tb_main;
         // This gives the final SPI edge time to propagate into
         // the free-running clk domain.
         // --------------------------------------------------------
+        sck_enable = 1'b0;
 
         spi_stop();
         ck_ss = 1'b1;
@@ -354,7 +351,7 @@ module tb_main;
 
         // Let the FPGA's TX handshake develop.
         repeat (4)
-            @(posedge ck_sck);
+            @(posedge sck_src);
 
         $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS",
                 $time);
@@ -388,8 +385,8 @@ module tb_main;
                     $time);
 
         // Try new command
-            
-        @(posedge sck_src);
+        repeat(5)
+            @(posedge sck_src);
 
         ck_ss = 1'b0;
 
@@ -463,7 +460,7 @@ module tb_main;
 
         // Let the FPGA's TX handshake develop.
         repeat (4)
-            @(posedge ck_sck);
+            @(posedge sck_src);
 
         $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS",
                 $time);

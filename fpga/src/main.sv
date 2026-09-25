@@ -25,18 +25,27 @@ module main (
       .active_area(active_area),
       .pixel_pulse(pixel_pulse)
   );
-  vga_game_example vga_game_example (
-      .clk(clk),
-      .reset(sw[3]),
-      .enable(sw[2]),
-      .up(btn[0]),
-      .down(btn[1]),
-      .left(btn[2]),
-      .right(btn[3]),
-      .coord_x(coord_x),
-      .coord_y(coord_y),
+
+  wire we;
+  wire [cell_pkg::AddrBits-1:0] write_addr, read_addr;
+  cell_pkg::cell_word_t write_data, read_data;
+
+  cell_memory memory (
+      .clk       (clk),
+      .we        (we),
+      .write_addr(write_addr),
+      .write_data(write_data),
+      .read_addr (read_addr),
+      .read_data (read_data)
+  );
+
+  cell_renderer renderer (
       .active_area(active_area),
-      .color(color)
+      .coord_x    (coord_x),
+      .coord_y    (coord_y),
+      .read_addr  (read_addr),
+      .read_data  (read_data),
+      .color      (color)
   );
   assign vga_r = color.red;
   assign vga_g = color.green;

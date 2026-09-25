@@ -1,4 +1,4 @@
-    module main #(
+    module spi_mcu #(
         parameter DEBUG = 1'd1
     )(
         input  wire       clk,        // Onboard 100MHz Clock (Pin E3) for the ILA Hub

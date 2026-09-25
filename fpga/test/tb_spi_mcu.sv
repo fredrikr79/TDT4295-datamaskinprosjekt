@@ -1,4 +1,4 @@
-module tb_main;
+module tb_spi_mcu;
 
     // ============================================================
     // FPGA / MCU control signals

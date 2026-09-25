@@ -27,7 +27,7 @@ module tb_spi_mcu;
   reg [7:0] mcu_oct_data;
   reg       mcu_oct_oe;
 
-  assign octo_spi = mcu_oct_oe ? mcu_oct_data : 8'bz;
+  assign octo_spi = mcu_oct_oe ? mcu_oct_data : 8'hzz;
 
 
   // ============================================================
@@ -50,7 +50,7 @@ module tb_spi_mcu;
   // DUT
   // ============================================================
 
-  main #(
+  spi_mcu #(
       .DEBUG(0)
   ) dut (
       .clk   (clk),
@@ -112,7 +112,7 @@ module tb_spi_mcu;
   // ck_sck never gets a runt pulse.
   // ============================================================
 
-  task spi_start;
+  task automatic spi_start;
     begin
       @(negedge sck_src);
 
@@ -123,7 +123,7 @@ module tb_spi_mcu;
   endtask
 
 
-  task spi_stop;
+  task automatic spi_stop;
     begin
       sck_enable = 1'b0;
       $display("[%0t] SPI CLOCK DISABLED", $time);
@@ -141,7 +141,7 @@ module tb_spi_mcu;
   // The data must be stable BEFORE the rising edge.
   // ============================================================
 
-  task mcu_write_byte;
+  task automatic mcu_write_byte;
     input [7:0] data;
 
     begin
@@ -169,7 +169,7 @@ module tb_spi_mcu;
   // FPGA is expected to drive the bus during TX.
   // ============================================================
 
-  task mcu_read_byte;
+  task automatic mcu_read_byte;
     output [7:0] data;
 
     begin
@@ -194,7 +194,7 @@ module tb_spi_mcu;
   // Wait for a particular READY transition
   // ============================================================
 
-  task wait_ready;
+  task automatic wait_ready;
     begin
       wait (ready === 1'b1);
 

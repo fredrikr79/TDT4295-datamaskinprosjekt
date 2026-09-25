@@ -1,5 +1,5 @@
 module spi_mcu #(
-    parameter DEBUG = 1'd1
+    parameter bit DEBUG = 1'd1
 ) (
     input wire clk,     // Onboard 100MHz Clock (Pin E3) for the ILA Hub
     input wire ck_ss,
@@ -24,22 +24,23 @@ module spi_mcu #(
 
 
   // FSM STATES
-  localparam [7:0]
-        ST_BOOT      =  8'b00000100,
-        ST_READY     =  8'b00001010,
-        ST_RX        =  8'b00010111,   
-        ST_DECODE    =  8'b00011011,
-        ST_BUSY      =  8'b00110101,
-        ST_TX_IDLE   =  8'b00111001,   
-        ST_TX_SEND   =  8'b01010001,   
-        ST_MEMORY    =  8'b01011001,
-        ST_FAILED    =  8'b11111111;
+  typedef enum bit [7:0] {
+    ST_BOOT    = 8'b00000100,
+    ST_READY   = 8'b00001010,
+    ST_RX      = 8'b00010111,
+    ST_DECODE  = 8'b00011011,
+    ST_BUSY    = 8'b00110101,
+    ST_TX_IDLE = 8'b00111001,
+    ST_TX_SEND = 8'b01010001,
+    ST_MEMORY  = 8'b01011001,
+    ST_FAILED  = 8'b11111111
+  } state_t;
 
   // KNOWN COMMANDS
-  localparam [3:0] ECHO = 4'hE;
+  typedef enum bit [3:0] {ECHO} opcode_t;
 
   // STATE / CMD TRACKERS
-  reg [7:0] state = ST_BOOT;
+  state_t state = ST_BOOT;
   reg [3:0] opcode = 4'hz;
 
   // RESET
@@ -51,7 +52,7 @@ module spi_mcu #(
   assign ready = (state == ST_READY) || (state == ST_TX_IDLE);
 
   // OCTO_SPI
-  assign octo_spi = (~ck_ss && tx_armed_s) ? tx_out : 8'bz;
+  assign octo_spi = (~ck_ss && tx_armed_s) ? tx_out : 8'hzz;
 
   // CDC synchronizations CK_SCK -> CLK
   reg [2:0] ck_ss_sync = 3'b000;
@@ -178,7 +179,7 @@ module spi_mcu #(
   // TX arming
   wire tx_armed_s = tx_armed_sync[2];
 
-  // Syncronization for TX stage 
+  // Syncronization for TX stage
   reg [2:0] tx_armed_sync = 3'b000;
   always @(posedge clk) begin
     if (reset) begin
@@ -203,7 +204,11 @@ module spi_mcu #(
   // initialize outgoing event driven buffer, and set conditions for preloading during TX handshake
   reg [7:0] tx_out = 8'h00;
   reg tx_first_loaded = 1'b0;
-  wire tx_load = (state == ST_TX_SEND) && !out_empty_s && in_empty && !tx_first_loaded && !out_empty;
+  wire tx_load = (state == ST_TX_SEND) &&
+    !out_empty_s &&
+    in_empty &&
+    !tx_first_loaded &&
+    !out_empty;
 
   always @(posedge clk) begin
     if (reset_s) begin
@@ -253,7 +258,13 @@ module spi_mcu #(
       case (state)
 
         ST_BOOT: begin
-          if (~in_full && ~out_full && ~in_wr_rst_busy && ~in_rd_rst_busy && ~out_rd_rst_busy && ~out_wr_rst_busy) begin
+          if (
+            ~in_full &&
+            ~out_full &&
+            ~in_wr_rst_busy &&
+            ~in_rd_rst_busy &&
+            ~out_rd_rst_busy &&
+            ~out_wr_rst_busy) begin
             state <= ST_READY;
             opcode <= 4'h0;
             in_r_en <= 1'b0;
@@ -358,7 +369,7 @@ module spi_mcu #(
   assign led0_b = state[0];
 
 
-  //DEBUG 
+  //DEBUG
   generate
     if (DEBUG) begin : gen_debug_ila
       ila_1 ila_inst (

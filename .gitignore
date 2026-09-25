@@ -11,6 +11,8 @@ fpga/test/config.hpp
 *.jou
 *.log
 .vivado.env
+/vtech
 .vscode/launch.json
 .vscode/settings.json
 .vscode/c_cpp_properties.json
+/vtech

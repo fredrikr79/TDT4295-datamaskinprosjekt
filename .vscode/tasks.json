@@ -55,6 +55,16 @@
             "problemMatcher": []
         },
         {
+            "label": "Verilator: Lint",
+            "type": "shell",
+            "command": "make",
+            "args": ["lint"],
+            "options": {
+                "cwd": "${workspaceFolder}/fpga"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "FPGA: Clean",
             "type": "shell",
             "command": "make",

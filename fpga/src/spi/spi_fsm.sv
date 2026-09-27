@@ -79,7 +79,8 @@ module spi_fsm #(
         end
 
         default: begin
-          state <= ST_READY;
+          // Go to fail state handler
+          state <= ST_DECODE;
         end
       endcase
 

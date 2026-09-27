@@ -82,13 +82,13 @@ module spi_processor #(
               end
 
               default: begin
-              // Do nothing...?
+                opcode <= FAILED;
               end
           endcase
         end
 
         default: begin
-          // Do nothing...?
+          opcode <= FAILED;
         end
 
       endcase

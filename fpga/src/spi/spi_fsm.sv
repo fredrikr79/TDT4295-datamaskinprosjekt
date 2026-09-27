@@ -47,6 +47,9 @@ module spi_fsm #(
                 state <= ST_TX_IDLE;
               end
             end
+            FAILED: begin
+                state <= ST_TX_IDLE;
+            end
             default: begin
               state <= ST_FAILED;
             end
@@ -74,13 +77,13 @@ module spi_fsm #(
           if (!out_full) begin
             // FAILED process description sets the opcode
             // to a designated failed procedure in spi_processor
-            state <= ST_DECODE;
+            state <= ST_BUSY;
           end
         end
 
         default: begin
           // Go to fail state handler
-          state <= ST_DECODE;
+          state <= ST_BUSY;
         end
       endcase
 

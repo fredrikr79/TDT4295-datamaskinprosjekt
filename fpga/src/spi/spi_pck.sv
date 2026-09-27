@@ -15,8 +15,9 @@ package spi_pck;
 
   // KNOWN COMMANDS
   typedef enum bit [3:0] {
-    ECHO,
-    FAILED
+    UNSET = 0000,
+    ECHO = 0001,
+    FAILED = 0002
   } opcode_e;
 
 endpackage

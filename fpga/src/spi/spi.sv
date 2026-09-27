@@ -128,7 +128,8 @@ module spi #(
     .octo_spi(octo_spi),
     .out_empty(out_empty),
     .out_full(out_full),
-    .out_ready(out_ready)
+    .out_ready(out_ready),
+    .out_empty_s(out_empty_s)
   );
 
   // Command processing module
@@ -142,7 +143,6 @@ module spi #(
     .proc_w_en(proc_w_en),
     .proc_r_en(proc_r_en),
     .out_fifo(out_fifo),
-    .out_w_en(out_w_en),
     .opcode(opcode)
   );
 

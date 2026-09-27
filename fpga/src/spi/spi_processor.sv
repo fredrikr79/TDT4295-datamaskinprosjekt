@@ -18,7 +18,8 @@ module spi_processor #(
 
   // in_read handlers registration MUX proc_1 | proc_2 | ...
   logic echo_r_en = 1'b0;
-  assign proc_r_en = echo_r_en;
+  logic fail_r_en = 1'b0;
+  assign proc_r_en = echo_r_en | fail_r_en;
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic echo_w_en = 1'b0;
@@ -36,6 +37,7 @@ module spi_processor #(
       echo_r_en  <= 1'b0;
       echo_w_en <= 1'b0;
       fail_w_en <= 1'b0;
+      fail_r_en <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
       out_fifo <= 8'h00;
     end else begin
@@ -43,6 +45,7 @@ module spi_processor #(
       echo_r_en  <= 1'b0;
       echo_w_en <= 1'b0;
       fail_w_en <= 1'b0;
+      fail_r_en <= 1'b0;
 
       case (state)
 
@@ -58,7 +61,7 @@ module spi_processor #(
         end
 
         ST_BUSY: begin
-            case (spi_pck::opcode_e'(in_fifo[7:4]))
+            case (spi_pck::opcode_e'(opcode))
 
               // Register command handler here. they should own their own read/write signals.
               // Register these in the in_r_en / out_w_en MUX assignments.
@@ -74,10 +77,11 @@ module spi_processor #(
               end
 
               FAILED: begin
-                if (!out_full) begin
-                  opcode <= spi_pck::opcode_e'(4'h0);
-                  fail_w_en <= 1'b1;
+                if (!out_full && !in_empty) begin
+                  opcode <= UNSET;
                   out_fifo <= 8'hFF;
+                  fail_w_en <= 1'b1;
+                  fail_r_en <= 1'b1;
                 end
               end
 
@@ -88,7 +92,7 @@ module spi_processor #(
         end
 
         default: begin
-          opcode <= FAILED;
+          // Do nothing
         end
 
       endcase

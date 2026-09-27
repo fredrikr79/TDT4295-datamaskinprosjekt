@@ -8,6 +8,7 @@ module spi_tx #(
     ck_ss_s,
     in_empty,
     out_w_en,
+    out_empty_s,
 
     input spi_pck::state_e state,
     input logic [7:0] out_fifo,
@@ -96,7 +97,7 @@ module spi_tx #(
 
   // initialize outgoing event driven buffer, and set conditions for preloading during TX handshake
   reg  tx_first_loaded = 1'b0;
-  wire tx_load = (state == ST_TX_SEND) && in_empty && !tx_first_loaded && !out_empty;
+  wire tx_load = (state == ST_TX_SEND) && !out_empty_s && !tx_first_loaded && !out_empty;
 
   always @(posedge clk) begin
     if (reset_s) begin
@@ -110,7 +111,7 @@ module spi_tx #(
     end else if (tx_event_trigger) begin
       tx_out <= out_data;
     end
-    if (state == (ST_TX_SEND) && !ck_ss_s && !out_empty && in_empty) tx_armed <= 1'b1;
+    if (state == (ST_TX_SEND) && !ck_ss_s && !out_empty_s) tx_armed <= 1'b1;
     else if (state == (ST_TX_SEND) && ck_ss_s && in_empty) begin
       tx_armed <= 1'b0;
       tx_first_loaded <= 1'b0;

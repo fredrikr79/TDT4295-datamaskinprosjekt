@@ -1,4 +1,4 @@
-module tb_spi_mcu;
+module tb_spi;
 
   // ============================================================
   // FPGA / MCU control signals
@@ -50,7 +50,7 @@ module tb_spi_mcu;
   // DUT
   // ============================================================
 
-  spi_mcu #(
+  spi #(
       .DEBUG(0)
   ) dut (
       .clk   (clk),
@@ -281,7 +281,7 @@ module tb_spi_mcu;
     // 00, 05, 06
     // --------------------------------------------------------
 
-    mcu_write_byte(8'hee);
+    mcu_write_byte(8'h11);
     mcu_write_byte(8'h01);
     mcu_write_byte(8'h02);
     mcu_write_byte(8'h03);
@@ -380,7 +380,7 @@ module tb_spi_mcu;
     // 00, 05, 06
     // --------------------------------------------------------
 
-    mcu_write_byte(8'hee);
+    mcu_write_byte(8'h11);
     mcu_write_byte(8'h01);
     mcu_write_byte(8'h02);
     mcu_write_byte(8'h03);
@@ -463,9 +463,104 @@ module tb_spi_mcu;
     else $display("[%0t] FPGA returned to READY", $time);
 
 
+    // Try new command
+    repeat (5) @(posedge sck_src);
+
+    ck_ss = 1'b0;
+
+    spi_start();
+
+
     // --------------------------------------------------------
-    // Finish
+    // Send command/data
+    //
+    // ECHO command = upper nibble 0.
+    //
+    // 00, 05, 06
     // --------------------------------------------------------
+
+    mcu_write_byte(8'hee); // illegal opcode
+    mcu_write_byte(8'h01); // valid payload
+    mcu_write_byte(8'h02);
+    mcu_write_byte(8'h03);
+    mcu_write_byte(8'h04);
+    mcu_write_byte(8'h05);
+
+
+    // --------------------------------------------------------
+    // Stop clock before releasing CS.
+    //
+    // This gives the final SPI edge time to propagate into
+    // the free-running clk domain.
+    // --------------------------------------------------------
+
+    spi_stop();
+    ck_ss = 1'b1;
+
+
+    $display("[%0t] RX TRANSACTION COMPLETE", $time);
+
+
+    // --------------------------------------------------------
+    // Give the 100 MHz domain time to process the RX FIFO.
+    // --------------------------------------------------------
+
+    wait (ready === 1'b1);
+
+
+    // --------------------------------------------------------
+    // FPGA should eventually enter TX_IDLE / READY.
+    // --------------------------------------------------------
+
+    if (ready !== 1'b1) begin
+
+      $display("[%0t] ERROR: FPGA did not reach TX/READY state", $time);
+
+    end else begin
+
+      $display("[%0t] FPGA ready for TX", $time);
+
+    end
+
+
+    // ============================================================
+    // TX TRANSACTION
+    // ============================================================
+
+    ck_ss = 1'b0;
+    spi_start();
+
+    mcu_write_byte(8'hAA);
+
+    // Let the FPGA's TX handshake develop.
+    repeat (4) @(posedge sck_src);
+
+    $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS", $time);
+
+
+    mcu_read_byte(rx_byte0);
+    $display("[%0t] FIRST TX BYTE = %02h", $time, rx_byte0);
+    mcu_read_byte(rx_byte1);
+    $display("[%0t] SECOND TX BYTE = %02h", $time, rx_byte1);
+    mcu_read_byte(rx_byte2);
+    $display("[%0t] THIRD TX BYTE = %02h", $time, rx_byte2);
+    mcu_read_byte(rx_byte3);
+    $display("[%0t] FOURTH TX BYTE = %02h", $time, rx_byte3);
+    mcu_read_byte(rx_byte4);
+    $display("[%0t] FIFTH TX BYTE = %02h", $time, rx_byte4);
+
+    // ------------------------------------------------------------
+    // Now terminate the transaction.
+    // ------------------------------------------------------------
+
+    spi_stop();
+    ck_ss = 1'b1;
+
+    wait (ready === 1'b1);
+
+    if (ready !== 1'b1) $display("[%0t] ERROR: FPGA did not return to READY", $time);
+    else $display("[%0t] FPGA returned to READY", $time);
+
 
     $display("[%0t] TEST COMPLETE", $time);
 

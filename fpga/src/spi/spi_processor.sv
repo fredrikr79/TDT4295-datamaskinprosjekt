@@ -57,7 +57,7 @@ module spi_processor #(
            // USING FWFT FIFO's allowing us to peek at the read bus without popping.
             // Each dispatched command decides for itself if it should pop the command
             // By setting in_r_en <= 1'b1;
-            opcode <= in_fifo[7:4];
+            opcode <= spi_pck::opcode_e'(in_fifo[7:4]);
         end
 
         ST_BUSY: begin

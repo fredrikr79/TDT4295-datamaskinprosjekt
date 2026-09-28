@@ -5031,16 +5031,6 @@
 		)
 		(uuid "fef77926-7be7-412b-8395-bb8478a8dc5e")
 	)
-	(label "5V_IN"
-		(at 50.8 33.02 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "2068356a-2911-4542-8412-3fae2550c84d")
-	)
 	(label "1V0_OUT"
 		(at 222.25 20.32 0)
 		(effects
@@ -5178,6 +5168,41 @@
 					(color 15 0 171 1)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "POWER_IN"
+		(shape input)
+		(at 50.8 33.02 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "f5fc193b-1f70-43fc-ba11-c2f9b1644ff3")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 38.441 33.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Extra" "5V"
+			(at 39.116 32.766 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(color 15 0 171 1)
+				)
+				(justify right)
 			)
 		)
 	)
@@ -8119,7 +8144,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias"
+		(property "Footprint" "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm"
 			(at 122.174 150.114 0)
 			(hide yes)
 			(show_name no)

@@ -1234,7 +1234,7 @@
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "U6"
+			(property "Reference" "U5"
 				(at 56.515 54.61 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1254,7 +1254,7 @@
 					)
 				)
 			)
-			(property "Footprint" "PWP16_2P31X2P46"
+			(property "Footprint" "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias"
 				(at 29.464 14.986 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1658,6 +1658,8 @@
 						)
 					)
 				)
+			)
+			(symbol "TPS54294PWP_1_1"
 				(pin power_in line
 					(at 55.88 19.05 90)
 					(length 7.62)
@@ -1668,7 +1670,7 @@
 							)
 						)
 					)
-					(number "EPAD"
+					(number "17"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -8117,7 +8119,7 @@
 				)
 			)
 		)
-		(property "Footprint" "TPS54294PWP:PWP16_2P31X2P46"
+		(property "Footprint" "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias"
 			(at 122.174 150.114 0)
 			(hide yes)
 			(show_name no)
@@ -8161,7 +8163,7 @@
 		(pin "12"
 			(uuid "923fda70-7d23-4bdd-b052-f23e3b8bf1f8")
 		)
-		(pin "EPAD"
+		(pin "17"
 			(uuid "f6aeea31-86ac-438f-9fc4-0d01d93dbe9f")
 		)
 		(pin "16"

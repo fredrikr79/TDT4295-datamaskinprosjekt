@@ -1,7 +1,6 @@
 /* ======================================================================
- * fs_core.c -- backend-independent part of fs.h: error strings, exact
- * reads, the line reader, exists, mkdir -p, rm -r, mv and cp. Compiled into every build, whichever
- * backend (fs_fatfs.c / fs_filex.c) is linked.
+ * fs_core.c - backend-independent part of fs.h: error strings, exact
+ * reads, the line reader, exists, mkdir -p, rm -r, mv and cp.
  * ====================================================================== */
 #include <string.h>
 
@@ -265,7 +264,7 @@ fs_err_t fs_remove_r(const char *path)
 }
 
 /* ======================================================================
- * mv / cp
+ * move / copy
  * ====================================================================== */
 
 static char      srcbuf[FS_PATH_MAX];

@@ -7,3 +7,5 @@ void cli_poll(void);
  * redraws a half-typed command line instead of trampling it. */
 void cli_async_begin(void);
 void cli_async_end(void);
+
+void cli_quit(const char *why);

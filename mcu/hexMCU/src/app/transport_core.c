@@ -1,8 +1,6 @@
 /* ======================================================================
- * transport_core.c -- the platform independent half of the transport
+ * transport_core.c - the platform independent half of the transport
  * layer: backend dispatch and the FPGA_READY edge counter.
- *
- * Compiled by BOTH builds. No stm32 headers.
  * ====================================================================== */
 #define LOG_TAG "xport"
 

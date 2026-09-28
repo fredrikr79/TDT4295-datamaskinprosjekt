@@ -20,6 +20,8 @@
 #include "transport.h"
 #include "log.h"
 #include "host_hooks.h"
+#include "cli.h"
+#include "display_host.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -173,6 +175,10 @@ static void host_abort(void)
 /* Everything that would be an interrupt on hardware happens here. */
 static void host_poll(void)
 {
+
+    if (!display_poll())
+        cli_quit("window closed");
+    
     uint64_t t = now_ns();
 
     if (fpga.state == XF_RUNNING && t >= fpga.finish_ns) {

@@ -31,10 +31,10 @@
 
 /* Opcode for the echo command: FPGA stores the payload and sends it back
  * on the next read. */
-#define FECHO_OPCODE              0xEEu
+#define FECHO_OPCODE              0x10u
 
 /* Instruction for "hand me what I asked for" reads. */
-#define READ_OPCODE               0xA5u
+#define READ_OPCODE               0x00u
 
 /* ======================================================================
  * FPGA ready reporting
@@ -572,17 +572,31 @@ static void cmd_loglevel(int argc, char **argv)
             log_get_level(), LOG_LEVEL);
 }
 
+/* Leave cleanly: wipe the prompt line, unmount, exit. Used by the exit
+ * command and by the host port when the window is closed. */
+void cli_quit(const char *why)
+{
+    bool was_visible = prompt_visible;
+
+    cli_async_begin();              /* wipe "> half-typed" if it is shown */
+    prompt_visible = false;         /* and keep log hooks from redrawing it */
+
+    fs_unmount();                   /* no-op if never mounted */
+    if (why) log_raw("%s, bye\r\n", why);
+    else     log_raw("bye\r\n");
+
+    if (plat_exit(0)) return;       /* host: does not come back */
+
+    log_raw("cannot exit terminal on hardware\r\n");
+    prompt_visible = was_visible;
+    cli_async_end();
+}
+
 static void cmd_exit(int argc, char **argv)
 {
     (void)argc; (void)argv;
-
-    fs_unmount();                 /* no-op if never mounted */
-    log_raw("bye\r\n");
-
-    if (!plat_exit(0))
-        log_raw("cannot exit terminal on hardware\r\n");
+    cli_quit(NULL);
 }
-
 static const cli_cmd_t cmds[] = {
     { "help",    cmd_help,     "list commands" },
     { "toggle",  cmd_toggle,   "toggle user LED" },

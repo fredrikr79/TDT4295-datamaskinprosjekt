@@ -8,6 +8,8 @@
 static log_hook_fn hook_before, hook_after;
 static int runtime_level = LOG_LEVEL;
 
+
+
 static const char level_char[] = { '-', 'E', 'W', 'I', 'D' };
 
 void log_set_hooks(log_hook_fn before, log_hook_fn after)

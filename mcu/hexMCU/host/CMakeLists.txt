@@ -10,26 +10,36 @@ endif()
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/sources.cmake)
 
-# Host always uses FatFs on card.img, whatever the firmware uses.
+# SDL3 vendored, host build only
+set(SDL_SHARED       OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC       ON  CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+add_subdirectory(${APP_ROOT}/third_party/SDL
+                 ${CMAKE_BINARY_DIR}/SDL EXCLUDE_FROM_ALL)
+
 add_executable(hexmcu_host
     ${APP_SOURCES}
     ${FATFS_SOURCES}
-    ${APP_ROOT}/port/host/host_main.c
-    ${APP_ROOT}/port/host/io_stdio.c
-    ${APP_ROOT}/port/host/platform_host.c
-    ${APP_ROOT}/port/host/transport_host.c
-    ${APP_ROOT}/port/host/diskio_host.c
+    ${APP_ROOT}/src/port/host/host_main.c
+    ${APP_ROOT}/src/port/host/io_stdio.c
+    ${APP_ROOT}/src/port/host/platform_host.c
+    ${APP_ROOT}/src/port/host/transport_host.c
+    ${APP_ROOT}/src/port/host/diskio_host.c
+    ${APP_ROOT}/src/port/host/display_host.c
 )
+
+target_link_libraries(hexmcu_host PRIVATE SDL3::SDL3)
 
 target_include_directories(hexmcu_host PRIVATE
     ${APP_INCLUDES}
     ${FATFS_INCLUDES}
-    ${APP_ROOT}/port/host
+    ${APP_ROOT}/src/port/host
 )
 
 target_compile_definitions(hexmcu_host PRIVATE
     LOG_LEVEL=LOG_LEVEL_DEBUG
     DEFAULT_CARD_IMAGE="${CMAKE_CURRENT_SOURCE_DIR}/card.img"
+    DEFAULT_IMAGE="${CMAKE_CURRENT_SOURCE_DIR}/test169.bmp"
 )
 
 target_compile_options(hexmcu_host PRIVATE

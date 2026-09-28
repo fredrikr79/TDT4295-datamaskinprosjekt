@@ -2,10 +2,7 @@
 #define FS_UTILS_H
 
 /* ======================================================================
- * fs_utils.h -- ls cd cat head echo mkdir rm exist mv cp.
- *
- * Built on fs.h only. Signatures match cli.c's cmd_fn so they go
- * straight into the command table. fs_mount/fs_unmount come from fs.h.
+ * fs_utils.h - ls cd cat head echo mkdir rm exist mv cp.
  * ====================================================================== */
 
 #include "fs.h"

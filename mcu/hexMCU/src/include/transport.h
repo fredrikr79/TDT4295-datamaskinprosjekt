@@ -2,10 +2,7 @@
 #define TRANSPORT_H
 
 /* ======================================================================
- * transport.h -- link to the FPGA, platform independent.
- *
- * No stm32 headers here: this is included by app/ code that both builds
- * compile. Exactly one backend is linked per build and it defines BACKEND.
+ * transport.h - link to the FPGA, platform independent.
  * ====================================================================== */
 
 #include <stdint.h>
@@ -14,10 +11,6 @@
 /* Clock cycles between the header and the data phase of a read, so the
  * bus can be handed over to the FPGA. */
 #define TRANSPORT_TURNAROUND_CYCLES  4u
-
-/* Wire format, same header layout in both directions:
- *   write: opcode, [x y], [len_field], payload...
- *   read : opcode, [x y], [len_field], [turnaround], data... */
 
 typedef enum {
     TRANSPORT_OK = 0,

@@ -1,5 +1,5 @@
 /* ======================================================================
- * fs_fatfs.c -- fs.h backend on FatFs (third_party/ff16).
+ * fs_fatfs.c - fs.h backend on FatFs (third_party/ff16).
  *
  * Portable: needs only ff.h. Whichever diskio_*.c is linked decides
  * whether this hits card.img (port/host/diskio_host.c) or the SD card

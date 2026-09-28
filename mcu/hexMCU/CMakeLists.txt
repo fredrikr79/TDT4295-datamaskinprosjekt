@@ -59,9 +59,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${APP_SOURCES}
-    port/stm32/io_uart.c
-    port/stm32/platform_stm32.c
-    port/stm32/transport_ospi.c
+    src/port/stm32/io_uart.c
+    src/port/stm32/platform_stm32.c
+    src/port/stm32/transport_ospi.c
 )
 
 # Add include paths
@@ -73,18 +73,18 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 if(FS_BACKEND STREQUAL "fatfs")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${FATFS_SOURCES}
-        port/stm32/diskio_sdmmc.c
+        src/port/stm32/diskio_sdmmc.c
     )
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${FATFS_INCLUDES}
     )
 elseif(FS_BACKEND STREQUAL "filex")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        port/stm32/fs_filex.c
+        src/port/stm32/fs_filex.c
         # TODO(filex): FileX sources + SD driver
     )
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        port/stm32                      # fs_filex.h
+        src/port/stm32                      # fs_filex.h
         # TODO(filex): FileX include dirs
     )
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

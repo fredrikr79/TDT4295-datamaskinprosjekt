@@ -30,6 +30,14 @@ module main (
   wire [cell_pkg::AddrBits-1:0] write_addr, read_addr;
   cell_pkg::cell_word_t write_data, read_data;
 
+  world_loader loader (
+      .clk  (clk),
+      .reset(sw[3]),
+      .we   (we),
+      .write_addr (write_addr),
+      .data (write_data)
+  );
+
   cell_memory memory (
       .clk       (clk),
       .we        (we),

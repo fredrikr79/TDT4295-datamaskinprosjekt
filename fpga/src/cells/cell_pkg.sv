@@ -1,6 +1,6 @@
 package cell_pkg;
-  localparam int unsigned GridWidth = 640;
-  localparam int unsigned GridHeight = 360;
+  localparam int unsigned GridWidth = config_pkg::ActiveWidth;
+  localparam int unsigned GridHeight = config_pkg::ActiveHeight;
 
   localparam int unsigned MaterialBits = 4;  // support for 16 materials
   localparam int unsigned CellsPerWord = 8;  // 8x4 = 32 which fits cleanly in registers

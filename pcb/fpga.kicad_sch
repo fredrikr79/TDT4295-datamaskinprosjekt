@@ -509,7 +509,7 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Connector:DE15_Socket_HighDensity"
+		(symbol "Connector:DE15_Socket_HighDensity_MountingHoles"
 			(pin_names
 				(offset 1.016)
 				(hide yes)
@@ -529,7 +529,7 @@
 					)
 				)
 			)
-			(property "Value" "DE15_Socket_HighDensity"
+			(property "Value" "DE15_Socket_HighDensity_MountingHoles"
 				(at 0 19.05 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -561,7 +561,7 @@
 					)
 				)
 			)
-			(property "Description" "15-pin D-SUB connector, socket (female), High density (3 columns), Triple Row, Generic, VGA-connector"
+			(property "Description" "15-pin D-SUB connector, socket (female), High density (3 columns), Triple Row, Generic, VGA-connector, Mounting Hole"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -594,7 +594,7 @@
 					)
 				)
 			)
-			(symbol "DE15_Socket_HighDensity_0_1"
+			(symbol "DE15_Socket_HighDensity_MountingHoles_0_1"
 				(polyline
 					(pts
 						(xy -3.81 17.78) (xy -3.81 -15.24) (xy 3.81 -12.7) (xy 3.81 15.24) (xy -3.81 17.78)
@@ -833,7 +833,7 @@
 					)
 				)
 			)
-			(symbol "DE15_Socket_HighDensity_1_1"
+			(symbol "DE15_Socket_HighDensity_MountingHoles_1_1"
 				(pin passive line
 					(at -7.62 10.16 0)
 					(length 5.08)
@@ -1097,6 +1097,24 @@
 						)
 					)
 					(number "15"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -17.78 90)
+					(length 3.81)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "SH"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -22887,6 +22905,121 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "power:PWR_FLAG"
+			(power global)
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "#FLG"
+				(at 0 1.905 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "PWR_FLAG"
+				(at 0 3.81 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Special symbol for telling ERC where power comes from"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "flag power"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "PWR_FLAG_0_0"
+				(pin power_out line
+					(at 0 0 90)
+					(length 0)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(symbol "PWR_FLAG_0_1"
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 1.27) (xy -1.016 1.905) (xy 0 2.54) (xy 1.016 1.905) (xy 0 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 	)
 	(text "Vccbram\n"
 		(exclude_from_sim no)
@@ -23263,6 +23396,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "4be7991e-c702-4844-b21b-31882ddc6f1a")
+	)
+	(junction
+		(at 43.18 274.32)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "4f36783a-70dc-41e5-ba1f-ebe15b3f52a4")
 	)
 	(junction
 		(at 360.68 27.94)
@@ -24663,6 +24802,16 @@
 			(type default)
 		)
 		(uuid "19134e20-4a1e-4661-8f21-5a58ceb1ba9f")
+	)
+	(wire
+		(pts
+			(xy 43.18 274.32) (xy 39.37 274.32)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1a06a14b-bd5c-4583-ae4e-00cfadb24920")
 	)
 	(wire
 		(pts
@@ -26591,7 +26740,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 274.32) (xy 39.37 274.32)
+			(xy 44.45 274.32) (xy 43.18 274.32)
 		)
 		(stroke
 			(width 0)
@@ -30975,7 +31124,7 @@
 		)
 	)
 	(symbol
-		(lib_id "Connector:DE15_Socket_HighDensity")
+		(lib_id "Connector:DE15_Socket_HighDensity_MountingHoles")
 		(at 175.26 219.71 0)
 		(unit 1)
 		(body_style 1)
@@ -31006,7 +31155,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_Dsub:DSUB-15_Socket_EdgeMount_P2.77mm"
+		(property "Footprint" "L77HDE15SD1CH4FVGA:AMPHENOL_L77HDE15SD1CH4FVGA"
 			(at 151.13 209.55 0)
 			(hide yes)
 			(show_name no)
@@ -31028,7 +31177,7 @@
 				)
 			)
 		)
-		(property "Description" "15-pin D-SUB connector, socket (female), High density (3 columns), Triple Row, Generic, VGA-connector"
+		(property "Description" "15-pin D-SUB connector, socket (female), High density (3 columns), Triple Row, Generic, VGA-connector, Mounting Hole"
 			(at 175.26 219.71 0)
 			(hide yes)
 			(show_name no)
@@ -31083,6 +31232,9 @@
 		)
 		(pin "7"
 			(uuid "de4f53e8-03e0-4854-96db-d3a735c1bda0")
+		)
+		(pin "SH"
+			(uuid "59375ae5-d70e-4caa-8c93-8d846eb97a29")
 		)
 		(instances
 			(project "tdt4295"
@@ -32599,6 +32751,83 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 175.26 237.49 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "569a577a-d622-45df-9723-ab633afae5f0")
+		(property "Reference" "#PWR037"
+			(at 175.26 243.84 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 175.26 241.554 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 175.26 237.49 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 175.26 237.49 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 175.26 237.49 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e3361d1e-1f88-4a50-8fb7-82e929a458b6")
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/55913984-0b9b-45b1-b632-d56e73135cfc"
+					(reference "#PWR037")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+3V3")
 		(at 387.35 41.91 0)
 		(unit 1)
@@ -33938,6 +34167,84 @@
 			(project "fpga"
 				(path "/98d00d1c-d3ac-42d5-9423-f6ff1763a613"
 					(reference "#PWR01")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 43.18 274.32 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "7c3ff2d2-629f-41a8-be29-a876fbcdfadc")
+		(property "Reference" "#FLG08"
+			(at 43.18 272.415 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 43.18 269.24 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_DFN_QFN:QFN-16-1EP_4x4mm_P0.65mm_EP2.1x2.1mm"
+			(at 43.18 274.32 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 43.18 274.32 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 43.18 274.32 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6f2b3882-07bf-4308-a9a3-29561be6a913")
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/55913984-0b9b-45b1-b632-d56e73135cfc"
+					(reference "#FLG08")
 					(unit 1)
 				)
 			)

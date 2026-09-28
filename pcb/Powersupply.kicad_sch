@@ -2886,6 +2886,12 @@
 		(uuid "4d77dc46-3bb0-479f-a483-594cd3302308")
 	)
 	(junction
+		(at 15.24 121.92)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "50167d62-6d77-473d-b5a4-39d9c1d0d5f9")
+	)
+	(junction
 		(at 78.74 162.56)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -2938,12 +2944,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "71719452-5639-4257-9956-bf0dcc1cb3ed")
-	)
-	(junction
-		(at 54.61 33.02)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "7310532f-d42c-4c9e-a555-888f9de4f4fe")
 	)
 	(junction
 		(at 248.92 127)
@@ -3072,6 +3072,12 @@
 		(uuid "ca31ecee-7953-4b6d-9ef0-530c8adb9714")
 	)
 	(junction
+		(at 259.08 123.19)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "cd94911a-a6e1-478c-be9c-46970d0b66a8")
+	)
+	(junction
 		(at 67.31 33.02)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -3082,6 +3088,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "d0b28801-afe4-4760-af68-30da30876e9f")
+	)
+	(junction
+		(at 222.25 25.4)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "d2a63a3e-89bf-4c64-9790-7cf92666ddeb")
 	)
 	(junction
 		(at 20.32 139.7)
@@ -3219,6 +3231,16 @@
 	)
 	(wire
 		(pts
+			(xy 222.25 25.4) (xy 222.25 33.02)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "084537b6-a8d5-4f89-92ee-77ca18e28873")
+	)
+	(wire
+		(pts
 			(xy 15.24 125.73) (xy 20.32 125.73)
 		)
 		(stroke
@@ -3299,7 +3321,7 @@
 	)
 	(wire
 		(pts
-			(xy 15.24 118.11) (xy 15.24 125.73)
+			(xy 15.24 118.11) (xy 15.24 121.92)
 		)
 		(stroke
 			(width 0)
@@ -3446,6 +3468,16 @@
 			(type default)
 		)
 		(uuid "25c6d710-8209-4919-8687-48c4b5986b0d")
+	)
+	(wire
+		(pts
+			(xy 15.24 121.92) (xy 15.24 125.73)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "26202728-324c-49b1-a514-d88ee73714ce")
 	)
 	(wire
 		(pts
@@ -3659,7 +3691,7 @@
 	)
 	(wire
 		(pts
-			(xy 222.25 20.32) (xy 222.25 33.02)
+			(xy 222.25 20.32) (xy 222.25 25.4)
 		)
 		(stroke
 			(width 0)
@@ -3869,7 +3901,7 @@
 	)
 	(wire
 		(pts
-			(xy 259.08 120.65) (xy 259.08 127)
+			(xy 259.08 120.65) (xy 259.08 123.19)
 		)
 		(stroke
 			(width 0)
@@ -4329,7 +4361,7 @@
 	)
 	(wire
 		(pts
-			(xy 54.61 33.02) (xy 59.69 33.02)
+			(xy 50.8 33.02) (xy 59.69 33.02)
 		)
 		(stroke
 			(width 0)
@@ -4739,16 +4771,6 @@
 	)
 	(wire
 		(pts
-			(xy 50.8 33.02) (xy 54.61 33.02)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "e8f33be5-abbd-4852-9d82-3fd3ad8d6162")
-	)
-	(wire
-		(pts
 			(xy 228.6 139.7) (xy 228.6 162.56)
 		)
 		(stroke
@@ -4997,6 +5019,26 @@
 		)
 		(uuid "fead5021-9076-4b13-905b-3fa841618c18")
 	)
+	(wire
+		(pts
+			(xy 259.08 123.19) (xy 259.08 127)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fef77926-7be7-412b-8395-bb8478a8dc5e")
+	)
+	(label "5V_IN"
+		(at 50.8 33.02 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "2068356a-2911-4542-8412-3fae2550c84d")
+	)
 	(label "1V0_OUT"
 		(at 222.25 20.32 0)
 		(effects
@@ -5134,41 +5176,6 @@
 					(color 15 0 171 1)
 				)
 				(justify left)
-			)
-		)
-	)
-	(global_label "POWER_IN"
-		(shape input)
-		(at 50.8 33.02 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "a0e942b1-9df3-4e75-a09f-e47455e33383")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 38.441 33.02 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Extra" "5V"
-			(at 49.276 36.322 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(color 15 0 171 1)
-				)
-				(justify right)
 			)
 		)
 	)
@@ -5419,84 +5426,6 @@
 			(project "tdt4295"
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
 					(reference "R38")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:PWR_FLAG")
-		(at 54.61 33.02 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "2436903d-ab61-4d74-9e8e-f4bec673a7af")
-		(property "Reference" "#FLG02"
-			(at 54.61 31.115 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "PWR_FLAG"
-			(at 54.61 27.94 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 54.61 33.02 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 54.61 33.02 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Special symbol for telling ERC where power comes from"
-			(at 54.61 33.02 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "8d51e7ff-2b28-45bf-95d7-bf0ccb5ed542")
-		)
-		(instances
-			(project "tdt4295"
-				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
-					(reference "#FLG02")
 					(unit 1)
 				)
 			)
@@ -6139,6 +6068,85 @@
 			(project "tdt4295"
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
 					(reference "C34")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 222.25 25.4 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "4893fc35-9597-4685-a38f-dccc00c44c25")
+		(property "Reference" "#FLG02"
+			(at 224.155 25.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 226.06 25.3999 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 222.25 25.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 222.25 25.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 222.25 25.4 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "de78cdb0-0bb6-4659-a4f5-acd3ff7416a1")
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
+					(reference "#FLG02")
 					(unit 1)
 				)
 			)
@@ -7467,6 +7475,85 @@
 			(project "tdt4295"
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
 					(reference "D4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 15.24 121.92 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "8f2a34b7-309f-426f-8452-ee449a6e73f6")
+		(property "Reference" "#FLG04"
+			(at 17.145 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 19.05 121.9199 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 15.24 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 15.24 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 15.24 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6c46e970-b780-4ab1-8f59-078c4f064f6c")
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
+					(reference "#FLG04")
 					(unit 1)
 				)
 			)
@@ -9669,6 +9756,85 @@
 			(project "tdt4295"
 				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
 					(reference "C46")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 259.08 123.19 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "efbd8b64-d555-405a-8e5d-c263e7c91d08")
+		(property "Reference" "#FLG03"
+			(at 260.985 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 262.89 123.1899 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 259.08 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 259.08 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Special symbol for telling ERC where power comes from"
+			(at 259.08 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "c7a3455b-8763-48b9-8fe4-5c79f1d9dd34")
+		)
+		(instances
+			(project "tdt4295"
+				(path "/603dd496-f9c4-4a31-9104-19eec41ebc98/634870db-7705-458e-b29f-8b3e7772e7aa"
+					(reference "#FLG03")
 					(unit 1)
 				)
 			)

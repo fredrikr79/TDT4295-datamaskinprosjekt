@@ -7,4 +7,5 @@
 	(lib (name "410_251_B") (type "KiCad") (uri "${KIPRJMOD}/assets/410_251_B/KiCADv6/footprints.pretty") (options "") (descr ""))
 	(lib (name "LED_ARGB") (type "KiCad") (uri "${KIPRJMOD}/assets/APTF1616LSEEZGKQBKC/footprints.pretty") (options "") (descr ""))
 	(lib (name "USB4110_GF_A") (type "KiCad") (uri "${KIPRJMOD}/assets/USB4110_GF_A/footprints.pretty") (options "") (descr ""))
+	(lib (name "L77HDE15SD1CH4FVGA") (type "KiCad") (uri "${KIPRJMOD}/assets/L77HDE15SD1CH4FVGA") (options "") (descr ""))
 )

@@ -11,5 +11,7 @@ package vga_sync_params;
   typedef logic unsigned [YCoordinateBits-1:0] y_coordinate_t;
 
   localparam int unsigned PixelClockRate  = TotalWidth * TotalHeight * FPS;
-  localparam int unsigned PixelClockDelay = GlobalClockFrequency / PixelClockRate;
+  
+  localparam int unsigned PixelClockDelay =
+      (GlobalClockFrequency + PixelClockRate / 2) / PixelClockRate;// Round to nearest
 endpackage

@@ -12,7 +12,7 @@ TOP_VCD := $(VCD_DIR)/$(TOP_MODULE).vcd
 
 SOURCES := $(shell find $(SOURCE_DIRECTORIES) \-type f \( -name "*.v" -o -name "*.sv" \) ! -path "src/config_pkg.sv") src/config_pkg.sv
 
-.PHONY: sim-vga sim-vcd generate-vcd clean vivado-all vivado-build vivado-program
+.PHONY: sim-vga sim-vcd generate-vcd clean vivado-all vivado-build vivado-program lint
 
 # Simulation
 sim-vga: $(VGA_SIM_BINARY)
@@ -20,6 +20,10 @@ sim-vga: $(VGA_SIM_BINARY)
 sim-vcd: $(TOP_VCD)
 	gtkwave $<
 generate-vcd: $(TOP_VCD)
+lint: $(SOURCES)
+	verilator \
+		--lint-only --Wall \
+		$(SOURCES)
 $(TOP_VCD): $(VCD_SIM_BINARY) $(VCD_DIR)
 	./$<
 $(VCD_SIM_BINARY): $(VCD_SIM_DIR) $(SOURCES)
@@ -45,10 +49,10 @@ $(VCD_DIR):
 
 # Vivado synthesizing
 vivado-all: vivado-build vivado-program
-vivado-program: scripts/vivado.sh scripts/program.tcl build/main.bit
-	sh scripts/vivado.sh -mode batch -source $(shell pwd)/scripts/program.tcl
-vivado-build: scripts/vivado.sh scripts/build.tcl
-	sh scripts/vivado.sh -mode batch -source $(shell pwd)/scripts/build.tcl
+vivado-program: scripts/vivado.sh scripts/program.tcl build/main.bit .vivado.env
+	sh scripts/vivado.sh -mode batch -source $(CURDIR)/scripts/program.tcl
+vivado-build: scripts/vivado.sh scripts/build.tcl $(SOURCES) .vivado.env
+	sh scripts/vivado.sh -mode batch -source $(CURDIR)/scripts/build.tcl
 
 # Generate verible file for lsp
 verible.filelist:

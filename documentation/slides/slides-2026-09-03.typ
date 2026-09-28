@@ -5,7 +5,7 @@
   aspect-ratio: "16-9",
   config-info(
     title: [Computer project 2026 Group A],
-    subtitle: [Subtitle],
+    subtitle: [],
     author: [
       Øyvind Nestvold,
       Fredrik Robertsen,

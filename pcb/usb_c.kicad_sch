@@ -2264,41 +2264,6 @@
 			)
 		)
 	)
-	(global_label "POWER_IN"
-		(shape input)
-		(at 31.75 111.76 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "11738007-4c26-4c40-9940-d06881636a2e")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 19.391 111.76 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-		(property "Extra" "5V"
-			(at 25.4 108.458 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(color 15 0 171 1)
-				)
-				(justify right)
-			)
-		)
-	)
 	(global_label "CC2"
 		(shape bidirectional)
 		(at 184.15 82.55 180)
@@ -2342,6 +2307,41 @@
 			(effects
 				(font
 					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "POWER_IN"
+		(shape input)
+		(at 31.75 111.76 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "547b0fe5-3ea0-4836-94b2-def921b08e45")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 19.391 111.76 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Extra" "5V"
+			(at 28.702 114.3 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(color 15 0 171 1)
 				)
 				(justify right)
 			)

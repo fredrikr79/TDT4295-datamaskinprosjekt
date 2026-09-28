@@ -77,11 +77,15 @@ module spi_processor #(
               end
 
               FAILED: begin
-                if (!out_full && !in_empty) begin
-                  opcode <= UNSET;
-                  out_fifo <= 8'hFF;
-                  fail_w_en <= 1'b1;
-                  fail_r_en <= 1'b1;
+                if (!out_full) begin
+                  if(!in_empty) begin
+                    fail_r_en <= 1'b1;
+                  end
+                  else begin
+                    out_fifo <= 8'hE0;
+                    fail_w_en <= 1'b1;
+                    opcode <= UNSET;
+                  end
                 end
               end
 

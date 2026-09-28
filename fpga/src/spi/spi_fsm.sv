@@ -48,6 +48,7 @@ module spi_fsm #(
               end
             end
             FAILED: begin
+              if(in_empty)
                 state <= ST_TX_IDLE;
             end
             default: begin

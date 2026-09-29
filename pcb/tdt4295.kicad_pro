@@ -256,7 +256,18 @@
       "mpn": "",
       "sch_revision": ""
     },
-    "layer_pairs": [],
+    "layer_pairs": [
+      {
+        "bottomLayer": 8,
+        "enabled": true,
+        "topLayer": 0
+      },
+      {
+        "bottomLayer": 10,
+        "enabled": true,
+        "topLayer": 0
+      }
+    ],
     "layer_presets": [],
     "viewports": []
   },

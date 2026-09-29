@@ -2240,6 +2240,26 @@
 		)
 		(uuid "fadb3108-98cc-42e2-8523-75b9efd2120d")
 	)
+	(label "D-"
+		(at 180.34 90.17 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "3d533713-4d4c-4803-87bc-ca64ee11a907")
+	)
+	(label "D+"
+		(at 180.34 92.71 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "8b11d3ff-d1d2-4371-99ab-007b0583fb5a")
+	)
 	(global_label "fault_signal"
 		(shape bidirectional)
 		(at 93.98 116.84 0)

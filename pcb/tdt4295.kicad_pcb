@@ -9524,7 +9524,7 @@
 			(uuid "e78a152f-cfa0-43e2-826c-f74c6ce588d1")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_Card.3dshapes/microSD_HC_Molex_47219-2001.step"
+		(model "${ASSETS}/sd_card_model.stp"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -24212,7 +24212,7 @@
 			(uuid "6a781da8-a4ab-4f99-b7db-19882c317823")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_BGA.3dshapes/Xilinx_FTG256.step"
+		(model "${ASSETS}/FTFTG256_XIL.step"
 			(offset
 				(xyz 0 0 0)
 			)

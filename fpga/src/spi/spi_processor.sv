@@ -24,7 +24,9 @@ module spi_processor #(
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic echo_w_en = 1'b0;
+  logic info_w_en = 1'b0;
   logic fail_w_en = 1'b0;
+  assign proc_w_en = echo_w_en | info_w_en | fail_w_en;
 
   // Done signals
   logic info_done = 1'b0;
@@ -85,6 +87,10 @@ module spi_processor #(
                     echo_done <= 1'b1;
                 end
               end
+
+              INFO: begin
+                if(!info_done) begin
+                  info_cmd_processor.sendInfo();
                 end
               end
 
@@ -114,5 +120,13 @@ module spi_processor #(
       endcase
     end
   end
+
+info info_cmd_processor(
+  .clk(clk),
+  .out_fifo(out_fifo),
+  .out_full(out_full),
+  .info_done(info_done),
+  .info_w_en(info_w_en)
+);
 
 endmodule

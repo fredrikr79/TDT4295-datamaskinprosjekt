@@ -47,6 +47,11 @@ module spi_fsm #(
                 state <= ST_TX_IDLE;
               end
             end
+            INFO: begin
+              if(in_empty && proc_done) begin
+                state <= ST_TX_IDLE;
+              end
+            end
             FAILED: begin
               if(in_empty && proc_done)
                 state <= ST_TX_IDLE;

@@ -17,7 +17,8 @@ package spi_pck;
   typedef enum bit [3:0] {
     UNSET = 0000,
     ECHO = 0001,
-    FAILED = 0002
+    INFO = 0002,
+    FAILED = 0003
   } opcode_e;
 
 endpackage

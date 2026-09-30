@@ -1,0 +1,11 @@
+cmake -S host -B build/host
+cmake --build build/host
+./build/host/hexmcu_host
+
+sudo minicom -b 115200 -D /dev/ttyACM0
+
+
+truncate -s 512M card.img
+mkfs.vfat -F 32 -S 512 -s 8 -n GAMECARD card.img   # 4 KiB clusters
+mcopy -i card.img assets/scene0.bin ::/SCENE0.BIN
+mdir -i card.img ::

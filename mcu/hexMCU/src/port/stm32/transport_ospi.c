@@ -66,9 +66,9 @@ static void ospi_cmd_common(OSPI_RegularCmdTypeDef *cmd)
 }
 
 /* Header phases, shared by write and read:
- *   instruction    = opcode (1 byte)
- *   address        = x, y   (4 bytes, MSB first)  if TRANSPORT_F_XY
- *   alternate bytes = len_field (2 bytes, MSB first) if TRANSPORT_F_LEN */
+ *   instruction     = opcode (1 byte)
+ *   address         = x, y   (4 bytes, MSB first)       if TRANSPORT_F_XY
+ *   alternate bytes = alt    (2 or 4 bytes, MSB first)  if TRANSPORT_F_ALT16/32 */
 static void ospi_build_hdr(OSPI_RegularCmdTypeDef *cmd,
                            const transport_hdr_t *hdr)
 {
@@ -84,11 +84,15 @@ static void ospi_build_hdr(OSPI_RegularCmdTypeDef *cmd,
         cmd->AddressDtrMode = HAL_OSPI_ADDRESS_DTR_DISABLE;
     }
 
-    if (hdr->fields & TRANSPORT_F_LEN) {
+    unsigned alt = transport_alt_bytes(hdr);
+    if (alt) {
         /* Works with or without the address phase in front of it. */
-        cmd->AlternateBytes        = hdr->len_field;
+        cmd->AlternateBytes        = (alt == 4u) ? hdr->alt
+                                                 : (hdr->alt & 0xFFFFu);
         cmd->AlternateBytesMode    = HAL_OSPI_ALTERNATE_BYTES_8_LINES;
-        cmd->AlternateBytesSize    = HAL_OSPI_ALTERNATE_BYTES_16_BITS;
+        cmd->AlternateBytesSize    = (alt == 4u)
+                                   ? HAL_OSPI_ALTERNATE_BYTES_32_BITS
+                                   : HAL_OSPI_ALTERNATE_BYTES_16_BITS;
         cmd->AlternateBytesDtrMode = HAL_OSPI_ALTERNATE_BYTES_DTR_DISABLE;
     }
 }
@@ -221,6 +225,15 @@ static transport_status_t ospi_backend_read(const transport_hdr_t *hdr,
     return TRANSPORT_OK;
 }
 
+/* Called from the READY EXTI ISR, while READY is high.
+ * TODO: read the 3 FPGA status GPIOs here, e.g.
+ *       return (uint8_t)((STATUS_GPIO_Port->IDR >> STATUS0_Pin_Pos) & 0x7u);
+ * Until the pins and codes are agreed, every command reports OK (0). */
+static uint8_t ospi_read_status(void)
+{
+    return 0u;
+}
+
 static void ospi_backend_abort(void)
 {
     ospi_recover();
@@ -234,6 +247,7 @@ static spi_backend_t ospi_backend = {
     .read  = ospi_backend_read,
     .abort = ospi_backend_abort,
     .poll  = NULL,          /* driven by DMA + interrupts */
+    .read_status = ospi_read_status,
     .done  = 1,
     .error = 0,
 };

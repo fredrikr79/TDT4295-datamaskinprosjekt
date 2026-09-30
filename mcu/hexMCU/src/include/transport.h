@@ -19,21 +19,33 @@ typedef enum {
 } transport_status_t;
 
 /* Optional header fields, OR'ed into transport_hdr_t.fields.
- * Wire order is fixed by OCTOSPI: opcode, [x y], [len_field], [payload]. */
-#define TRANSPORT_F_XY   0x01u   /* x, y in the address phase (4 bytes)      */
-#define TRANSPORT_F_LEN  0x02u   /* len_field in the alt-bytes phase (2 bytes) */
+ * Wire order is fixed by OCTOSPI: opcode, [x y], [alt], [payload].
+ * Set at most one of the ALT flags (ALT32 wins if both are set). */
+#define TRANSPORT_F_XY     0x01u   /* x, y in the address phase (4 bytes)    */
+#define TRANSPORT_F_ALT16  0x02u   /* low 16 bits of alt, alt-bytes phase    */
+#define TRANSPORT_F_ALT32  0x04u   /* all 32 bits of alt, alt-bytes phase    */
 
 typedef struct {
     uint8_t  opcode;
     uint8_t  fields;     /* TRANSPORT_F_* bitmask, 0 = opcode only */
     uint16_t x;
     uint16_t y;
-    uint16_t len_field;  /* value sent as the len field (TRANSPORT_F_LEN).
-                            Independent of len: "send op x y 0" sends a
-                            len field with no payload behind it. */
+    uint32_t alt;        /* alternate-bytes value, MSB first on the wire.
+                            ALT16: a single field, e.g. N for a line.
+                            ALT32: two fields packed hi:lo, e.g. x2:y2 for
+                            a box. Independent of len: a header can carry
+                            an N field with no payload behind it. */
     uint16_t len;        /* write: payload bytes after the header
                             read : bytes clocked in after the turnaround */
 } transport_hdr_t;
+
+/* Bytes the alt-bytes phase takes on the wire: 0, 2 or 4. */
+static inline unsigned transport_alt_bytes(const transport_hdr_t *hdr)
+{
+    if (hdr->fields & TRANSPORT_F_ALT32) return 4u;
+    if (hdr->fields & TRANSPORT_F_ALT16) return 2u;
+    return 0u;
+}
 
 typedef struct {
     transport_status_t (*init)(void);
@@ -57,6 +69,10 @@ typedef struct {
      * its simulated timing. */
     void (*poll)(void);
 
+    /* Read the FPGA's 3 status pins (stable while READY is high).
+     * Called from transport_ready_isr(). NULL = always 0 (OK). */
+    uint8_t (*read_status)(void);
+
     /* The link is half duplex -- at most ONE transfer is in flight, so one
      * pair of flags covers both directions.
      *   done  == 1 : nothing in flight (idle, finished, or failed)
@@ -76,13 +92,31 @@ transport_status_t transport_init(void);
 void transport_poll(void);
 
 /* ----------------------------------------------------------------------
- * FPGA_READY edge counter.
+ * FPGA_READY edge counter + status latch.
  *
  * Bumped from the EXTI ISR on hardware and from the fake FPGA on the host,
  * so everything above this layer is identical on both. The main loop only
  * ever compares counts -- it never has to catch an edge live.
+ *
+ * On each edge the ISR also latches the 3 status pins, so the status of
+ * the command that READY answers is still there when the main loop looks.
  * -------------------------------------------------------------------- */
+#define TRANSPORT_STATUS_MASK  0x07u
+
 void     transport_ready_isr(void);     /* ISR / fake FPGA -> counter */
 uint32_t transport_ready_count(void);   /* main loop only */
+uint8_t  transport_ready_status(void);  /* status at the latest READY */
+
+/* ----------------------------------------------------------------------
+ * Per-transfer trace: one debug line for every transfer and every step.
+ * Far too chatty to leave on (the game makes hundreds of transfers a
+ * second), so it is off by default and switched with the console's
+ * `trace` command. Needs log level 4 (debug) as well.
+ * -------------------------------------------------------------------- */
+void transport_set_trace(bool on);
+bool transport_trace_on(void);
+
+#define LOG_TRACE(...) \
+    do { if (transport_trace_on()) LOG_DBG(__VA_ARGS__); } while (0)
 
 #endif /* TRANSPORT_H */

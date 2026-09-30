@@ -17,32 +17,41 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 add_subdirectory(${APP_ROOT}/third_party/SDL
                  ${CMAKE_BINARY_DIR}/SDL EXCLUDE_FROM_ALL)
 
-add_executable(hexmcu_host
+# Everything except main(), compiled once and shared by both programs:
+#   hexmcu_host  the emulator (host_main.c -> myMain)
+#   test_host    the fpga.c example (test_host.c has its own main loop)
+add_library(hexmcu_host_common OBJECT
     ${APP_SOURCES}
     ${FATFS_SOURCES}
-    ${APP_ROOT}/src/port/host/host_main.c
     ${APP_ROOT}/src/port/host/io_stdio.c
     ${APP_ROOT}/src/port/host/platform_host.c
     ${APP_ROOT}/src/port/host/transport_host.c
     ${APP_ROOT}/src/port/host/diskio_host.c
     ${APP_ROOT}/src/port/host/display_host.c
+    ${APP_ROOT}/src/port/host/fake_fpga.c
 )
 
-target_link_libraries(hexmcu_host PRIVATE SDL3::SDL3)
+# PUBLIC: both executables inherit includes, defines, flags and SDL.
+target_link_libraries(hexmcu_host_common PUBLIC SDL3::SDL3)
 
-target_include_directories(hexmcu_host PRIVATE
+target_include_directories(hexmcu_host_common PUBLIC
     ${APP_INCLUDES}
     ${FATFS_INCLUDES}
     ${APP_ROOT}/src/port/host
 )
 
-target_compile_definitions(hexmcu_host PRIVATE
+target_compile_definitions(hexmcu_host_common PUBLIC
     LOG_LEVEL=LOG_LEVEL_DEBUG
     DEFAULT_CARD_IMAGE="${CMAKE_CURRENT_SOURCE_DIR}/card.img"
-    DEFAULT_IMAGE="${CMAKE_CURRENT_SOURCE_DIR}/test169.bmp"
 )
 
-target_compile_options(hexmcu_host PRIVATE
+target_compile_options(hexmcu_host_common PUBLIC
     -Wall -Wextra -g -fsanitize=address,undefined)
-target_link_options(hexmcu_host PRIVATE
+target_link_options(hexmcu_host_common PUBLIC
     -fsanitize=address,undefined)
+
+add_executable(hexmcu_host ${APP_ROOT}/src/port/host/host_main.c)
+target_link_libraries(hexmcu_host PRIVATE hexmcu_host_common)
+
+add_executable(test_host ${APP_ROOT}/src/port/host/test_host.c)
+target_link_libraries(test_host PRIVATE hexmcu_host_common)

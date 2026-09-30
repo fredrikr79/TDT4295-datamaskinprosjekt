@@ -1,5 +1,15 @@
 #define LOG_TAG "disp"
 
+/* ======================================================================
+ * display_host.c - SIM + HUD layers in an SDL window.
+ *
+ * The layers are plain arrays that anyone may write at any time. Once per
+ * frame (30 Hz) display_poll() composites them into one RGB565 frame --
+ * HUD pixel, unless it is DISPLAY_HUD_CLEAR, then the SIM pixel -- and
+ * hands that to SDL as an RGB565 texture. 640x360 is ~230k pixels, cheap
+ * enough to redo every frame, so nothing tracks what changed.
+ * ====================================================================== */
+
 #include "display_host.h"
 #include "log.h"
 
@@ -7,12 +17,15 @@
 #include <string.h>
 
 #define FRAME_NS (1000000000ull / 30u)   /* present at 30 Hz */
+#define NPIX     ((size_t)DISPLAY_W * DISPLAY_H)
 
 static SDL_Window   *win;
 static SDL_Renderer *ren;
 static SDL_Texture  *tex;
-static uint32_t      fb[DISPLAY_W * DISPLAY_H];
 static uint64_t      next_frame_ns;
+
+static uint16_t layers[2][NPIX];         /* [DISPLAY_SIM], [DISPLAY_HUD] */
+static uint16_t frame[NPIX];             /* composited, what SDL gets    */
 
 static void sdl_log_to_ours(void *ud, int category,
                             SDL_LogPriority pri, const char *msg)
@@ -29,8 +42,34 @@ static void sdl_log_to_ours(void *ud, int category,
     log_emit(level, "sdl", "%s", msg);
 }
 
+/* ---- layers ----------------------------------------------------------- */
+uint16_t *display_layer(display_layer_t layer)
+{
+    return layers[layer == DISPLAY_HUD ? 1 : 0];
+}
+
+void display_clear(display_layer_t layer)
+{
+    uint16_t *p = display_layer(layer);
+    uint16_t  v = (layer == DISPLAY_HUD) ? DISPLAY_HUD_CLEAR : 0x0000u;
+    for (size_t i = 0; i < NPIX; i++) p[i] = v;
+}
+
+static void composite(void)
+{
+    const uint16_t *sim = layers[DISPLAY_SIM];
+    const uint16_t *hud = layers[DISPLAY_HUD];
+    for (size_t i = 0; i < NPIX; i++)
+        frame[i] = (hud[i] == DISPLAY_HUD_CLEAR) ? sim[i] : hud[i];
+}
+
+/* ---- window ----------------------------------------------------------- */
 bool display_init(const char *title, int scale)
-{   
+{
+    /* First, so the layers are valid even if there is no window. */
+    display_clear(DISPLAY_SIM);
+    display_clear(DISPLAY_HUD);
+
     SDL_SetLogOutputFunction(sdl_log_to_ours, NULL);
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");  /* Ctrl-C stays io_stdio's */
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -43,11 +82,12 @@ bool display_init(const char *title, int scale)
         return false;
     }
 
-    /* Draw in 640x480 coordinates; SDL scales up by whole multiples. */
+    /* Draw in DISPLAY_W x DISPLAY_H coordinates; SDL scales up by whole
+     * multiples and letterboxes the rest. */
     SDL_SetRenderLogicalPresentation(ren, DISPLAY_W, DISPLAY_H,
                                      SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
-    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888,
+    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB565,
                             SDL_TEXTUREACCESS_STREAMING, DISPLAY_W, DISPLAY_H);
     if (!tex) {
         LOG_ERR("texture: %s", SDL_GetError());
@@ -55,45 +95,10 @@ bool display_init(const char *title, int scale)
     }
     SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
 
-    memset(fb, 0, sizeof fb);
-    LOG_INFO("display up: %dx%d, video driver %s, renderer %s",
-             DISPLAY_W, DISPLAY_H, SDL_GetCurrentVideoDriver(),
+    LOG_INFO("display up: %dx%d RGB565, SIM + HUD (clear = 0x%04X), "
+             "video driver %s, renderer %s", DISPLAY_W, DISPLAY_H,
+             DISPLAY_HUD_CLEAR, SDL_GetCurrentVideoDriver(),
              SDL_GetRendererName(ren));
-    return true;
-}
-
-uint32_t *display_framebuffer(void)
-{
-    return fb;
-}
-
-bool display_load_bmp(const char *path)
-{
-    SDL_Surface *raw = SDL_LoadBMP(path);
-    if (!raw) {
-        LOG_ERR("load %s: %s", path, SDL_GetError());
-        return false;
-    }
-
-    /* Whatever the BMP's format, convert it to ours. */
-    SDL_Surface *s = SDL_ConvertSurface(raw, SDL_PIXELFORMAT_XRGB8888);
-    SDL_DestroySurface(raw);
-    if (!s) {
-        LOG_ERR("convert: %s", SDL_GetError());
-        return false;
-    }
-
-    /* Copy row by row: the surface pitch can be wider than w*4. */
-    int w = s->w < DISPLAY_W ? s->w : DISPLAY_W;
-    int h = s->h < DISPLAY_H ? s->h : DISPLAY_H;
-    memset(fb, 0, sizeof fb);
-    for (int y = 0; y < h; y++) {
-        const uint8_t *row = (const uint8_t *)s->pixels + (size_t)y * (size_t)s->pitch;
-        memcpy(&fb[(size_t)y * DISPLAY_W], row, (size_t)w * 4u);
-    }
-
-    LOG_INFO("loaded %s (%dx%d)", path, s->w, s->h);
-    SDL_DestroySurface(s);
     return true;
 }
 
@@ -111,7 +116,8 @@ bool display_poll(void)
         if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) return false;
     }
 
-    SDL_UpdateTexture(tex, NULL, fb, DISPLAY_W * (int)sizeof fb[0]);
+    composite();
+    SDL_UpdateTexture(tex, NULL, frame, DISPLAY_W * (int)sizeof frame[0]);
     SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);   /* letterbox colour */
     SDL_RenderClear(ren);
     SDL_RenderTexture(ren, tex, NULL, NULL);

@@ -1,6 +1,7 @@
 HOST_DIR := build/host
 FW_DIR   := build/fw
 HOST_BIN := $(HOST_DIR)/hexmcu_host
+TEST_BIN := $(HOST_DIR)/test_host
 
 # --- SD card image ----------------------------------------------------
 # Lives in host/, outside build/, so `make clean` leaves it alone.
@@ -12,7 +13,16 @@ CARD_SIZE := 512M
 CARD_SPC  := 8
 CARD_NAME := GAMECARD
 
-.PHONY: host run fw flash clean card card-reset ls cat
+# --- test_host picture -----------------------------------------------
+# test_host wants a 640x360 RGB565 BMP. It is made from $(IMAGE) with
+# ImageMagick, and redone only when $(IMAGE) changes. -alpha off matters:
+# with an alpha channel ImageMagick ignores the RGB565 subtype and writes
+# a 24-bit BMP instead.
+IMAGE     := host/test.bmp
+IMAGE565  := host/test565.bmp
+MAGICK    := $(shell command -v magick 2>/dev/null || echo convert)
+
+.PHONY: host run test fw flash clean card card-reset ls cat
 
 host:
 	@cmake -S host -B $(HOST_DIR) -G Ninja || \
@@ -26,6 +36,16 @@ run: host $(CARD)
 		exit 1; \
 	fi
 	@./$(HOST_BIN) --card=$(CARD) $(ARGS)
+
+# `make test`, or `make test ARGS=--errors=2` to watch it resync
+test: host $(IMAGE565)
+	@./$(TEST_BIN) $(ARGS) $(IMAGE565)
+
+# $(wildcard): if only the converted picture exists, just use it
+$(IMAGE565): $(wildcard $(IMAGE))
+	@test -f "$(IMAGE)" || { echo "need $(IMAGE) (or a ready $(IMAGE565))"; exit 1; }
+	@echo "converting $(IMAGE) -> $@ (640x360 RGB565)"
+	@$(MAGICK) "$(IMAGE)" -alpha off -resize '640x360!' -define bmp:subtype=RGB565 $@
 
 fw:
 	@cmake -S . -B $(FW_DIR) -G Ninja \

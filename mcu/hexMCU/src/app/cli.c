@@ -18,6 +18,7 @@
 #include "platform.h"
 #include "transport.h"
 #include "fs_utils.h"
+#include "fpga.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -25,25 +26,16 @@
 #define PROMPT        "> "
 #define PROMPT_LEN    (sizeof PROMPT - 1)
 
-#define BACKEND_READY_TIMEOUT_MS  100   /* waiting for backend to be free   */
-#define XFER_DONE_TIMEOUT_MS      100   /* waiting for transfer to finish   */
-#define FPGA_IRQ_TIMEOUT_MS       1000  /* waiting for FPGA_READY interrupt */
-
-/* Opcode for the echo command: FPGA stores the payload and sends it back
- * on the next read. */
-#define FECHO_OPCODE              0x10u
-
-/* Instruction for "hand me what I asked for" reads. */
-#define READ_OPCODE               0x00u
-
 /* ======================================================================
  * FPGA ready reporting
  *
- * The counter itself lives in transport_core.c, bumped by the EXTI ISR on
- * hardware and by the fake FPGA on the host. The CLI only compares counts
- * from the main loop, so it never has to catch an edge live.
+ * The counter lives in transport_core.c, bumped by the EXTI ISR on
+ * hardware and by the fake FPGA on the host. Commands in fpga.c consume
+ * one READY each (fpga_ready_used()). The console only reports the ones
+ * nobody waited for: READY after a raw 'send', or a stale / extra pulse.
  * ====================================================================== */
-static uint32_t ready_reported;   /* written by main loop only */
+static uint32_t ready_seen, used_seen;   /* written by main loop only */
+static int32_t  ready_spare;             /* READYs not (yet) consumed  */
 
 /* ======================================================================
  * Line editor state + async redraw hooks
@@ -109,67 +101,52 @@ static void print_hex(const uint8_t *b, uint16_t n)
 }
 
 /* ======================================================================
- * Generic job state machine
+ * Console side of FPGA commands
  *
- * A job is a short list of steps. Each step is one of:
- *   WRITE     send hdr (opcode + optional x/y and len fields), then
- *             hdr.len payload bytes from data
- *   READ      send hdr (normally just READ_OPCODE), turnaround, then read
- *             hdr.len bytes -- what gets read was requested by an earlier
- *             WRITE. If expect
- *             is set the result is compared against it, else hex dumped.
- *   WAIT_IRQ  wait for an FPGA_READY interrupt since the previous transfer
+ * The console runs one FPGA command of its own at a time, through the
+ * same queue as everything else. It builds the command into pend.cmd and
+ * submits it with cli_done() as the callback, which prints the result.
  *
- * Per step:  STEP_START (wait for backend free, then launch)
- *         -> STEP_BUSY  (wait for done)  -> next step
- * send = [WRITE], read = [READ], fecho = [WRITE, WAIT_IRQ, READ]
+ * If the queue is full, the console keeps retrying from cli_poll() for
+ * up to CLI_SUBMIT_TIMEOUT_MS, then gives up.
+ *
+ * fecho -r is done here: each round is one echo command; cli_done()
+ * records it and resubmits the same command with fresh random bytes.
  * ====================================================================== */
-typedef enum { STEP_WRITE, STEP_READ, STEP_WAIT_IRQ } step_kind_t;
-typedef struct {
-    step_kind_t      kind;
-    transport_hdr_t  hdr;     /* WRITE/READ: header; hdr.len = data bytes */
-    const uint8_t   *data;    /* WRITE: payload (hdr.len bytes), or NULL  */
-    const uint8_t   *expect;  /* READ: compare against this, or NULL      */
-} step_t;
-typedef enum { JOB_IDLE, JOB_STEP_START, JOB_STEP_BUSY } job_state_t;
+#define CLI_SUBMIT_TIMEOUT_MS  1000u
 
-#define MAX_STEPS 4
-
-static const char *const step_names[]  = { "write", "read", "wait-irq" };
-static const char *const state_names[] = { "idle", "starting", "busy" };
+typedef enum { PEND_NONE, PEND_SEND, PEND_READ, PEND_FECHO, PEND_INFO } pend_t;
+static const char *const pend_names[] = { "-", "send", "read", "fecho", "info" };
 
 static struct {
-    job_state_t state;
-    const char *name;
-    step_t      steps[MAX_STEPS];
-    uint8_t     n_steps;
-    uint8_t     idx;
-    uint32_t    t0;        /* start time of the current phase */
-    uint32_t    irq_mark;  /* ready_count when the last transfer started */
+    pend_t      what;
+    fpga_cmd_t  cmd;          /* what is (to be) submitted                 */
+    bool        waiting;      /* queue was full: retrying from cli_poll()  */
+    uint32_t    since;        /* when waiting started                      */
+    uint16_t    len;          /* read / fecho byte count                   */
 
-    /* Repeat support (fecho -r). rounds == 1 is a normal one-shot job. */
+    /* fecho repeat. rounds == 1 is a normal one-shot. */
     uint32_t    rounds;       /* total rounds requested                    */
     uint32_t    round;        /* current round, 1-based                    */
-    uint16_t    rand_len;     /* >0: refill tx_buf with this many random
-                                 bytes before every round                  */
+    uint16_t    rand_len;     /* >0: new random bytes before every round   */
     uint32_t    passed, failed;
     uint32_t    fail_data;    /* failed rounds that were data mismatches   */
     uint32_t    bytes_ok, bytes_bad;
     uint32_t    lane_err[8];  /* bit errors per data line IO0..IO7         */
-    uint8_t     dumps_left;   /* full hex dumps still allowed this job     */
-} job;
+    uint8_t     dumps_left;   /* full hex dumps still allowed              */
+} pend;
 
 #define REPEAT_MAX_DUMPS  3   /* in repeat mode, dump only the first few fails */
 
 static uint8_t rd_buf[RD_BUF_SIZE];
 static uint8_t tx_buf[RD_BUF_SIZE];   /* fecho payload; DMA reads it, so
-                                         only touched while job is idle */
+                                         only touched while no console
+                                         command is queued */
 
-/* Compare what was sent with what came back, update the job statistics,
- * and print. One-shot jobs always dump both buffers; repeat jobs only dump
- * the first few failures so a long run doesn't flood the console.
- * Returns true if everything matched. */
-static bool check_echo(const uint8_t *want, const uint8_t *got, uint16_t n)
+/* Compare what was sent with what came back, update the statistics, and
+ * print. One-shot runs always dump both buffers; repeat runs only dump
+ * the first few failures so a long run doesn't flood the console. */
+static void check_echo(const uint8_t *want, const uint8_t *got, uint16_t n)
 {
     uint16_t bad = 0, first = 0;
     for (uint16_t i = 0; i < n; i++) {
@@ -178,19 +155,19 @@ static bool check_echo(const uint8_t *want, const uint8_t *got, uint16_t n)
         if (bad == 0) first = i;
         bad++;
         for (uint8_t b = 0; b < 8; b++)
-            if (diff & (1u << b)) job.lane_err[b]++;
+            if (diff & (1u << b)) pend.lane_err[b]++;
     }
-    job.bytes_bad += bad;
-    job.bytes_ok  += (uint32_t)(n - bad);
+    pend.bytes_bad += bad;
+    pend.bytes_ok  += (uint32_t)(n - bad);
 
-    bool repeat = job.rounds > 1;
-    if (repeat && bad == 0) return true;               /* quiet on success */
-    if (repeat && job.dumps_left == 0) return false;   /* summary covers it */
-    if (repeat) job.dumps_left--;
+    bool repeat = pend.rounds > 1;
+    if (repeat && bad == 0) return;                 /* quiet on success  */
+    if (repeat && pend.dumps_left == 0) return;     /* summary covers it */
+    if (repeat) pend.dumps_left--;
 
     cli_async_begin();
     if (repeat) log_raw("round %lu/%lu:\r\n",
-                        (unsigned long)job.round, (unsigned long)job.rounds);
+                        (unsigned long)pend.round, (unsigned long)pend.rounds);
     log_raw("sent %u bytes:\r\n", n);
     hex_rows(want, n);
     log_raw("got  %u bytes:\r\n", n);
@@ -202,180 +179,144 @@ static bool check_echo(const uint8_t *want, const uint8_t *got, uint16_t n)
                 "(sent %02X, got %02X)\r\n",
                 bad, n, first, want[first], got[first]);
     cli_async_end();
-    return bad == 0;
 }
 
 static void print_summary(bool aborted)
 {
-    uint32_t done = job.passed + job.failed;
+    uint32_t done = pend.passed + pend.failed;
     cli_async_begin();
-    log_raw("%s %s: %lu/%lu rounds, %lu passed, %lu failed",
-            job.name, aborted ? "aborted" : "done",
-            (unsigned long)done, (unsigned long)job.rounds,
-            (unsigned long)job.passed, (unsigned long)job.failed);
-    if (job.failed)
+    log_raw("fecho %s: %lu/%lu rounds, %lu passed, %lu failed",
+            aborted ? "aborted" : "done",
+            (unsigned long)done, (unsigned long)pend.rounds,
+            (unsigned long)pend.passed, (unsigned long)pend.failed);
+    if (pend.failed)
         log_raw(" (%lu data mismatch, %lu transfer/irq)",
-                (unsigned long)job.fail_data,
-                (unsigned long)(job.failed - job.fail_data));
+                (unsigned long)pend.fail_data,
+                (unsigned long)(pend.failed - pend.fail_data));
     log_raw("\r\n");
-    if (job.bytes_ok + job.bytes_bad)
+    if (pend.bytes_ok + pend.bytes_bad)
         log_raw("bytes: %lu ok, %lu bad\r\n",
-                (unsigned long)job.bytes_ok, (unsigned long)job.bytes_bad);
-    if (job.bytes_bad) {
+                (unsigned long)pend.bytes_ok, (unsigned long)pend.bytes_bad);
+    if (pend.bytes_bad) {
         log_raw("bit errors per line:");
         for (int b = 7; b >= 0; b--)
-            log_raw(" IO%d=%lu", b, (unsigned long)job.lane_err[b]);
+            log_raw(" IO%d=%lu", b, (unsigned long)pend.lane_err[b]);
         log_raw("\r\n");
     }
     cli_async_end();
 }
 
-/* Fill tx_buf for the next round. Only called while no transfer is in
- * flight, so DMA is not reading tx_buf. */
 static uint8_t rand8(void);
-static void refill_random(void)
+static void pend_submit(void);
+
+/* The console's command is over, or never got into the queue. */
+static void pend_end(bool aborted)
 {
-    for (uint16_t i = 0; i < job.rand_len; i++) tx_buf[i] = rand8();
+    if (pend.what == PEND_FECHO && pend.rounds > 1) print_summary(aborted);
+    pend.what    = PEND_NONE;
+    pend.waiting = false;
 }
 
-/* A round has ended, successfully or not: next round, or finish. */
-static void job_end(bool ok)
+/* One fecho round has ended: record it, then start the next or finish. */
+static void fecho_round_done(fpga_err_t err)
 {
-    if (job.rounds <= 1) {
-        if (ok) LOG_INFO("%s: ok", job.name);
-        job.state = JOB_IDLE;
+    bool ok = err == FPGA_ERR_NONE;
+
+    if (err == FPGA_ERR_ABORTED || err == FPGA_ERR_CANCELLED) {
+        if (pend.rounds <= 1) LOG_ERR("fecho %s", fpga_err_str(err));
+        pend_end(true);
         return;
     }
 
-    if (ok) job.passed++; else job.failed++;
+    if (ok || err == FPGA_ERR_MISMATCH)
+        check_echo(tx_buf, rd_buf, pend.len);       /* stats + dump */
+    if (err == FPGA_ERR_MISMATCH)
+        pend.fail_data++;
+    else if (!ok && pend.rounds > 1)
+        LOG_ERR("fecho round %lu/%lu failed: %s",
+                (unsigned long)pend.round, (unsigned long)pend.rounds,
+                fpga_err_str(err));
+    else if (!ok)
+        LOG_ERR("fecho failed: %s", fpga_err_str(err));
 
-    if (job.round >= job.rounds) {
-        print_summary(false);
-        job.state = JOB_IDLE;
-        return;
-    }
+    if (pend.rounds <= 1) { pend_end(false); return; }
 
-    job.round++;
-    if (job.rand_len) refill_random();
-    job.idx      = 0;
-    job.t0       = plat_millis();
-    job.irq_mark = transport_ready_count();
-    job.state    = JOB_STEP_START;
+    if (ok) pend.passed++; else pend.failed++;
+    if (pend.round >= pend.rounds) { pend_end(false); return; }
+
+    /* Our echo is out of the queue, so tx_buf is safe to refill. */
+    pend.round++;
+    for (uint16_t i = 0; i < pend.rand_len; i++) tx_buf[i] = rand8();
+    pend_submit();
 }
 
-static void job_fail(const char *why)
+static void print_info(void)
 {
-    if (job.rounds > 1)
-        LOG_ERR("%s round %lu/%lu failed (step %u, %s): %s", job.name,
-                (unsigned long)job.round, (unsigned long)job.rounds,
-                job.idx + 1, step_names[job.steps[job.idx].kind], why);
+    const fpga_info_t *in = fpga_link_info();
+    cli_async_begin();
+    if (!in->valid)
+        log_raw("fpga info: unknown (no INFO yet), size check off\r\n");
     else
-        LOG_ERR("%s failed (step %u, %s): %s", job.name, job.idx + 1,
-                step_names[job.steps[job.idx].kind], why);
-    job_end(false);
+        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%04X\r\n",
+                in->width, in->height, in->max_cmd, in->session);
+    cli_async_end();
 }
 
-static void job_next_step(void)
+/* Done callback for every console command, called from fpga_poll(). */
+static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
-    if (++job.idx >= job.n_steps) {
-        job_end(true);
-    } else {
-        job.state = JOB_STEP_START;
-        job.t0    = plat_millis();
-    }
+    (void)cmd;
+    if (pend.what == PEND_FECHO) { fecho_round_done(err); return; }
+
+    pend_t what = pend.what;
+    pend_end(err == FPGA_ERR_ABORTED || err == FPGA_ERR_CANCELLED);
+
+    if (err == FPGA_ERR_STATUS)
+        LOG_ERR("%s failed: FPGA status %u", pend_names[what],
+                fpga_ready_status());
+    else if (err != FPGA_ERR_NONE)
+        LOG_ERR("%s failed: %s", pend_names[what], fpga_err_str(err));
+    else if (what == PEND_INFO)
+        print_info();
+    else if (what == PEND_READ)
+        print_hex(rd_buf, pend.len);
+    else
+        LOG_INFO("%s: ok", pend_names[what]);
 }
 
-static void job_poll(void)
+/* Put pend.cmd in the queue. Full queue: keep trying from cli_poll(). */
+static void pend_submit(void)
 {
-    if (job.state == JOB_IDLE) return;
+    pend.cmd.done = cli_done;
+    fpga_status_t st = fpga_submit(&pend.cmd);
 
-    const step_t *s = &job.steps[job.idx];
-    uint32_t elapsed = plat_millis() - job.t0;   /* wrap-safe */
-
-    if (job.state == JOB_STEP_START) {
-        if (s->kind == STEP_WAIT_IRQ) {
-            if (transport_ready_count() != job.irq_mark)
-                job_next_step();
-            else if (elapsed >= FPGA_IRQ_TIMEOUT_MS)
-                job_fail("no FPGA ready irq (timeout)");
-            return;
-        }
-
-        if (!BACKEND->done) {
-            if (elapsed >= BACKEND_READY_TIMEOUT_MS)
-                job_fail("backend not ready (timeout)");
-            return;
-        }
-
-        /* Take the mark BEFORE starting: an IRQ that fires during the
-         * transfer then still counts for a following WAIT_IRQ step. */
-        job.irq_mark = transport_ready_count();
-
-        LOG_DBG("%s step %u/%u: %s op=0x%02X fields=0x%X x=0x%04X "
-                "y=0x%04X lenf=%u len=%u", job.name,
-                job.idx + 1, job.n_steps, step_names[s->kind],
-                s->hdr.opcode, s->hdr.fields, s->hdr.x, s->hdr.y,
-                s->hdr.len_field, s->hdr.len);
-
-        transport_status_t st = (s->kind == STEP_WRITE)
-            ? BACKEND->write(&s->hdr, s->data)
-            : BACKEND->read(&s->hdr, rd_buf);
-
-        if (st != TRANSPORT_OK) {
-            job_fail(st == TRANSPORT_BUSY ? "backend busy"
-                                          : "transfer did not start");
-            return;
-        }
-        job.state = JOB_STEP_BUSY;
-        job.t0    = plat_millis();
+    if (st == FPGA_OK) { pend.waiting = false; return; }
+    if (st == FPGA_EFULL) {
+        if (!pend.waiting) { pend.waiting = true; pend.since = plat_millis(); }
         return;
     }
-
-    /* JOB_STEP_BUSY */
-    if (BACKEND->done) {
-        if (BACKEND->error) {
-            job_fail("transfer error");
-            return;
-        }
-        if (s->kind == STEP_READ) {
-            if (s->expect) {
-                if (!check_echo(s->expect, rd_buf, s->hdr.len)) {
-                    job.fail_data++;
-                    job_fail("echo data mismatch");
-                    return;
-                }
-            } else {
-                print_hex(rd_buf, s->hdr.len);
-            }
-        }
-        job_next_step();
-    } else if (elapsed >= XFER_DONE_TIMEOUT_MS) {
-        BACKEND->abort();
-        job_fail("transfer never completed");
-    }
+    if (st == FPGA_ETOOBIG)
+        LOG_ERR("%s refused: %s, N=%u", pend_names[pend.what],
+                fpga_status_str(st), fpga_link_info()->max_cmd);
+    else
+        LOG_ERR("%s refused: %s", pend_names[pend.what], fpga_status_str(st));
+    pend_end(true);
 }
 
-/* rounds: how many times to run the step list (1 = once). rand_len: if
- * nonzero, tx_buf gets that many fresh random bytes before each round
- * after the first (the caller fills it for round 1). */
-static bool job_start(const char *name, const step_t *steps, uint8_t n,
-                      uint32_t rounds, uint16_t rand_len)
+static void pend_start(pend_t what, fpga_cmd_t cmd)
 {
-    if (job.state != JOB_IDLE || n == 0 || n > MAX_STEPS || rounds == 0)
-        return false;
-    memset(&job, 0, sizeof job);
-    job.rounds     = rounds;
-    job.round      = 1;
-    job.rand_len   = rand_len;
-    job.dumps_left = REPEAT_MAX_DUMPS;
-    job.name     = name;
-    memcpy(job.steps, steps, n * sizeof *steps);
-    job.n_steps  = n;
-    job.idx      = 0;
-    job.t0       = plat_millis();
-    job.irq_mark = transport_ready_count();
-    job.state    = JOB_STEP_START;
-    job_poll();                          /* try immediately */
+    pend.what    = what;
+    pend.cmd     = cmd;
+    pend.waiting = false;
+    pend_submit();
+}
+
+/* One console command at a time: its buffers are shared. */
+static bool console_busy(void)
+{
+    if (pend.what == PEND_NONE) return false;
+    log_raw("busy: '%s' still running (abort to cancel)\r\n",
+            pend_names[pend.what]);
     return true;
 }
 
@@ -413,17 +354,18 @@ static bool parse_arg(const char *what, const char *s, unsigned long max,
     return false;
 }
 
-/* send <op>                 opcode only
- * send <op> <x> <y>         + address phase (x, y)
- * send <op> <x> <y> <len>   + len field in the alt-bytes phase
- * Header only in all cases: len is just a field, no payload follows. */
+/* send <op>                       opcode only
+ * send <op> <x> <y>               + address phase (x, y)
+ * send <op> <x> <y> <n>           + 16-bit alt bytes (e.g. a line's N)
+ * send <op> <x1> <y1> <x2> <y2>   + 32-bit alt bytes (a box's x2:y2)
+ * Header only in all cases: no payload follows. */
 static void cmd_send(int argc, char **argv)
 {
-    unsigned long op, x, y, len;
+    unsigned long op, x, y, a1, a2;
     transport_hdr_t hdr = {0};
 
-    if (argc != 2 && argc != 4 && argc != 5) {
-        log_raw("usage: send <op> [<x> <y> [<len>]]\r\n");
+    if (argc != 2 && argc != 4 && argc != 5 && argc != 6) {
+        log_raw("usage: send <op> [<x> <y> [<n> | <x2> <y2>]]\r\n");
         return;
     }
     if (!parse_arg("opcode", argv[1], 0xFF, &op)) return;
@@ -437,13 +379,19 @@ static void cmd_send(int argc, char **argv)
         hdr.y = (uint16_t)y;
     }
     if (argc == 5) {
-        if (!parse_arg("len", argv[4], 0xFFFF, &len)) return;
-        hdr.fields   |= TRANSPORT_F_LEN;
-        hdr.len_field = (uint16_t)len;
+        if (!parse_arg("n", argv[4], 0xFFFF, &a1)) return;
+        hdr.fields |= TRANSPORT_F_ALT16;
+        hdr.alt     = (uint32_t)a1;
+    }
+    if (argc == 6) {
+        if (!parse_arg("x2", argv[4], 0xFFFF, &a1)) return;
+        if (!parse_arg("y2", argv[5], 0xFFFF, &a2)) return;
+        hdr.fields |= TRANSPORT_F_ALT32;
+        hdr.alt     = ((uint32_t)a1 << 16) | (uint32_t)a2;
     }
 
-    step_t steps[] = { { .kind = STEP_WRITE, .hdr = hdr } };
-    if (!job_start("send", steps, 1, 1, 0)) log_raw("busy\r\n");
+    if (console_busy()) return;
+    pend_start(PEND_SEND, fpga_cmd_raw_write(hdr, NULL));
 }
 
 static void cmd_read(int argc, char **argv)
@@ -453,9 +401,10 @@ static void cmd_read(int argc, char **argv)
     if (!parse_num(argv[1], 1, RD_BUF_SIZE, &len)) {
         log_raw("bad len '%s' (1..%u)\r\n", argv[1], RD_BUF_SIZE); return;
     }
-    step_t steps[] = { { .kind = STEP_READ,
-                         .hdr  = { .opcode = READ_OPCODE, .len = (uint16_t)len } } };
-    if (!job_start("read", steps, 1, 1, 0)) log_raw("busy\r\n");
+    transport_hdr_t hdr = { .opcode = READ_OPCODE, .len = (uint16_t)len };
+    if (console_busy()) return;
+    pend.len = (uint16_t)len;
+    pend_start(PEND_READ, fpga_cmd_raw_read(hdr, rd_buf));
 }
 
 /* Small xorshift32, seeded from the clock on first use. Good enough for
@@ -473,9 +422,8 @@ static uint8_t rand8(void)
 /* fecho [-r <rounds>] <n>            echo n random bytes
  * fecho [-r <rounds>] <b0> <b1> ...   echo exactly these bytes
  *
- * [WRITE op + payload] -> [WAIT_IRQ] -> [READ op, len bytes, compare]
- * With -r the whole thing runs <rounds> times (new random bytes each
- * round) and ends with a pass/fail summary. */
+ * One round is one echo command. With -r the console runs <rounds> of
+ * them (new random bytes each round) and ends with a pass/fail summary. */
 #define FECHO_MAX_ROUNDS  100000ul
 
 static void cmd_fecho(int argc, char **argv)
@@ -497,7 +445,7 @@ static void cmd_fecho(int argc, char **argv)
         return;
     }
     /* tx_buf may still be feeding a DMA transfer -- check before touching it */
-    if (job.state != JOB_IDLE) { log_raw("busy\r\n"); return; }
+    if (console_busy()) return;
 
     if (argc - a == 1) {
         if (!parse_num(argv[a], 1, RD_BUF_SIZE, &v)) {
@@ -514,19 +462,52 @@ static void cmd_fecho(int argc, char **argv)
         }
     }
 
-    step_t steps[] = {
-        { .kind = STEP_WRITE,
-          /* No len field: the FPGA takes the opcode, then drains its
-           * FIFO until empty, so the payload length needs no header.
-           * Keep n below the FPGA FIFO depth. */
-          .hdr  = { .opcode = FECHO_OPCODE, .len = n },
-          .data = tx_buf },
-        { .kind = STEP_WAIT_IRQ },
-        { .kind = STEP_READ, .hdr = { .opcode = READ_OPCODE, .len = n },
-          .expect = tx_buf },
-    };
-    if (!job_start("fecho", steps, 3, (uint32_t)rounds, rand_len))
-        log_raw("busy\r\n");
+    memset(&pend, 0, sizeof pend);
+    pend.len        = n;
+    pend.rounds     = (uint32_t)rounds;
+    pend.round      = 1;
+    pend.rand_len   = rand_len;
+    pend.dumps_left = REPEAT_MAX_DUMPS;
+
+    pend_start(PEND_FECHO, fpga_cmd_echo(tx_buf, rd_buf, n));
+}
+
+/* info                          show what we know about the FPGA
+ * info query                    send INFO and show the answer
+ * info set <w> <h> <n> [<sid>]  pretend INFO said this (debugging)
+ * info clear                    forget it: no size check until next INFO */
+static void cmd_info(int argc, char **argv)
+{
+    if (argc == 1) { print_info(); return; }
+
+    if (argc == 2 && strcmp(argv[1], "query") == 0) {
+        if (console_busy()) return;
+        pend_start(PEND_INFO, fpga_cmd_info());
+        return;
+    }
+
+    if (argc == 2 && strcmp(argv[1], "clear") == 0) {
+        fpga_info_t in = {0};
+        fpga_set_link_info(&in);
+        print_info();
+        return;
+    }
+
+    if ((argc == 5 || argc == 6) && strcmp(argv[1], "set") == 0) {
+        unsigned long w, h, n, sid = 0;
+        if (!parse_arg("width",  argv[2], 0xFFFF, &w)) return;
+        if (!parse_arg("height", argv[3], 0xFFFF, &h)) return;
+        if (!parse_arg("n",      argv[4], 0xFFFF, &n)) return;
+        if (argc == 6 && !parse_arg("session", argv[5], 0xFFFF, &sid)) return;
+        fpga_info_t in = { .valid = true, .width = (uint16_t)w,
+                           .height = (uint16_t)h, .max_cmd = (uint16_t)n,
+                           .session = (uint16_t)sid };
+        fpga_set_link_info(&in);
+        print_info();
+        return;
+    }
+
+    log_raw("usage: info [query | clear | set <w> <h> <n> [<session>]]\r\n");
 }
 
 static void cmd_readrdy(int argc, char **argv)
@@ -536,25 +517,49 @@ static void cmd_readrdy(int argc, char **argv)
     log_raw("ready irqs: %lu\r\n", (unsigned long)transport_ready_count());
     log_raw("backend   : done=%u error=%u\r\n",
             (unsigned)BACKEND->done, (unsigned)BACKEND->error);
-    if (job.state == JOB_IDLE) {
-        log_raw("job       : idle\r\n");
-    } else {
-        log_raw("job       : %s, step %u/%u (%s), %s for %lu ms\r\n",
-                job.name, job.idx + 1, job.n_steps,
-                step_names[job.steps[job.idx].kind],
-                state_names[job.state],
-                (unsigned long)(plat_millis() - job.t0));
-    }
+    log_raw("status    : %u at last READY\r\n", fpga_ready_status());
+    log_raw("queue     : %u/%u\r\n", fpga_queued(), (unsigned)FPGA_QUEUE_LEN);
+    const fpga_cmd_t *cur = fpga_current();
+    if (cur)
+        log_raw("running   : op 0x%02X, %s for %lu ms\r\n", cur->hdr.opcode,
+                fpga_current_step(), (unsigned long)fpga_current_ms());
+    else
+        log_raw("running   : -\r\n");
+    if (pend.what == PEND_FECHO && pend.rounds > 1)
+        log_raw("console   : fecho round %lu/%lu", (unsigned long)pend.round,
+                (unsigned long)pend.rounds);
+    else
+        log_raw("console   : %s", pend_names[pend.what]);
+    log_raw("%s\r\n", pend.waiting ? " (waiting for queue space)" : "");
 }
 
+/* Abort the running FPGA command and cancel everything queued -- the
+ * game's commands too. The done callbacks report what was stopped. */
 static void cmd_abort(int argc, char **argv)
 {
     (void)argc; (void)argv;
-    if (job.state == JOB_IDLE) { log_raw("nothing running\r\n"); return; }
-    if (job.state == JOB_STEP_BUSY) BACKEND->abort();
-    job.state = JOB_IDLE;
-    if (job.rounds > 1) print_summary(true);   /* stats up to this point */
-    else                log_raw("%s aborted\r\n", job.name);
+    uint8_t n = fpga_queued();
+    if (n == 0 && pend.what == PEND_NONE) {
+        log_raw("nothing running\r\n");
+        return;
+    }
+    if (pend.waiting) {                 /* never made it into the queue */
+        log_raw("%s dropped\r\n", pend_names[pend.what]);
+        pend_end(true);
+    }
+    fpga_abort_all();
+    if (n) log_raw("aborted %u fpga command%s\r\n", n, n == 1 ? "" : "s");
+}
+
+/* trace [on|off] -- one debug line per FPGA transfer and step */
+static void cmd_trace(int argc, char **argv)
+{
+    if (argc == 2 && strcmp(argv[1], "on") == 0)       transport_set_trace(true);
+    else if (argc == 2 && strcmp(argv[1], "off") == 0) transport_set_trace(false);
+    else if (argc != 1) { log_raw("usage: trace [on|off]\r\n"); return; }
+    log_raw("trace: %s%s\r\n", transport_trace_on() ? "on" : "off",
+            transport_trace_on() && log_get_level() < 4
+                ? " (shows at log level 4: 'log 4')" : "");
 }
 
 static void cmd_loglevel(int argc, char **argv)
@@ -600,12 +605,14 @@ static void cmd_exit(int argc, char **argv)
 static const cli_cmd_t cmds[] = {
     { "help",    cmd_help,     "list commands" },
     { "toggle",  cmd_toggle,   "toggle user LED" },
-    { "send",    cmd_send,     "send <op> [<x> <y> [<len>]]  e.g. send 0x66 0xfada 0x2345 0" },
+    { "send",    cmd_send,     "send <op> [<x> <y> [<n> | <x2> <y2>]]  e.g. send 0x66 0xfada 0x2345 0" },
     { "read",    cmd_read,     "read <len>          e.g. read 4" },
     { "fecho",   cmd_fecho,    "fecho [-r N] <n> | <b0> <b1> ...  echo random / given bytes, N rounds" },
-    { "readrdy", cmd_readrdy,  "show ready pin, backend and job state" },
-    { "abort",   cmd_abort,    "cancel the running job" },
+    { "readrdy", cmd_readrdy,  "show ready pin, backend and fpga queue" },
+    { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
+    { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
     { "ls",      fs_cmd_ls,    "ls [path]           list a directory" },
     { "cd",      fs_cmd_cd,    "cd [path]           change directory" },
     { "cat",     fs_cmd_cat,   "cat <file>          print a file" },
@@ -683,24 +690,39 @@ void cli_init(void)
 
     log_raw("\r\nhexmcu console, type 'help'\r\n" PROMPT);
     prompt_visible = true;
-    ready_reported = transport_ready_count();
+    ready_seen = transport_ready_count();
+    used_seen  = fpga_ready_used();
 }
 
 void cli_poll(void)
 {
+    /* Results arrive through cli_done(), called from fpga_poll() just
+     * before this. Here: retry a submit that found the queue full. */
+    if (pend.waiting) {
+        if (fpga_has_space()) {
+            pend_submit();
+        } else if (plat_millis() - pend.since >= CLI_SUBMIT_TIMEOUT_MS) {
+            LOG_ERR("%s: fpga queue still full after %u ms, gave up",
+                    pend_names[pend.what], CLI_SUBMIT_TIMEOUT_MS);
+            pend_end(true);
+        }
+    }
+
+    /* A READY can land between fpga_poll() and here, before the command
+     * waiting for it has consumed it -- so only report spare READYs once
+     * the queue is empty and nothing can still claim them. */
+    uint32_t rc = transport_ready_count(), used = fpga_ready_used();
+    ready_spare += (int32_t)(rc - ready_seen) - (int32_t)(used - used_seen);
+    ready_seen = rc;
+    used_seen  = used;
+    if (ready_spare < 0) ready_spare = 0;
+    if (ready_spare > 0 && fpga_queued() == 0) {
+        if (ready_spare == 1) LOG_INFO("fpga ready");
+        else LOG_INFO("fpga ready (x%ld)", (long)ready_spare);
+        ready_spare = 0;
+    }
+
     int c;
     while ((c = io_getc()) >= 0)
         handle_char((char)c);
-
-    uint32_t rc = transport_ready_count();
-    if (rc != ready_reported) {
-        uint32_t n = rc - ready_reported;
-        ready_reported = rc;
-        if (job.state != JOB_IDLE && job.rounds > 1) {
-            /* one READY per round is expected -- don't flood the console */
-        } else if (n == 1) LOG_INFO("fpga ready");
-        else        LOG_INFO("fpga ready (x%lu)", (unsigned long)n);
-    }
-
-    job_poll();
 }

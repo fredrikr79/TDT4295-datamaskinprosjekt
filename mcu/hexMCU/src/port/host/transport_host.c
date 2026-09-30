@@ -3,25 +3,28 @@
 #define _POSIX_C_SOURCE 200809L
 
 /* ======================================================================
- * transport_host.c -- fake FPGA behind the same spi_backend_t interface.
+ * transport_host.c -- the OCTOSPI link of the host build, behind the same
+ * spi_backend_t interface as transport_ospi.c.
  *
- * Models the parts of the link that can actually go wrong:
+ * Only the wires live here:
  *   - transfers take time, proportional to byte count at the configured
  *     clock and lane count
- *   - the FPGA answers a command with a READY pulse some time later
  *   - transfers can fail, at a configurable rate
+ *   - the READY line, pulsed when the FPGA says so
+ * What the FPGA does with the bytes is fake_fpga.c. A write is handed
+ * over when it completes intact; a failed transfer never reaches it.
  *
  * Timing is wall-clock for now. When the virtual clock lands, replace
  * now_ns() with it and drive it from transport_poll() -- nothing above
  * this file changes.
  * ====================================================================== */
-#define LOG_TAG "fake"
+#define LOG_TAG "link"
 
 #include "transport.h"
 #include "log.h"
 #include "host_hooks.h"
 #include "cli.h"
-#include "display_host.h"
+#include "fake_fpga.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -31,7 +34,6 @@
 /* ---- tunables (host_hooks.h exposes setters for the CLI / argv) ------- */
 static double   cfg_clock_mhz   = 20.0;  /* OCTOSPI clock                  */
 static unsigned cfg_lanes       = 8;     /* 8 = octal, 4 = quad, 1 = single*/
-static unsigned cfg_ready_us    = 200;   /* command -> READY pulse delay   */
 static unsigned cfg_error_pct   = 0;     /* chance a transfer fails        */
 
 void host_fpga_set_clock(double mhz, unsigned lanes)
@@ -56,14 +58,14 @@ static uint64_t now_ns(void)
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
 
-/* Header is the opcode, then optionally x,y (4) and the len field (2),
- * each switched on by its own bit in hdr->fields. Same for both
+/* Header is the opcode, then optionally x,y (4) and the alt field (2 or
+ * 4), each switched on by its own bit in hdr->fields. Same for both
  * directions; a read adds the turnaround cycles below. */
 static uint64_t transfer_ns(const transport_hdr_t *hdr, bool is_read)
 {
     uint64_t bytes = 1u                                          /* opcode */
                    + ((hdr->fields & TRANSPORT_F_XY)  ? 4u : 0u) /* x, y   */
-                   + ((hdr->fields & TRANSPORT_F_LEN) ? 2u : 0u) /* len f. */
+                   + transport_alt_bytes(hdr)                    /* alt    */
                    + (uint64_t)hdr->len;                         /* data   */
 
     /* bits / (MHz * lanes) -> microseconds, then to ns */
@@ -84,40 +86,31 @@ static bool roll_error(void)
     return (unsigned)(rand() % 100) < cfg_error_pct;
 }
 
-/* ---- fake FPGA state ------------------------------------------------- */
-typedef enum { XF_IDLE, XF_RUNNING } xfer_state_t;
-
+/* ---- link state ------------------------------------------------------ */
 static spi_backend_t host_backend;
 
 static struct {
-    xfer_state_t state;
-    uint64_t     finish_ns;      /* when the current transfer completes    */
-    bool         fail;           /* this transfer is going to fail         */
-    bool         is_read;
-    uint8_t     *rx_buf;         /* caller's buffer, filled on completion  */
-    uint16_t     rx_len;
+    bool            running;     /* a transfer is on the wire              */
+    uint64_t        finish_ns;   /* when it completes                      */
+    bool            fail;        /* this transfer is going to fail         */
+    bool            is_read;
+    transport_hdr_t hdr;         /* copy: the caller's may be on its stack */
+    const uint8_t  *tx;          /* caller's buffers, valid until done     */
+    uint8_t        *rx;
 
-    uint64_t     ready_at_ns;    /* 0 = no READY pulse pending             */
-    uint8_t      last_opcode;    /* what a following read echoes back      */
-} fpga;
-
-/* What the fake FPGA hands back on a read: the opcode that was last
- * written, then a counting pattern. Recognisable in the hex dump, and it
- * proves the write actually reached the "FPGA" before the read. */
-static void fill_read_data(uint8_t *buf, uint16_t n)
-{
-    for (uint16_t i = 0; i < n; i++)
-        buf[i] = (uint8_t)(fpga.last_opcode + i);
-}
+    uint64_t        ready_at_ns; /* 0 = no READY pulse pending             */
+    uint8_t         status_next; /* status pins for that pulse             */
+    uint8_t         status_pins; /* what the status pins show right now    */
+} link;
 
 static transport_status_t host_init(void)
 {
-    memset(&fpga, 0, sizeof fpga);
+    memset(&link, 0, sizeof link);
     host_backend.done  = 1;
     host_backend.error = 0;
     host_ready_pin = false;
-    LOG_INFO("fake fpga up: %.1f MHz x%u lanes, ready delay %u us",
-             cfg_clock_mhz, cfg_lanes, cfg_ready_us);
+    fake_fpga_reset();
+    LOG_INFO("link up: %.1f MHz x%u lanes", cfg_clock_mhz, cfg_lanes);
     return TRANSPORT_OK;
 }
 
@@ -131,25 +124,26 @@ static transport_status_t start(const transport_hdr_t *hdr, bool is_read,
 
     uint64_t dur = transfer_ns(hdr, is_read);
 
-    fpga.state     = XF_RUNNING;
-    fpga.finish_ns = now_ns() + dur;
-    fpga.fail      = roll_error();
-    fpga.is_read   = is_read;
-    fpga.rx_buf    = rx;
-    fpga.rx_len    = hdr->len;
+    link.running   = true;
+    link.finish_ns = now_ns() + dur;
+    link.fail      = roll_error();
+    link.is_read   = is_read;
+    link.hdr       = *hdr;
+    link.tx        = tx;
+    link.rx        = rx;
 
     host_backend.error = 0;
     host_backend.done  = 0;
 
-    if (!is_read) {
-        fpga.last_opcode = hdr->opcode;
-        /* The FPGA "processes" the command and pulses READY afterwards. */
-        fpga.ready_at_ns = fpga.finish_ns + (uint64_t)cfg_ready_us * 1000ull;
-    }
-
-    LOG_DBG("%s op=0x%02X len=%u -> %lu ns%s",
-            is_read ? "read" : "write", hdr->opcode, hdr->len,
-            (unsigned long)dur, fpga.fail ? " (will fail)" : "");
+    /* Injected failures always show at debug level; the rest is trace. */
+    if (link.fail)
+        LOG_DBG("%s op=0x%02X len=%u -> %lu ns (will fail)",
+                is_read ? "read" : "write", hdr->opcode, hdr->len,
+                (unsigned long)dur);
+    else
+        LOG_TRACE("%s op=0x%02X len=%u -> %lu ns",
+                  is_read ? "read" : "write", hdr->opcode, hdr->len,
+                  (unsigned long)dur);
 
     return TRANSPORT_OK;
 }
@@ -166,39 +160,49 @@ static transport_status_t host_read(const transport_hdr_t *hdr, uint8_t *buf)
 
 static void host_abort(void)
 {
-    fpga.state       = XF_IDLE;
-    fpga.ready_at_ns = 0;
+    link.running     = false;
+    link.ready_at_ns = 0;
     host_backend.error = 1;
     host_backend.done  = 1;
+}
+
+static uint8_t host_read_status(void)
+{
+    return link.status_pins;
 }
 
 /* Everything that would be an interrupt on hardware happens here. */
 static void host_poll(void)
 {
-
-    if (!display_poll())
-        cli_quit("window closed");
-    
     uint64_t t = now_ns();
 
-    if (fpga.state == XF_RUNNING && t >= fpga.finish_ns) {
-        fpga.state = XF_IDLE;
-        if (fpga.fail) {
-            fpga.ready_at_ns   = 0;      /* a failed command gets no READY */
-            host_backend.error = 1;      /* error BEFORE done, same order  */
-            host_backend.done  = 1;      /* as the HAL callbacks           */
+    if (link.running && t >= link.finish_ns) {
+        link.running = false;
+        if (link.fail) {
+            link.ready_at_ns   = 0;      /* the FPGA never saw it: no READY */
+            host_backend.error = 1;      /* error BEFORE done, same order   */
+            host_backend.done  = 1;      /* as the HAL callbacks            */
         } else {
-            if (fpga.is_read && fpga.rx_buf)
-                fill_read_data(fpga.rx_buf, fpga.rx_len);
+            if (link.is_read) {
+                fake_fpga_read(&link.hdr, link.rx);
+            } else {
+                int32_t us = fake_fpga_write(&link.hdr, link.tx,
+                                             &link.status_next);
+                link.ready_at_ns = us < 0 ? 0 : t + (uint64_t)us * 1000ull;
+            }
             host_backend.done = 1;
         }
     }
 
-    if (fpga.ready_at_ns != 0 && t >= fpga.ready_at_ns) {
-        fpga.ready_at_ns = 0;
+    if (link.ready_at_ns != 0 && t >= link.ready_at_ns) {
+        link.ready_at_ns = 0;
+        link.status_pins = link.status_next; /* stable before READY rises */
         host_ready_pin   = true;         /* level, for the readrdy command */
         transport_ready_isr();           /* edge, same entry as the EXTI   */
     }
+
+    if (!fake_fpga_poll(t))
+        cli_quit("window closed");
 }
 
 static spi_backend_t host_backend = {
@@ -207,6 +211,7 @@ static spi_backend_t host_backend = {
     .read  = host_read,
     .abort = host_abort,
     .poll  = host_poll,
+    .read_status = host_read_status,
     .done  = 1,
     .error = 0,
 };

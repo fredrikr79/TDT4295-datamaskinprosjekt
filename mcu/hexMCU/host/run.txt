@@ -1,0 +1,4 @@
+git submodule update --init
+
+sudo pacman -S --needed cmake ninja wayland wayland-protocols libxkbcommon libdecor \
+    libx11 libxext libxrandr libxcursor libxi libxss mesa

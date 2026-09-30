@@ -55,7 +55,7 @@ module spi #(
   wire proc_r_en, rx_r_en, tx_r_en;
   wire proc_w_en;
 
-  assign in_r_en = proc_r_en | rx_r_en | tx_r_en;
+  assign in_r_en  = proc_r_en | rx_r_en | tx_r_en;
   assign out_w_en = proc_w_en;
 
   // CDC synchronizations CK_SCK -> CLK
@@ -69,13 +69,13 @@ module spi #(
 
   always_ff @(posedge clk) begin
     if (reset) begin
-        ck_ss_sync <= 3'b111;
-        ck_rst_sync <= 3'b000;
-        out_empty_sync <= 3'b111;
+      ck_ss_sync <= 3'b111;
+      ck_rst_sync <= 3'b000;
+      out_empty_sync <= 3'b111;
     end else begin
-        ck_ss_sync <= {ck_ss_sync[1:0], ck_ss};
-        ck_rst_sync <= {ck_rst_sync[1:0], ck_rst};
-        out_empty_sync <= {out_empty_sync[1:0], out_empty};
+      ck_ss_sync <= {ck_ss_sync[1:0], ck_ss};
+      ck_rst_sync <= {ck_rst_sync[1:0], ck_rst};
+      out_empty_sync <= {out_empty_sync[1:0], out_empty};
     end
   end
 
@@ -83,67 +83,69 @@ module spi #(
 
   // State handler
   spi_fsm fsm (
-    .clk(clk),
-    .opcode(opcode),
-    .reset_s(reset_s),
-    .boot_done(boot_done),
-    .ck_ss_s(ck_ss_s),
-    .in_empty(in_empty),
-    .out_full(out_full),
-    .state(state)
+      .clk(clk),
+      .opcode(opcode),
+      .reset_s(reset_s),
+      .boot_done(boot_done),
+      .ck_ss_s(ck_ss_s),
+      .in_empty(in_empty),
+      .out_full(out_full),
+      .state(state),
+      .proc_done(proc_done)
   );
 
   // Data recieve module
   spi_rx rx (
-    .clk(clk),
-    .ck_sck(ck_sck),
-    .ck_ss(ck_ss),
-    .ck_ss_s(ck_ss_s),
-    .reset(reset),
-    .reset_s(reset_s),
-    .octo_spi(octo_spi),
-    .in_r_en(in_r_en),
-    .rx_r_en(rx_r_en),
-    .state(state),
-    .acknack(acknack),
-    .in_empty(in_empty),
-    .in_ready(in_ready),
-    .in_full(in_full),
-    .in_fifo(in_fifo)
+      .clk(clk),
+      .ck_sck(ck_sck),
+      .ck_ss(ck_ss),
+      .ck_ss_s(ck_ss_s),
+      .reset(reset),
+      .reset_s(reset_s),
+      .octo_spi(octo_spi),
+      .in_r_en(in_r_en),
+      .rx_r_en(rx_r_en),
+      .state(state),
+      .acknack(acknack),
+      .in_empty(in_empty),
+      .in_ready(in_ready),
+      .in_full(in_full),
+      .in_fifo(in_fifo)
   );
 
   // Data send module
   spi_tx tx (
-    .clk(clk),
-    .ck_sck(ck_sck),
-    .reset(reset),
-    .reset_s(reset_s),
-    .ck_ss(ck_ss),
-    .ck_ss_s(ck_ss_s),
-    .tx_r_en(tx_r_en),
-    .in_empty(in_empty),
-    .out_w_en(out_w_en),
-    .state(state),
-    .out_fifo(out_fifo),
-    .octo_spi(octo_spi),
-    .out_empty(out_empty),
-    .out_full(out_full),
-    .out_ready(out_ready),
-    .out_empty_s(out_empty_s)
+      .clk(clk),
+      .ck_sck(ck_sck),
+      .reset(reset),
+      .reset_s(reset_s),
+      .ck_ss(ck_ss),
+      .ck_ss_s(ck_ss_s),
+      .tx_r_en(tx_r_en),
+      .in_empty(in_empty),
+      .out_w_en(out_w_en),
+      .state(state),
+      .out_fifo(out_fifo),
+      .octo_spi(octo_spi),
+      .out_empty(out_empty),
+      .out_full(out_full),
+      .out_ready(out_ready),
+      .out_empty_s(out_empty_s)
   );
 
   // Command processing module
   spi_processor processor (
-    .clk(clk),
-    .state(state),
-    .in_fifo(in_fifo),
-    .out_full(out_full),
-    .in_empty(in_empty),
-    .reset_s(reset_s),
-    .proc_w_en(proc_w_en),
-    .proc_r_en(proc_r_en),
-    .out_fifo(out_fifo),
-    .opcode(opcode)
+      .clk(clk),
+      .state(state),
+      .in_fifo(in_fifo),
+      .out_full(out_full),
+      .in_empty(in_empty),
+      .reset_s(reset_s),
+      .proc_w_en(proc_w_en),
+      .proc_r_en(proc_r_en),
+      .out_fifo(out_fifo),
+      .opcode(opcode),
+      .proc_done(proc_done)
   );
 
   // DEBUG

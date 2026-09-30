@@ -11,6 +11,7 @@ module spi_processor #(
     output logic [7:0] out_fifo,
     output logic proc_w_en,
     proc_r_en,
+    proc_done,
     output spi_pck::opcode_e opcode
 );
 
@@ -24,7 +25,12 @@ module spi_processor #(
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic echo_w_en = 1'b0;
   logic fail_w_en = 1'b0;
-  assign proc_w_en = echo_w_en | fail_w_en;
+
+  // Done signals
+  logic info_done = 1'b0;
+  logic echo_done = 1'b0;
+  assign proc_done = echo_done | info_done;
+
 
   always_ff @(posedge clk) begin
 
@@ -36,6 +42,7 @@ module spi_processor #(
     if (reset_s) begin
       echo_r_en  <= 1'b0;
       echo_w_en <= 1'b0;
+      echo_done <= 1'b0;
       fail_w_en <= 1'b0;
       fail_r_en <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
@@ -44,6 +51,7 @@ module spi_processor #(
 
       echo_r_en  <= 1'b0;
       echo_w_en <= 1'b0;
+      echo_done <= 1'b0;
       fail_w_en <= 1'b0;
       fail_r_en <= 1'b0;
 
@@ -73,6 +81,10 @@ module spi_processor #(
                     out_fifo <= in_fifo;
                     echo_w_en <= 1'b1;
                     echo_r_en  <= 1'b1;
+                end else begin
+                    echo_done <= 1'b1;
+                end
+              end
                 end
               end
 

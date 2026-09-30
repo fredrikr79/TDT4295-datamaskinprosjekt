@@ -2,7 +2,7 @@ module spi_fsm #(
 
 ) (
     input spi_pck::opcode_e opcode,
-    input logic reset_s, boot_done, ck_ss_s, clk, in_empty, out_full,
+    input logic reset_s, boot_done, ck_ss_s, clk, in_empty, out_full , proc_done,
     output spi_pck::state_e state
 );
 
@@ -43,12 +43,12 @@ module spi_fsm #(
           //TODO refactor into spi_proc, interface must be defined.
           case (opcode)
             ECHO: begin
-              if (in_empty) begin
+              if (in_empty && proc_done) begin
                 state <= ST_TX_IDLE;
               end
             end
             FAILED: begin
-              if(in_empty)
+              if(in_empty && proc_done)
                 state <= ST_TX_IDLE;
             end
             default: begin

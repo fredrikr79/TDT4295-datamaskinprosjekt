@@ -440,15 +440,10 @@ module tb_spi;
 
 
     mcu_read_byte(rx_byte0);
-    $display("[%0t] FIRST TX BYTE = %02h", $time, rx_byte0);
     mcu_read_byte(rx_byte1);
-    $display("[%0t] SECOND TX BYTE = %02h", $time, rx_byte1);
     mcu_read_byte(rx_byte2);
-    $display("[%0t] THIRD TX BYTE = %02h", $time, rx_byte2);
     mcu_read_byte(rx_byte3);
-    $display("[%0t] FOURTH TX BYTE = %02h", $time, rx_byte3);
     mcu_read_byte(rx_byte4);
-    $display("[%0t] FIFTH TX BYTE = %02h", $time, rx_byte4);
 
     // ------------------------------------------------------------
     // Now terminate the transaction.
@@ -479,12 +474,7 @@ module tb_spi;
     // 00, 05, 06
     // --------------------------------------------------------
 
-    mcu_write_byte(8'hee); // illegal opcode
-    mcu_write_byte(8'h01); // valid payload
-    mcu_write_byte(8'h02);
-    mcu_write_byte(8'h03);
-    mcu_write_byte(8'h04);
-    mcu_write_byte(8'h05);
+    mcu_write_byte(8'h20); // illegal opcode
 
 
     // --------------------------------------------------------
@@ -539,15 +529,18 @@ module tb_spi;
 
 
     mcu_read_byte(rx_byte0);
-    $display("[%0t] FIRST TX BYTE = %02h", $time, rx_byte0);
-    mcu_read_byte(rx_byte1);
-    $display("[%0t] SECOND TX BYTE = %02h", $time, rx_byte1);
-    mcu_read_byte(rx_byte2);
-    $display("[%0t] THIRD TX BYTE = %02h", $time, rx_byte2);
-    mcu_read_byte(rx_byte3);
-    $display("[%0t] FOURTH TX BYTE = %02h", $time, rx_byte3);
-    mcu_read_byte(rx_byte4);
-    $display("[%0t] FIFTH TX BYTE = %02h", $time, rx_byte4);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+    mcu_read_byte(rx_byte0);
+
 
     // ------------------------------------------------------------
     // Now terminate the transaction.

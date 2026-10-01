@@ -1,3 +1,6 @@
 [submodule "mcu/hexMCU/third_party/SDL"]
 	path = mcu/hexMCU/third_party/SDL
 	url = https://github.com/libsdl-org/SDL.git
+[submodule "mcu/hexMCU/third_party/tinyusb"]
+	path = mcu/hexMCU/third_party/tinyusb
+	url = https://github.com/hathach/tinyusb.git

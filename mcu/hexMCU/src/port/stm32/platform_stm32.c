@@ -1,3 +1,4 @@
+#include "log.h"
 #include "platform.h"
 #include "transport.h"
 #include "frame_sync.h"
@@ -37,6 +38,7 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t pin)
 #ifdef FPGA_SYNC_Pin
     if (pin == FPGA_SYNC_Pin)  frame_sync_isr();
 #endif
+    if (pin == B1_Pin) LOG_INFO("Button pressed!");
 }
 
 bool plat_exit(int code)

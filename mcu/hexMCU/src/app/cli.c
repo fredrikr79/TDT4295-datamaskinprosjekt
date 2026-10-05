@@ -257,7 +257,7 @@ static void print_info(void)
     if (!in->valid)
         log_raw("fpga info: unknown (no INFO yet), size check off\r\n");
     else
-        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%04X\r\n",
+        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%08X\r\n",
                 in->width, in->height, in->max_cmd, in->session);
     cli_async_end();
 }

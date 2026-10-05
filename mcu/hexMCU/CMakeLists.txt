@@ -37,6 +37,12 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 set(FS_BACKEND fatfs)
 # set(FS_BACKEND filex)
 
+# ---------------------------------------------------------------------
+# USB controller: fsdev = U535/U545 (Nucleo), dwc2 = U595/U5A5 (OTG_HS)
+# ---------------------------------------------------------------------
+set(USB_IP fsdev)
+# set(USB_IP dwc2)
+
 message("Filesystem backend: " ${FS_BACKEND})
 
 # Include sources.cmake
@@ -93,6 +99,29 @@ elseif(FS_BACKEND STREQUAL "filex")
     )
 else()
     message(FATAL_ERROR "FS_BACKEND must be fatfs or filex, got '${FS_BACKEND}'")
+endif()
+
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    ${TINYUSB_SOURCES}
+    src/port/stm32/usb_host_stm32.c
+)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${TINYUSB_INCLUDES}
+    src/port/stm32/usb          # tusb_config.h lives here
+)
+
+if(USB_IP STREQUAL "fsdev")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/hcd_stm32_fsdev.c
+        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/fsdev_common.c
+    )
+elseif(USB_IP STREQUAL "dwc2")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/hcd_dwc2.c
+        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/dwc2_common.c
+    )
+else()
+    message(FATAL_ERROR "USB_IP must be fsdev or dwc2, got '${USB_IP}'")
 endif()
 
 # Add project symbols (macros)

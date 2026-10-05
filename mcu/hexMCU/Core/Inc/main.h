@@ -57,13 +57,16 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define FPGA_ACK_Pin GPIO_PIN_13
-#define FPGA_ACK_GPIO_Port GPIOC
+#define B1_Pin GPIO_PIN_13
+#define B1_GPIO_Port GPIOC
+#define B1_EXTI_IRQn EXTI13_IRQn
 #define FPGA_READY_Pin GPIO_PIN_4
 #define FPGA_READY_GPIO_Port GPIOA
 #define FPGA_READY_EXTI_IRQn EXTI4_IRQn
 #define LED_GREEN_Pin GPIO_PIN_5
 #define LED_GREEN_GPIO_Port GPIOA
+#define FPGA_ACK_Pin GPIO_PIN_8
+#define FPGA_ACK_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

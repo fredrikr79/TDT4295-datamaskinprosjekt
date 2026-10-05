@@ -35,7 +35,7 @@ run: host $(CARD)
 		echo "$(CARD) is attached to a loop device -- unmount it first"; \
 		exit 1; \
 	fi
-	@./$(HOST_BIN) --card=$(CARD) $(ARGS)
+	@./$(HOST_BIN)
 
 # `make test`, or `make test ARGS=--errors=2` to watch it resync
 test: host $(IMAGE565)

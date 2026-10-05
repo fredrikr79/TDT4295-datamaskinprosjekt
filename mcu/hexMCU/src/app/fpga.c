@@ -184,6 +184,7 @@ static void start_head(void)
 }
 
 static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
+static uint32_t be32(const uint8_t *p) { return (uint32_t)((uint32_t) p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]); }
 
 /* INFO answer: [W][H][N][SID], 16 bits each, MSB first. */
 static fpga_err_t parse_info(void)
@@ -193,14 +194,14 @@ static fpga_err_t parse_info(void)
         .width   = be16(&info_rx[0]),
         .height  = be16(&info_rx[2]),
         .max_cmd = be16(&info_rx[4]),
-        .session = be16(&info_rx[6]),
+        .session = be32(&info_rx[6]),
     };
     /* A box header alone is 9 bytes; anything smaller is not usable. */
     if (in.width == 0 || in.height == 0 || in.max_cmd < 9u)
         return FPGA_ERR_BAD_INFO;
 
     if (info.valid && info.session != in.session)
-        LOG_INFO("new FPGA session 0x%04X (was 0x%04X)",
+        LOG_INFO("new FPGA session 0x%08X (was 0x%08X)",
                  in.session, info.session);
     info = in;
     return FPGA_ERR_NONE;

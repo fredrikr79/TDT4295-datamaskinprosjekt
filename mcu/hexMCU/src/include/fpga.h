@@ -75,22 +75,22 @@
 #endif
 
 /* ---- opcodes -------------------------------------------------------- */
-#define ECHO_OPCODE             0x01u
-#define SEND_LINE_OPCODE        0x02u
-#define READ_LINE_OPCODE        0x03u
-#define SEND_HUD_BOX_OPCODE     0x04u
-#define READ_HUD_BOX_OPCODE     0x05u
-#define SEND_SIM_BOX_OPCODE     0x06u
-#define READ_SIM_BOX_OPCODE     0x07u
-#define STOP_SIM_OPCODE         0x08u
-#define START_SIM_OPCODE        0x09u
-#define INFO_OPCODE             0x0Au   /* not agreed on yet */
+#define ECHO_OPCODE             0x10u
+#define INFO_OPCODE             0x20u   /* not agreed on yet */
+#define SEND_LINE_OPCODE        0x30u
+#define READ_LINE_OPCODE        0x40u
+#define SEND_HUD_BOX_OPCODE     0x50u
+#define READ_HUD_BOX_OPCODE     0x60u
+#define SEND_SIM_BOX_OPCODE     0x70u
+#define READ_SIM_BOX_OPCODE     0x80u
+#define STOP_SIM_OPCODE         0x90u
+#define START_SIM_OPCODE        0xA0u
 
 /* The READ step of every command that returns data. The FPGA ignores it
  * (a dummy); it is only there because the HAL and OCTOSPI need one. */
 #define READ_OPCODE             0x00u
 
-#define FPGA_INFO_BYTES         8u      /* W, H, N, SID: 2 bytes each */
+#define FPGA_INFO_BYTES         10u      /* W, H, N: 2 bytes each, SID 4 bytes*/
 
 /* Status GPIOs, valid while READY is high. Only OK is agreed so far. */
 #define FPGA_STATUS_OK          0u
@@ -127,7 +127,7 @@ typedef struct {
     uint16_t width;
     uint16_t height;
     uint16_t max_cmd;       /* N: largest command in bytes, header included */
-    uint16_t session;
+    uint32_t session;
 } fpga_info_t;
 
 /* ---- commands --------------------------------------------------------

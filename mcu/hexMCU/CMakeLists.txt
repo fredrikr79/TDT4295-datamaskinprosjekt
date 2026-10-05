@@ -29,13 +29,10 @@ project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
 # ---------------------------------------------------------------------
-# Filesystem backend: leave exactly ONE of these lines uncommented.
-#   fatfs  third_party/ff16 + port/stm32/diskio_sdmmc.c
-#   filex  port/stm32/fs_filex.c (stub for now)
-# Save, then build as usual; CMake reconfigures by itself.
+# USB controller: fsdev = U535/U545 (Nucleo), dwc2 = U595/U5A5 (OTG_HS)
 # ---------------------------------------------------------------------
-set(FS_BACKEND fatfs)
-# set(FS_BACKEND filex)
+set(USB_IP fsdev)
+# set(USB_IP dwc2)
 
 message("Filesystem backend: " ${FS_BACKEND})
 
@@ -70,29 +67,28 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${APP_INCLUDES}
 )
 
-if(FS_BACKEND STREQUAL "fatfs")
+
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    ${TINYUSB_SOURCES}
+    src/port/stm32/usb_host_stm32.c
+)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${TINYUSB_INCLUDES}
+    src/port/stm32/usb          # tusb_config.h lives here
+)
+
+if(USB_IP STREQUAL "fsdev")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        ${FATFS_SOURCES}
-        src/port/stm32/diskio_sdmmc.c
+        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/hcd_stm32_fsdev.c
+        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/fsdev_common.c
     )
-    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        ${FATFS_INCLUDES}
-    )
-elseif(FS_BACKEND STREQUAL "filex")
+elseif(USB_IP STREQUAL "dwc2")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        src/port/stm32/fs_filex.c
-        # TODO(filex): FileX sources + SD driver
-    )
-    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        src/port/stm32                      # fs_filex.h
-        # TODO(filex): FileX include dirs
-    )
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-        FS_USE_FILEX
-        # TODO(filex): FX_STANDALONE_ENABLE if running without ThreadX
+        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/hcd_dwc2.c
+        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/dwc2_common.c
     )
 else()
-    message(FATAL_ERROR "FS_BACKEND must be fatfs or filex, got '${FS_BACKEND}'")
+    message(FATAL_ERROR "USB_IP must be fsdev or dwc2, got '${USB_IP}'")
 endif()
 
 # Add project symbols (macros)

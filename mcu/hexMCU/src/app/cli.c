@@ -17,7 +17,6 @@
 #include "log.h"
 #include "platform.h"
 #include "transport.h"
-#include "fs_utils.h"
 #include "fpga.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
@@ -257,7 +256,7 @@ static void print_info(void)
     if (!in->valid)
         log_raw("fpga info: unknown (no INFO yet), size check off\r\n");
     else
-        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%04X\r\n",
+        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%08X\r\n",
                 in->width, in->height, in->max_cmd, in->session);
     cli_async_end();
 }
@@ -586,7 +585,6 @@ void cli_quit(const char *why)
     cli_async_begin();              /* wipe "> half-typed" if it is shown */
     prompt_visible = false;         /* and keep log hooks from redrawing it */
 
-    fs_unmount();                   /* no-op if never mounted */
     if (why) log_raw("%s, bye\r\n", why);
     else     log_raw("bye\r\n");
 
@@ -613,16 +611,6 @@ static const cli_cmd_t cmds[] = {
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
-    { "ls",      fs_cmd_ls,    "ls [path]           list a directory" },
-    { "cd",      fs_cmd_cd,    "cd [path]           change directory" },
-    { "cat",     fs_cmd_cat,   "cat <file>          print a file" },
-    { "head",    fs_cmd_head,  "head <file> [n]     first n lines" },
-    { "echo",    fs_cmd_echo,  "echo [-a] <f> <txt> write text to a file" },
-    { "mkdir",   fs_cmd_mkdir, "mkdir [-r] <dir>    make a dir (-r: parents too)" },
-    { "rm",      fs_cmd_rm,    "rm [-r] <path>      delete (-r: dir + contents)" },
-    { "exist",   fs_cmd_exist, "exist <path>        true/false" },
-    { "mv",      fs_cmd_mv,    "mv <src> <dst>      rename / move" },
-    { "cp",      fs_cmd_cp,    "cp [-r] <src> <dst> copy (-r: dir + contents)" },
     { "exit",    cmd_exit,     "exit the emulator (host only)" },
 };
 #define NUM_CMDS (sizeof cmds / sizeof cmds[0])

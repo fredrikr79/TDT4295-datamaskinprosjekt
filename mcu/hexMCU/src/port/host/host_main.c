@@ -19,7 +19,6 @@ static void usage(const char *prog)
            "  --mhz=N        OCTOSPI clock in MHz (default 20)\n"
            "  --lanes=N      1, 4 or 8 (default 8)\n"
            "  --errors=N     %% of transfers that fail (default 0)\n"
-           "  --card=PATH    FAT image to use as the SD card\n"
            "  -h, --help     this text\n", prog);
 }
 
@@ -39,7 +38,6 @@ int main(int argc, char **argv)
     double      mhz    = 20.0;
     unsigned    lanes  = 8;
     unsigned    errors = 0;
-    const char *card   = getenv("CARD_IMAGE");   /* NULL when unset */
     const char *v;
 
     for (int i = 1; i < argc; i++) {
@@ -52,8 +50,6 @@ int main(int argc, char **argv)
             lanes = (unsigned)strtoul(v, NULL, 10);
         } else if (arg_val(argv[i], "--errors=", &v)) {
             errors = (unsigned)strtoul(v, NULL, 10);
-        } else if (arg_val(argv[i], "--card=", &v)) {
-            card = v;
         } else {
             fprintf(stderr, "unknown option: %s\n", argv[i]);
             usage(argv[0]);
@@ -63,10 +59,6 @@ int main(int argc, char **argv)
 
     host_fpga_set_clock(mhz, lanes);
     host_fpga_set_error_rate(errors);
-
-    /* Nothing opens the image here -- disk_initialize does, on the first
-     * f_mount inside myMain. A bad path shows up as FR_NOT_READY there. */
-    if (card) host_disk_set_image(card);
 
     if (display_init("hexmcu fake fpga", 2))
         atexit(display_shutdown);

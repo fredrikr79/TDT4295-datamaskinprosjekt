@@ -59,7 +59,7 @@ static struct {
     uint8_t  out[OUT_FIFO];     /* answer FIFO                              */
     uint16_t out_len, out_pos;
     bool     sim_running;
-    uint16_t session;           /* new on every reset, reported by INFO     */
+    uint32_t session;           /* new on every reset, reported by INFO     */
     uint64_t next_sync_ns;      /* 0 = not started                          */
 } ff;
 
@@ -238,7 +238,7 @@ int32_t fake_fpga_write(const transport_hdr_t *h, const uint8_t *data,
             (uint8_t)(FAKE_W  >> 8), (uint8_t)FAKE_W,
             (uint8_t)(FAKE_H  >> 8), (uint8_t)FAKE_H,
             (uint8_t)(MAX_CMD >> 8), (uint8_t)MAX_CMD,
-            (uint8_t)(ff.session >> 8), (uint8_t)ff.session,
+            (uint8_t)(ff.session >> 24), (uint8_t)(ff.session >> 16), (uint8_t)(ff.session >> 8),(uint8_t)ff.session
         };
         answer_bytes(info, sizeof info);
         break;
@@ -291,7 +291,9 @@ void fake_fpga_reset(void)
 
     /* A fresh id per "power-up", like an FPGA that just got configured. */
     srand((unsigned)time(NULL));
-    ff.session = (uint16_t)(rand() & 0xFFFF);
+    ff.session = (uint32_t)(rand() & 0xFFFF);
+    ff.session = ff.session | (uint32_t)(rand() & 0xFFFF) << 16;
+
 
     LOG_INFO("fake fpga: %ux%u, N=%u, %u bytes/pixel, session 0x%04X, "
              "ready %d us, sync %u Hz", FAKE_W, FAKE_H, MAX_CMD, PIXEL_BYTES,

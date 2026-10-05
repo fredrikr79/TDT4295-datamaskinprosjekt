@@ -22,11 +22,9 @@ add_subdirectory(${APP_ROOT}/third_party/SDL
 #   test_host    the fpga.c example (test_host.c has its own main loop)
 add_library(hexmcu_host_common OBJECT
     ${APP_SOURCES}
-    ${FATFS_SOURCES}
     ${APP_ROOT}/src/port/host/io_stdio.c
     ${APP_ROOT}/src/port/host/platform_host.c
     ${APP_ROOT}/src/port/host/transport_host.c
-    ${APP_ROOT}/src/port/host/diskio_host.c
     ${APP_ROOT}/src/port/host/display_host.c
     ${APP_ROOT}/src/port/host/fake_fpga.c
 )
@@ -36,13 +34,11 @@ target_link_libraries(hexmcu_host_common PUBLIC SDL3::SDL3)
 
 target_include_directories(hexmcu_host_common PUBLIC
     ${APP_INCLUDES}
-    ${FATFS_INCLUDES}
     ${APP_ROOT}/src/port/host
 )
 
 target_compile_definitions(hexmcu_host_common PUBLIC
     LOG_LEVEL=LOG_LEVEL_DEBUG
-    DEFAULT_CARD_IMAGE="${CMAKE_CURRENT_SOURCE_DIR}/card.img"
 )
 
 target_compile_options(hexmcu_host_common PUBLIC

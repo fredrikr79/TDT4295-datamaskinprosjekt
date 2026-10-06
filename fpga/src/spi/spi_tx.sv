@@ -18,8 +18,7 @@ module spi_tx #(
     out_full,
     out_ready,
 
-    output logic tx_r_en,
-    tx_w_en
+    output logic tx_r_en
 );
 
   import spi_pck::*;

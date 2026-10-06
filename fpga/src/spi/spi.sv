@@ -24,9 +24,14 @@ module spi #(
 
   import spi_pck::*;
 
+  // FIFO states
+  reg in_empty;
+  reg out_full;
+
   // STATE / CMD TRACKERS
   spi_pck::state_e state;
   spi_pck::opcode_e opcode;
+  reg proc_done;
 
   // RESET
   reg rst_en = 1'b0;  // programatic reset

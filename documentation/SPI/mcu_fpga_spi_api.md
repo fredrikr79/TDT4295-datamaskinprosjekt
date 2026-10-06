@@ -6,7 +6,7 @@ MCU waits READY
 health_check -> ECHO 100 bytes -> resend until correct
 MCU issues boot / init cmd response:
     Resolution -> [16 bit X resolution][16 bit Y resolution]
-    size buffers -> [16 bit IN_SIZE][16 bit OUT_SIZE]
+    size buffers -> [16 bit buffer size]
     sessionID -> [32 bit random ID]
 Await READY -> done
 
@@ -16,7 +16,7 @@ SYNC signal,
 FAILED / ACKNACK flag 3 bits,
 
 ## Commands
-|      NAME       |      PAYLOAD     |         RETURN TYPE         |  OPCODE  |  OPCODE HEX  | IMPLEMENTED |
+|      NAME       |      PAYLOAD     |           RETURNS           |  OPCODE  |  OPCODE HEX  | IMPLEMENTED |
 |-----------------|------------------|-----------------------------|----------|--------------|-------------|
 |1. ECHO          | [B1][B2] .. [BN] |  [B1][B2]...[BN]            |  0001    |  01          |yes          |
 |2. INFO          | VOID             |  [B1][B2]...[BN]            |  0001    |  01          |yes          |

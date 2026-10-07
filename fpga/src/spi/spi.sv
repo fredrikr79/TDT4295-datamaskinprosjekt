@@ -68,6 +68,7 @@ module spi #(
   reg [2:0] ck_rst_sync = 3'b000;
   reg [2:0] out_empty_sync = 3'b000;
 
+  // ck_sck domain signals synchronized into clk domain
   wire ck_ss_s = ck_ss_sync[2];
   wire ck_rst_s = ck_rst_sync[2];
   wire out_empty_s = out_empty_sync[2];

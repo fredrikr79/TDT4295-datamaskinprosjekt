@@ -40,7 +40,6 @@ module spi_fsm #(
         end
 
         ST_BUSY: begin
-          //TODO refactor into spi_proc, interface must be defined.
           case (opcode)
             ECHO: begin
               if (in_empty && proc_done) begin

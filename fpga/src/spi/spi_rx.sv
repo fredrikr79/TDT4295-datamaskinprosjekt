@@ -46,7 +46,7 @@ module spi_rx #(
 
   assign in_ready = ~in_wr_rst_busy && ~in_rd_rst_busy && ~in_full;
 
-  fifo_generator_1 in_queue (
+  in_buffer in_queue (
       .din(rx_capture),
       .dout(in_fifo),
       .almost_full(in_almost_full),

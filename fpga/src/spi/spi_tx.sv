@@ -39,7 +39,7 @@ module spi_tx #(
 
   reg tx_armed = 1'b0;
 
-  fifo_generator_2 out_queue (
+  out_buffer out_queue (
       .din(out_fifo),
       .dout(out_data),
       .almost_full(out_almost_full),

@@ -47,7 +47,7 @@ module info #(
     else if(!out_full) begin
         info_done <= 1'b0;
         info_w_en <= 1'b1;
-        info_fifo <= data[95 - cycle_counter*8 -: 8];
+        info_fifo <= data[79 - cycle_counter*8 -: 8];
         cycle_counter <= cycle_counter + 1;
     end
     else begin

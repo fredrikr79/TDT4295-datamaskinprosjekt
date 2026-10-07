@@ -7,10 +7,10 @@ module spi_processor #(
     in_empty,
     reset_s,
     clk,
-    ck_ss_s,
     output logic [7:0] out_fifo,
     output logic proc_w_en,
     proc_r_en,
+    proc_done,
     output spi_pck::opcode_e opcode
 );
 
@@ -23,8 +23,21 @@ module spi_processor #(
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic echo_w_en = 1'b0;
+  logic info_w_en = 1'b0;
   logic fail_w_en = 1'b0;
-  assign proc_w_en = echo_w_en | fail_w_en;
+  assign proc_w_en = echo_w_en | info_w_en | fail_w_en;
+
+  // Done signals
+  logic info_done = 1'b0;
+  logic echo_done = 1'b0;
+  assign proc_done = echo_done | info_done;
+
+  // Run signals
+  logic send_info = 1'b0;
+
+  // Output buffer muxing
+  logic [7:0] info_fifo = 8'h00;
+
 
   always_ff @(posedge clk) begin
 
@@ -36,14 +49,17 @@ module spi_processor #(
     if (reset_s) begin
       echo_r_en  <= 1'b0;
       echo_w_en <= 1'b0;
+      echo_done <= 1'b0;
       fail_w_en <= 1'b0;
       fail_r_en <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
       out_fifo <= 8'h00;
+      send_info <= 1'b0;
     end else begin
 
       echo_r_en  <= 1'b0;
       echo_w_en <= 1'b0;
+      echo_done <= 1'b0;
       fail_w_en <= 1'b0;
       fail_r_en <= 1'b0;
 
@@ -73,7 +89,20 @@ module spi_processor #(
                     out_fifo <= in_fifo;
                     echo_w_en <= 1'b1;
                     echo_r_en  <= 1'b1;
+                end else begin
+                    echo_done <= 1'b1;
                 end
+              end
+
+              INFO: begin
+                if (!info_done) begin
+                    send_info <= 1'b1;
+                    if (info_w_en) begin
+                      out_fifo <= info_fifo;
+                    end
+                end
+                else
+                    send_info <= 1'b0;
               end
 
               FAILED: begin
@@ -102,5 +131,14 @@ module spi_processor #(
       endcase
     end
   end
+
+  info info_cmd_processor(
+    .clk(clk),
+    .info_fifo(info_fifo),
+    .out_full(out_full),
+    .info_done(info_done),
+    .info_w_en(info_w_en),
+    .send_info(send_info)
+  );
 
 endmodule

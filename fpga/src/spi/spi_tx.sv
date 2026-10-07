@@ -18,8 +18,7 @@ module spi_tx #(
     out_full,
     out_ready,
 
-    output logic tx_r_en,
-    tx_w_en
+    output logic tx_r_en
 );
 
   import spi_pck::*;
@@ -40,7 +39,7 @@ module spi_tx #(
 
   reg tx_armed = 1'b0;
 
-  fifo_generator_2 out_queue (
+  out_buffer out_queue (
       .din(out_fifo),
       .dout(out_data),
       .almost_full(out_almost_full),

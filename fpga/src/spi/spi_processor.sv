@@ -23,12 +23,13 @@ module spi_processor #(
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic echo_w_en = 1'b0;
-  logic info_w_en = 1'b0;
+  logic info_w_en;
   logic fail_w_en = 1'b0;
+
   assign proc_w_en = echo_w_en | info_w_en | fail_w_en;
 
   // Done signals
-  logic info_done = 1'b0;
+  logic info_done;
   logic echo_done = 1'b0;
   assign proc_done = echo_done | info_done;
 
@@ -36,7 +37,7 @@ module spi_processor #(
   logic send_info = 1'b0;
 
   // Output buffer muxing
-  logic [7:0] info_fifo = 8'h00;
+  logic [7:0] info_fifo;
 
 
   always_ff @(posedge clk) begin

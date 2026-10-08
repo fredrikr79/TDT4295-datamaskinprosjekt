@@ -5,7 +5,10 @@
     let pkgs = nixpkgs.legacyPackages.x86_64-linux;
     in {
       devShells.x86_64-linux.default = pkgs.mkShell {
-        packages = with pkgs; [ verilator python3 gnumake gcc freeglut libGL libGLU gtkwave ];
+        packages = with pkgs; [ verilator python3 gnumake gcc freeglut libGL libGLU gtkwave verible ];
+        shellHook = ''
+          export VERIBLE_LS_PROJECTROOT_OVERRIDE="$(git rev-parse --show-toplevel)/fpga"
+        '';
       };
     };
 }

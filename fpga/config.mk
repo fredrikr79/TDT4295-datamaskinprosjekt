@@ -1,12 +1,12 @@
 GlobalClockFrequency ?= 100_000_000
-LeftPorch ?= 40
-ActiveWidth ?= 854
-RightPorch ?= 8
-HorizontalSync ?= 32
-TopPorch ?= 6
-ActiveHeight ?= 480
-BottomPorch ?= 15
-VerticalSync ?= 8
+LeftPorch ?= 48
+ActiveWidth ?= 640
+RightPorch ?= 16
+HorizontalSync ?= 96
+TopPorch ?= 93
+ActiveHeight ?= 360
+BottomPorch ?= 70
+VerticalSync ?= 2
 FPS ?= 60
 
 .ONESHELL:

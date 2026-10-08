@@ -1,4 +1,4 @@
-module decoding_circuit (
+module vga_decoding_circuit (
     input vga_sync_params::x_coordinate_t horizontal_count,
     input vga_sync_params::y_coordinate_t vertical_count,
     output logic h_sync,

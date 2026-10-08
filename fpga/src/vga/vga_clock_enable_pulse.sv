@@ -1,4 +1,4 @@
-module clock_enable_pulse #(
+module vga_clock_enable_pulse #(
     parameter int unsigned N = 10
 ) (
     input  logic clk,
@@ -10,7 +10,7 @@ module clock_enable_pulse #(
   localparam int unsigned CountWidth = (N > 1) ? $clog2(N) : 1;
   logic [CountWidth-1:0] count;
 
-  mod_n_counter #(
+  vga_mod_n_counter #(
       .N(N)
   ) u_counter (
       .clk   (clk),

@@ -2,7 +2,7 @@ module cells (
     input  wire                             clk,
     input  wire [3:2]                       sw,
 
-    input logic                             active_area, 
+    input logic                             active_area,
                                             pixel_pulse,
 
     input vga_sync_params::x_coordinate_t   coord_x,

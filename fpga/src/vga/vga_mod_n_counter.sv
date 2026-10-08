@@ -1,4 +1,4 @@
-module mod_n_counter #(
+module vga_mod_n_counter #(
     parameter int unsigned N = 10,
     localparam int unsigned WIDTH = (N > 1) ? $clog2(N) : 1
 ) (

@@ -1,4 +1,4 @@
-module vga_controller #(
+module vga #(
 ) (
     input logic clk,
     reset,

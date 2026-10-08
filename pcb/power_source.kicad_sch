@@ -1381,15 +1381,29 @@
 		)
 		(uuid "f18521e0-d68f-44b1-9d71-ac6145b83322")
 	)
-	(label "5V_IN"
+	(global_label "5V_IN"
+		(shape input)
 		(at 185.42 60.96 0)
+		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
-		(uuid "1330dcff-5f15-4b0b-beaa-9e922f44ffb0")
+		(uuid "18841ea7-0b7d-4a11-a3b0-027c00b7f023")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 193.6062 60.96 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
 	)
 	(symbol
 		(lib_id "power:GND")

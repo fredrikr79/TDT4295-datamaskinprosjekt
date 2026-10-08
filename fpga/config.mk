@@ -16,11 +16,11 @@ src/config_pkg.sv: src
 	package config_pkg;
 	    parameter int unsigned GlobalClockFrequency = $(GlobalClockFrequency);
 	    parameter int unsigned LeftPorch = $(LeftPorch);
-	    parameter int unsigned ActiveWidth = $(ActiveWidth);
+	    parameter reg [15:0] ActiveWidth = $(ActiveWidth);
 	    parameter int unsigned RightPorch = $(RightPorch);
 	    parameter int unsigned HorizontalSync = $(HorizontalSync);
 	    parameter int unsigned TopPorch = $(TopPorch);
-	    parameter int unsigned ActiveHeight = $(ActiveHeight);
+	    parameter reg [15:0] ActiveHeight = $(ActiveHeight);
 	    parameter int unsigned BottomPorch = $(BottomPorch);
 	    parameter int unsigned VerticalSync = $(VerticalSync);
 	    parameter int unsigned FPS = $(FPS);

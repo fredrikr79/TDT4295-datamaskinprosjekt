@@ -39,9 +39,9 @@
         "other_text_thickness": 0.15,
         "other_text_upright": false,
         "pads": {
-          "drill": 0.8,
-          "height": 1.27,
-          "width": 1.27
+          "drill": 0.25,
+          "height": 0.508,
+          "width": 0.508
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -76,7 +76,40 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "hole_clearance|59130000|112950000|03ed13e5-b6ee-4d76-99cd-0a84b5be77ce|527dcab3-13e0-423e-be89-6bd5a070a923",
+          ""
+        ],
+        [
+          "hole_clearance|59130000|112950000|2261c5cc-5eba-4f03-9c6c-c82943e0f14d|527dcab3-13e0-423e-be89-6bd5a070a923",
+          ""
+        ],
+        [
+          "hole_clearance|59130000|119050000|600960f9-c485-46a8-8b50-94f5cc4d4b50|cb7ef56f-f3b2-4655-856a-f628e6df070b",
+          ""
+        ],
+        [
+          "hole_clearance|59130000|119050000|a8ebd277-eae6-4dbe-aca9-106369854d5d|cb7ef56f-f3b2-4655-856a-f628e6df070b",
+          ""
+        ],
+        [
+          "hole_clearance|59130000|86450000|3a23a01f-3f9c-4e8b-8d1b-fa7483163b35|be6c0a2b-b5b2-41cd-9ebf-a6b97ffe6346",
+          ""
+        ],
+        [
+          "hole_clearance|59130000|86450000|81dcddbc-1805-4aeb-8817-43d2f5ed91bf|be6c0a2b-b5b2-41cd-9ebf-a6b97ffe6346",
+          ""
+        ],
+        [
+          "hole_clearance|59130000|92550000|6f11ad65-fb75-4c6c-bac4-9fb0f0e416da|79104ce3-ea29-4626-acf7-ee08bca0e6f4",
+          ""
+        ],
+        [
+          "hole_clearance|59130000|92550000|c22210c6-35c2-475c-9768-106015fbc852|79104ce3-ea29-4626-acf7-ee08bca0e6f4",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -107,7 +140,7 @@
         "items_not_allowed": "error",
         "length_out_of_range": "error",
         "lib_footprint_issues": "warning",
-        "lib_footprint_mismatch": "warning",
+        "lib_footprint_mismatch": "ignore",
         "malformed_courtyard": "error",
         "microvia_drill_out_of_range": "error",
         "mirrored_text_on_front_layer": "warning",
@@ -154,14 +187,14 @@
         "min_hole_to_hole": 0.25,
         "min_microvia_diameter": 0.2,
         "min_microvia_drill": 0.1,
-        "min_resolved_spokes": 2,
+        "min_resolved_spokes": 1,
         "min_silk_clearance": 0.0,
         "min_text_height": 0.8,
         "min_text_thickness": 0.08,
         "min_through_hole_diameter": 0.25,
         "min_track_width": 0.15,
-        "min_via_annular_width": 0.15,
-        "min_via_diameter": 0.6,
+        "min_via_annular_width": 0.125,
+        "min_via_diameter": 0.5,
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": true
       },
@@ -210,7 +243,8 @@
         }
       ],
       "track_widths": [
-        0.0
+        0.0,
+        0.5
       ],
       "tuning_pattern_settings": {
         "diff_pair_defaults": {
@@ -255,7 +289,18 @@
       "mpn": "",
       "sch_revision": ""
     },
-    "layer_pairs": [],
+    "layer_pairs": [
+      {
+        "bottomLayer": 8,
+        "enabled": true,
+        "topLayer": 0
+      },
+      {
+        "bottomLayer": 10,
+        "enabled": true,
+        "topLayer": 0
+      }
+    ],
     "layer_presets": [],
     "viewports": []
   },
@@ -581,6 +626,26 @@
         "via_diameter": 0.6,
         "via_drill": 0.25,
         "wire_width": 6
+      },
+      {
+        "name": "POWER",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 1,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.5,
+        "tuning_profile": "",
+        "via_diameter": 0.6,
+        "via_drill": 0.25
+      },
+      {
+        "diff_pair_gap": 0.152,
+        "diff_pair_width": 0.22,
+        "name": "USB Data",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 0,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.15,
+        "tuning_profile": ""
       }
     ],
     "meta": {
@@ -588,7 +653,32 @@
     },
     "net_colors": null,
     "netclass_assignments": null,
-    "netclass_patterns": []
+    "netclass_patterns": [
+      {
+        "netclass": "POWER",
+        "pattern": "POWER_IN"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "*1V0*"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "*1V8*"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "*3V3*"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "*5V*"
+      },
+      {
+        "netclass": "USB Data",
+        "pattern": "USB*"
+      }
+    ]
   },
   "pcbnew": {
     "last_paths": {
@@ -787,7 +877,7 @@
         "uuid": "603dd496-f9c4-4a31-9104-19eec41ebc98"
       }
     ],
-    "used_designators": "L1-6,L8,CR1-2,#FLG1-8,C1-120,FB1-2,SW1-2,U1-10,#PWR1-98,#PWR100-102,D1-16,Y1-5,J1-8,JP1,R1-60,STM32UF9NJH6Q_CUSTOM1-3,Q1-2",
+    "used_designators": "Y1-5,#PWR1-98,#PWR100-102,D1-16,Q1-2,R1-60,STM32UF9NJH6Q_CUSTOM1-3,JP1,SW1-2,C1-120,FB1-2,U1-10,#FLG1-8,CR1-2,L1-6,L8,J1-8",
     "variants": []
   },
   "sheets": [

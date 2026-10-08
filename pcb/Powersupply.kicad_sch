@@ -1254,7 +1254,7 @@
 					)
 				)
 			)
-			(property "Footprint" "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias"
+			(property "Footprint" "TPS54294PWP:PWP16_2P31X2P46"
 				(at 29.464 14.986 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1670,7 +1670,7 @@
 							)
 						)
 					)
-					(number "17"
+					(number "EPAD"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -5031,16 +5031,6 @@
 		)
 		(uuid "fef77926-7be7-412b-8395-bb8478a8dc5e")
 	)
-	(label "5V_IN"
-		(at 50.8 33.02 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "2068356a-2911-4542-8412-3fae2550c84d")
-	)
 	(label "1V0_OUT"
 		(at 222.25 20.32 0)
 		(effects
@@ -5080,16 +5070,6 @@
 			(justify left bottom)
 		)
 		(uuid "aa7db5a7-cbd3-4cc3-ad33-aff99ef92143")
-	)
-	(label "5V_IN"
-		(at 215.9 77.47 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e0ffc9de-3fdf-4cdd-980f-56ea50ca8640")
 	)
 	(label "1V0_OUT"
 		(at 215.9 80.01 0)
@@ -5178,6 +5158,65 @@
 					(color 15 0 171 1)
 				)
 				(justify left)
+			)
+		)
+	)
+	(global_label "5V_IN"
+		(shape input)
+		(at 215.9 77.47 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ab2c38b3-79e2-45c8-b609-0e37286ba2f5")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 207.7138 77.47 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+	)
+	(global_label "POWER_IN"
+		(shape input)
+		(at 50.8 33.02 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "f5fc193b-1f70-43fc-ba11-c2f9b1644ff3")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 38.441 33.02 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Extra" "5V"
+			(at 39.116 32.766 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(color 15 0 171 1)
+				)
+				(justify right)
 			)
 		)
 	)
@@ -6745,7 +6784,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical_SMD"
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical"
 			(at 228.6 82.55 0)
 			(hide yes)
 			(show_name no)
@@ -8119,7 +8158,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias"
+		(property "Footprint" "TPS54294PWP:PWP16_2P31X2P46"
 			(at 122.174 150.114 0)
 			(hide yes)
 			(show_name no)
@@ -8163,7 +8202,7 @@
 		(pin "12"
 			(uuid "923fda70-7d23-4bdd-b052-f23e3b8bf1f8")
 		)
-		(pin "17"
+		(pin "EPAD"
 			(uuid "f6aeea31-86ac-438f-9fc4-0d01d93dbe9f")
 		)
 		(pin "16"

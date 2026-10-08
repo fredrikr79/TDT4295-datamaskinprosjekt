@@ -1,0 +1,108 @@
+cmake_minimum_required(VERSION 3.22)
+
+#
+# This file is generated only once,
+# and is not re-generated if converter is called multiple times.
+#
+# User is free to modify the file as much as necessary
+#
+
+# Setup compiler settings
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+
+
+# Define the build type
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug")
+endif()
+
+# Set the project name
+set(CMAKE_PROJECT_NAME hexMCU)
+
+# Enable compile command to ease indexing with e.g. clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
+
+# Core project settings
+project(${CMAKE_PROJECT_NAME})
+message("Build type: " ${CMAKE_BUILD_TYPE})
+
+# ---------------------------------------------------------------------
+# USB controller: fsdev = U535/U545 (Nucleo), dwc2 = U595/U5A5 (OTG_HS)
+# ---------------------------------------------------------------------
+set(USB_IP fsdev)
+# set(USB_IP dwc2)
+
+message("Filesystem backend: " ${FS_BACKEND})
+
+# Include sources.cmake
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sources.cmake)
+
+# Enable CMake support for ASM and C languages
+enable_language(C ASM)
+
+# Create an executable object type
+add_executable(${CMAKE_PROJECT_NAME})
+
+# Add STM32CubeMX generated sources
+add_subdirectory(cmake/stm32cubemx)
+
+# Link directories setup
+target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user defined library search paths
+)
+
+# Add sources to executable
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    ${APP_SOURCES}
+    src/port/stm32/io_uart.c
+    src/port/stm32/platform_stm32.c
+    src/port/stm32/transport_ospi.c
+)
+
+# Add include paths
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user defined include paths
+    ${APP_INCLUDES}
+)
+
+
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    ${TINYUSB_SOURCES}
+    src/port/stm32/usb_host_stm32.c
+)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${TINYUSB_INCLUDES}
+    src/port/stm32/usb          # tusb_config.h lives here
+)
+
+if(USB_IP STREQUAL "fsdev")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/hcd_stm32_fsdev.c
+        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/fsdev_common.c
+    )
+elseif(USB_IP STREQUAL "dwc2")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/hcd_dwc2.c
+        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/dwc2_common.c
+    )
+else()
+    message(FATAL_ERROR "USB_IP must be fsdev or dwc2, got '${USB_IP}'")
+endif()
+
+# Add project symbols (macros)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    # Add user defined symbols
+    LOG_LEVEL=LOG_LEVEL_INFO
+)
+
+# Remove wrong libob.a library dependency when using cpp files
+list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
+
+# Add linked libraries
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    stm32cubemx
+
+    # Add user defined libraries
+)

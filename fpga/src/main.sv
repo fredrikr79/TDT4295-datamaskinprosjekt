@@ -44,7 +44,11 @@ module main (
       .coord_x(coord_x),
       .coord_y(coord_y),
       .active_area(active_area),
-      .pixel_pulse(pixel_pulse)
+      .pixel_pulse(pixel_pulse),
+      .vga_r(vga_r),
+      .vga_g(vga_g),
+      .vga_b(vga_b),
+      .color(color)
   );
 
   cells cell_controller (

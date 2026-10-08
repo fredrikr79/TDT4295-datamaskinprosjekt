@@ -6,11 +6,9 @@ module cell_renderer (
 
     output wire [cell_pkg::AddrBits-1:0] read_addr,
     input cell_pkg::cell_word_t          read_data,
-    output color_pkg::color_t color
+    output layer_pkg::layer_px_t pixel
 );
   import cell_pkg::*;
-
-  localparam color_pkg::color_t BlankColor = '{red: 4'h0, green: 4'h0, blue: 4'h0};
 
   wire in_grid = active_area
       && (coord_x < vga_sync_params::x_coordinate_t'(GridWidth))
@@ -27,7 +25,7 @@ module cell_renderer (
   assign material = read_data[get_cell_index(grid_x)];
 
   always_comb begin
-    color = BlankColor;  // VGA requires black outside the active area
-    if (in_grid) color = props(material).color;
+    pixel = layer_pkg::TransparentPixel;
+    if (in_grid) pixel = layer_pkg::gen_layer_px(props(material).color);
   end
 endmodule

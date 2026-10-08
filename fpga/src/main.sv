@@ -35,6 +35,13 @@ module main (
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
 
+  localparam int unsigned NumLayers = 3;
+  localparam int unsigned LayerCells = 0;
+  localparam int unsigned LayerGol = 1;
+  localparam int unsigned LayerHud = 2;
+
+  layer_pkg::layer_px_t layers[NumLayers];
+
   vga vga_controller (
       .clk(clk),
       .reset(sw[3]),
@@ -58,6 +65,15 @@ module main (
       .pixel_pulse(pixel_pulse),
       .coord_x(coord_x),
       .coord_y(coord_y),
+      .pixel(layers[LayerCells])
+  );
+
+
+  compositor #(
+      .NumLayers(NumLayers)
+  ) layer_compositor (
+      .active_area(active_area),
+      .layers(layers),
       .color(color)
   );
 

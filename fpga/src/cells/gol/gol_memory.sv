@@ -9,7 +9,7 @@ module gol_row_delay #(
     output wire data_out
 );
 
-	// Declares to create a SRLC32E shift-register out of sr (srl_style=srl)
+  // Declares to create a SRLC32E shift-register out of sr (srl_style=srl)
   (* srl_style = "srl" *) logic [Depth-1:0] sr = '0;
 
   always_ff @(posedge clk) begin
@@ -22,7 +22,7 @@ module gol_row_delay #(
 endmodule
 
 module gol_ring_buffer #(
-    parameter int unsigned Depth = gol::pkg::RingDepth
+    parameter int unsigned Depth = gol_pkg::RingDepth
 ) (
     input  wire  clk,
     input  wire  en,
@@ -38,7 +38,7 @@ module gol_ring_buffer #(
   logic target_gol_cell = 1'b0;
 
   always_ff @(posedge clk) begin
-    if (en) begin 
+    if (en) begin
       addr <= (addr == AddrBits'(Depth - 1)) ? '0 : addr + 1'b1; // Looparound if at end of memory
     end
   end

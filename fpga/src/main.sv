@@ -68,6 +68,13 @@ module main (
       .pixel(layers[LayerCells])
   );
 
+  gol gol_controller (
+      .clk(clk),
+      .reset(sw[3]),
+      .active_area(active_area),
+      .pixel_pulse(pixel_pulse),
+      .pixel(layers[LayerGol])
+  );
 
   compositor #(
       .NumLayers(NumLayers)

@@ -8848,6 +8848,16 @@
 		)
 		(uuid "61c41ae0-25dd-455c-8b5a-c5043c064050")
 	)
+	(label "USER_BUTTON"
+		(at 40.64 270.51 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "6e33fb85-d67a-436b-bc40-c7621348932f")
+	)
 	(label "MCU_STLINK_JCLK"
 		(at 217.17 104.14 0)
 		(effects
@@ -8857,6 +8867,16 @@
 			(justify left bottom)
 		)
 		(uuid "8d9e85e5-9afb-4629-a096-148a6c191e3c")
+	)
+	(label "USER_BUTTON"
+		(at 217.17 185.42 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "9dc81217-b6b0-4e46-b620-3395a9929b3d")
 	)
 	(label "SD_CMD"
 		(at 218.44 200.66 0)
@@ -9498,30 +9518,6 @@
 			)
 		)
 	)
-	(global_label "USER_BUTTON"
-		(shape bidirectional)
-		(at 40.64 270.51 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "993051e5-9025-4914-8dfb-537449e191d8")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 23.4202 270.51 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
-			)
-		)
-	)
 	(global_label "CC1"
 		(shape bidirectional)
 		(at 220.98 106.68 0)
@@ -9631,30 +9627,6 @@
 		(uuid "c1846bdb-3fb2-4821-ae77-c183872d313a")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 229.2871 152.4 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-	)
-	(global_label "USER_BUTTON"
-		(shape bidirectional)
-		(at 217.17 185.42 0)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left)
-		)
-		(uuid "de8d3e3c-edb4-4557-997e-47b03ef2d22b")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 234.3898 185.42 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)

@@ -14,3 +14,12 @@ void myMain(void)
         cli_poll();
     }
 }
+
+
+
+// example
+// static void myfunc (const fpga_cmd_t *c, fpga_err_t e)
+
+// fpga_cmd_t c = fpga_cmd_read_sim_box(area_around(projectile), around_proj,   AREA_BYTES);
+// c.done = myfunc;
+// fpga_status_t st = fpga_submit(&c); 

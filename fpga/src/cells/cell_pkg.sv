@@ -43,7 +43,6 @@ package cell_pkg;
   localparam material_t MatPortal = 4'd4;
   localparam material_t MatLava = 4'd5;
   localparam material_t MatAcid = 4'd6;
-  localparam material_t MatGameOfLife = 4'd7;
 
   // density: heavier materials sink in lighter ones
   // falls: pulled downward by gravity.
@@ -100,13 +99,6 @@ package cell_pkg;
           falls: 1'b1,
           spreads: 1'b1,
           color: '{red: 4'h8, green: 4'hF, blue: 4'h0}
-      };
-      MatGameOfLife:
-      return '{
-          density: 4'd15,
-          falls: 1'b0,
-          spreads: 1'b0,
-          color: '{red: 4'hF, green: 4'hF, blue: 4'hF}
       };
       default:  // MatAir, and every unassigned id
       return '{

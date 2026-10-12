@@ -118,21 +118,21 @@ module spi_processor #(
 
               WRITE_LINE: begin
                 if(!write_line_done) begin
-                  send__line_done <= 1'b1;
+                  send_write_line_done <= 1'b1;
                 end
                 else
-                  send__line <= 1'b0;
+                  send_write_line <= 1'b0;
               end
 
               READ_LINE: begin
                 if(!read_line_done) begin
-                  send__line_done <= 1'b1;
+                  send_read_line_done <= 1'b1;
                   if(_w_en) begin
                     out_fifo <= read_line_fifo;
                   end
                 end
                 else
-                  send__line <= 1'b0;
+                  send_read_line <= 1'b0;
               end
 
               FAILED: begin

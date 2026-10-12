@@ -171,4 +171,22 @@ module spi_processor #(
     .send_info(send_info)
   );
 
+  write_line write_line_cmd_processor(
+    .clk(clk),
+    .ck_rst(ck_rst),
+    .buffer(), // TODO add memory input buffer
+    .in_fifo(in_fifo),
+    .write_line_done(write_line_done),
+    .write_line_r_en(write_line_r_en),
+  );
+
+  read_line read_line_cmd_processor(
+    .clk(clk),
+    .ck_rst(ck_rst),
+    .buffer(), // TODO add memory output buffer
+    .read_line_fifo(read_line_fifo),
+    .read_line_done(read_line_done),
+    .read_line_w_en(read_line_w_en),
+  );
+
 endmodule

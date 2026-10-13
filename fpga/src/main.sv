@@ -20,8 +20,9 @@ module main (
 
     inout wire acknack,
 
-    output wire led,
-    led0_r,
+    output wire [3:0] led,
+
+    output wire led0_r,
     led0_g,
     led0_b,
     ready,
@@ -75,6 +76,9 @@ module main (
       .pixel_pulse(pixel_pulse),
       .pixel(layers[LayerGol])
   );
+
+  // TODO: Implement HUD layer. Temporarily always transparent. Remove after implementing the HUD layer.
+  assign layers[LayerHud] = layer_pkg::TransparentPixel;
 
   compositor #(
       .NumLayers(NumLayers)

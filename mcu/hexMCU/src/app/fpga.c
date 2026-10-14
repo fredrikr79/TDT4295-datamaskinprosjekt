@@ -186,7 +186,7 @@ static void start_head(void)
 static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static uint32_t be32(const uint8_t *p) { return (uint32_t)((uint32_t) p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]); }
 
-/* INFO answer: [W][H][N][SID], 16 bits each, MSB first. */
+/* INFO answer: [W][H][N] 16 bits each, [SID] 32 bits, MSB first. */
 static fpga_err_t parse_info(void)
 {
     fpga_info_t in = {
@@ -201,8 +201,8 @@ static fpga_err_t parse_info(void)
         return FPGA_ERR_BAD_INFO;
 
     if (info.valid && info.session != in.session)
-        LOG_INFO("new FPGA session 0x%08X (was 0x%08X)",
-                 in.session, info.session);
+        LOG_INFO("new FPGA session 0x%08lX (was 0x%08lX)",
+                 (unsigned long)in.session, (unsigned long)info.session);
     info = in;
     return FPGA_ERR_NONE;
 }
@@ -404,7 +404,7 @@ fpga_cmd_t fpga_cmd_read_line(uint16_t x, uint16_t y, uint16_t n,
                          .rx = buf, .rx_len = len, .kind = FPGA_KIND_READ };
 }
 
-/* Box header: x1,y1 in the address phase, x2,y2 in 32-bit alt bytes. */
+/* Box header: X,Y in the address phase, W,H in the 32-bit alt bytes. */
 static transport_hdr_t box_hdr(uint8_t op, fpga_box_t b, uint16_t len)
 {
     return (transport_hdr_t){ .opcode = op,

@@ -10,6 +10,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/frame_sync.c
     ${APP_ROOT}/src/app/game.c
     ${APP_ROOT}/src/app/usb_input.c
+    ${APP_ROOT}/src/app/render.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

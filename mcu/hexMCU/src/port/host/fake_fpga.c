@@ -47,9 +47,6 @@
 #define FRAME_HZ      30u           /* SYNC pulses: one per finished frame */
 #define FRAME_NS      (1000000000ull / FRAME_HZ)
 
-/* PROTOCOL: box = [X1][Y1][X2][Y2]. 1: X2,Y2 are width and height.
- * 0: X2,Y2 are the inclusive opposite corner. */
-#define BOX_IS_WH     1
 
 /* PROTOCOL: which layer the line commands work on. */
 #define LINE_LAYER    DISPLAY_HUD
@@ -130,19 +127,15 @@ static void answer_bytes(const uint8_t *src, uint16_t n)
     memcpy(ff.out, src, ff.out_len);
 }
 
-/* Box header fields -> start, width, height. */
+/* Box header fields -> start, width, height: X,Y in the address phase,
+ * W,H in the alt bytes (see fpga.h). */
 static void box_extent(const transport_hdr_t *h,
                        uint16_t *x, uint16_t *y, uint16_t *w, uint16_t *hh)
 {
-    uint16_t a = (uint16_t)(h->alt >> 16), b = (uint16_t)h->alt;
-    *x = h->x;
-    *y = h->y;
-#if BOX_IS_WH
-    *w = a;  *hh = b;
-#else
-    *w  = a >= h->x ? (uint16_t)(a - h->x + 1u) : 0u;
-    *hh = b >= h->y ? (uint16_t)(b - h->y + 1u) : 0u;
-#endif
+    *x  = h->x;
+    *y  = h->y;
+    *w  = (uint16_t)(h->alt >> 16);
+    *hh = (uint16_t)h->alt;
 }
 
 /* ---- header sanity ---------------------------------------------------- */
@@ -233,7 +226,7 @@ int32_t fake_fpga_write(const transport_hdr_t *h, const uint8_t *data,
     }
 
     case INFO_OPCODE: {
-        /* [W][H][N][SID], 16 bits each, MSB first */
+        /* [W][H][N] 16 bits each, [SID] 32 bits, MSB first */
         const uint8_t info[FPGA_INFO_BYTES] = {
             (uint8_t)(FAKE_W  >> 8), (uint8_t)FAKE_W,
             (uint8_t)(FAKE_H  >> 8), (uint8_t)FAKE_H,

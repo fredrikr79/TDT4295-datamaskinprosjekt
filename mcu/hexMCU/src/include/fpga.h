@@ -8,18 +8,23 @@
  * | ECHO          | 01 | -              | -               | [B1]..[BN]     | [B1]..[BN]
  * | Send_line     | 02 | [X][Y]         | [N]      (16b)  | pixels         | -
  * | Read_line     | 03 | [X][Y]         | [N]      (16b)  | -              | pixels
- * | Send_HUD_box  | 04 | [X1][Y1]       | [X2][Y2] (32b)  | pixels         | -
- * | Read_HUD_box  | 05 | [X1][Y1]       | [X2][Y2] (32b)  | -              | pixels
- * | Send_SIM_box  | 06 | [X1][Y1]       | [X2][Y2] (32b)  | pixels         | -
- * | Read_SIM_box  | 07 | [X1][Y1]       | [X2][Y2] (32b)  | -              | pixels
+ * | Send_HUD_box  | 04 | [X][Y]         | [W][H]   (32b)  | pixels         | -
+ * | Read_HUD_box  | 05 | [X][Y]         | [W][H]   (32b)  | -              | pixels
+ * | Send_SIM_box  | 06 | [X][Y]         | [W][H]   (32b)  | pixels         | -
+ * | Read_SIM_box  | 07 | [X][Y]         | [W][H]   (32b)  | -              | pixels
  * | Stop_SIM      | 08 | -              | -               | [XXXXXXX0]     | -
  * | Start_SIM     | 09 | -              | -               | [XXXXXXX1]     | -
  * | INFO          | 0A | -              | -               | -              | [W][H][N][SID]
  * ------------------------------------------------------------------------------------
+ * Boxes: X,Y is the top-left pixel, W the pixels per row, H the rows. The
+ * pixels are one stream, row by row: after W pixels the next row starts,
+ * so the last one lands at (X+W-1, Y+H-1). Build boxes with fpga_box().
+ *
  * Pixels are RGB565, 2 bytes each, MSB first. On the HUD layer 0xF81F
  * (magenta) means "empty": the SIM pixel below shows through.
  *
- * INFO answer, each field 16 bits MSB first (FPGA_INFO_BYTES in total):
+ * INFO answer, MSB first (FPGA_INFO_BYTES in total): W, H, N 16 bits each,
+ * SID 32 bits:
  *   W, H  size of the FPGA's screen in pixels
  *   N     size of the FPGA's input FIFO: no command, counting opcode,
  *         address and alt bytes, may be larger than this
@@ -119,7 +124,15 @@ typedef enum {
                                fpga_abort_all()                        */
 } fpga_err_t;
 
+/* A box on the wire: x1,y1 = top-left pixel, x2 = W (pixels per row),
+ * y2 = H (rows) -- see the table above. Make one with fpga_box(). */
 typedef struct { uint16_t x1, y1, x2, y2; } fpga_box_t;
+
+/* The box w x h pixels with its top-left corner at x, y. */
+static inline fpga_box_t fpga_box(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+    return (fpga_box_t){ .x1 = x, .y1 = y, .x2 = w, .y2 = h };
+}
 
 /* What INFO told us (or what the console set by hand). */
 typedef struct {

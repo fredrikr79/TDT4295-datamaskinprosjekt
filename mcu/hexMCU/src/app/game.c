@@ -9,16 +9,14 @@
 #include "frame_sync.h"
 #include "game.h"
 #include "usb_input.h"
-
-/* things the MCU side has to agree with the FPGA on */
-#define PX_BYTES        2u          /* RGB565, MSB first on the wire     */
-#define HUD_CLEAR       0xF81Fu     /* HUD colour key: see-through       */
-#define RGB565(r, g, b) ((uint16_t)((((r) & 0xF8u) << 8) | (((g) & 0xFCu) << 3) | ((b) >> 3)))
+#include "render.h"                 /* also PX_BYTES, HUD_CLEAR, RGB565 */
 
 /* tuning */
 #define PROBE_LEN       100u
 #define PROBE_RETRY_MS  200u
 #define FIRST_ROOM      0u
+#define CURSOR_SIZE     8
+#define CURSOR_COLOUR   RGB565(255, 255, 255)
 
 /* ======================================================================
  * The state machine
@@ -48,6 +46,7 @@ static uint16_t room = FIRST_ROOM;  /* the room on the FPGA / being loaded */
 static uint16_t next_room;          /* where the door leads: loaded after SAVE */
 
 static void run_enter(void);
+static void room_enter(void);
 
 static void go(state_t s)
 {
@@ -103,6 +102,7 @@ static void load_start(void)
 {
     LOG_INFO("loading room %u", room);
     /* TODO: reset load progress */
+    room_enter();
     go(S_LOAD);
 }
 
@@ -123,19 +123,30 @@ static bool load_poll(void)
 /* RUN: the game itself  */
 static struct {
     uint32_t sync_seen;         /* SYNC count we last started a frame at */
+    int32_t  cx, cy;            /* cursor position, follows the mouse    */
 } run;
 
-int x, y;
+static render_cube_t cursor = RENDER_CUBE_INIT(CURSOR_SIZE, CURSOR_COLOUR);
 
-/* Frames that went by while probing or loading don't count as missed. */
+static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
+{
+    return v < lo ? lo : v > hi ? hi : v;
+}
+
+/* Runs on every way into RUN, also after a resync that kept the session,
+ * so nothing here may reset the game. Frames that went by while probing
+ * or loading don't count as missed. */
 static void run_enter(void)
 {
     run.sync_seen = frame_sync_count();
-    /* TODO: set up per-room game state */
-    const fpga_info_t *in = fpga_link_info();
-    x = in->width / 2;
-    y = in->height / 2;
+}
 
+/* Per-room game state: from load_start(), once per room. */
+static void room_enter(void)
+{
+    const fpga_info_t *scr = fpga_link_info();
+    run.cx = (scr->width  - CURSOR_SIZE) / 2;
+    run.cy = (scr->height - CURSOR_SIZE) / 2;
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -143,33 +154,25 @@ static void run_frame(uint32_t n)
 {
     (void)n;
     /* TODO: update + draw. Walking through a door: game_change_room(to). */
+
+    /* busy: the last cursor frame isn't back yet, try again next frame */
+    render_cube(&cursor, (int16_t)run.cx, (int16_t)run.cy);
 }
 
 static void run_poll(void)
 {
-    //static uint32_t t;
-    // if (plat_millis() - t >= 20) {
-    //     t = plat_millis();
-    //     input_t in;
-    //     input_take(&in);
-    //     //input_log(&in);
-    // }
-
-    // accumilate x y even tho we are not on the next frame.
-    const fpga_info_t *screen = fpga_link_info();
+    /* Input every poll, not just on frames: the mouse adds up in between. */
+    const fpga_info_t *scr = fpga_link_info();
     input_t in;
     input_take(&in);
-    x += in->mouse_dx;
-    if(x<0)
-        x = 0;
-    if(x>screen->width):
-        x = screen->width;
-    y += in->mouse_dy;
+    /* input_log(&in); */
+    run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - CURSOR_SIZE);
+    run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - CURSOR_SIZE);
+
+    if (!render_cube_poll(&cursor)) { failed = true; return; }
 
     uint32_t n = frame_sync_take(&run.sync_seen);
     if (n) run_frame(n);
-    //same check for y
-
 }
 
 /* Leave the current room: save it, then load `to`.
@@ -188,8 +191,8 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
     if (err != FPGA_ERR_NONE) { failed = true; return; }
 
     const fpga_info_t *in = fpga_link_info();
-    LOG_INFO("fpga: %ux%u, N=%u, session 0x%04X",
-             in->width, in->height, in->max_cmd, in->session);
+    LOG_INFO("fpga: %ux%u, N=%u, session 0x%08lX",
+             in->width, in->height, in->max_cmd, (unsigned long)in->session);
 
     if (have_session && in->session == session) {
         /* same FPGA memory: what was sent is still there */
@@ -203,6 +206,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
          * here drops the room change; the player is still in `room`. */
         have_session = true;
         session      = in->session;
+        render_cube_forget(&cursor);    /* unknown what of ours it has */
         load_start();
     }
 }
@@ -214,7 +218,8 @@ static void resync(void)
     if (state == S_SAVE || state == S_LOAD || state == S_RUN)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */
-    failed   = false;            /* ...so clear this after them      */
+    render_cube_lost(&cursor);   /* ...so these come after them      */
+    failed   = false;
     retry_at = plat_millis();
     go(S_PROBE);
 }

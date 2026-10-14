@@ -7,6 +7,8 @@ module spi_processor #(
     in_empty,
     reset_s,
     clk,
+    mem_busy,
+    mem_data_on_wire,
     output logic proc_w_en,
     proc_r_en,
     proc_done,
@@ -60,7 +62,7 @@ module spi_processor #(
     // e.g in_r_en = cmd1_in_r_en | cmd2_in_r_en
 
     if (reset_s) begin
-      echo_r_en  <= 1'b0;
+      echo_r_en <= 1'b0;
       echo_w_en <= 1'b0;
       echo_done <= 1'b0;
       fail_w_en <= 1'b0;
@@ -74,7 +76,7 @@ module spi_processor #(
       send_read_line <= 1'b0;
     end else begin
 
-      echo_r_en  <= 1'b0;
+      echo_r_en <= 1'b0;
       echo_w_en <= 1'b0;
       echo_done <= 1'b0;
       fail_w_en <= 1'b0;
@@ -87,76 +89,69 @@ module spi_processor #(
         end
 
         ST_DECODE: begin
-           // USING FWFT FIFO's allowing us to peek at the read bus without popping.
-            // Each dispatched command decides for itself if it should pop the command
-            // By setting in_r_en <= 1'b1;
-            opcode <= spi_pck::opcode_e'(in_fifo[7:4]);
+          // USING FWFT FIFO's allowing us to peek at the read bus without popping.
+          // Each dispatched command decides for itself if it should pop the command
+          // By setting in_r_en <= 1'b1;
+          opcode <= spi_pck::opcode_e'(in_fifo[7:4]);
         end
 
         ST_BUSY: begin
-            case (spi_pck::opcode_e'(opcode))
+          case (spi_pck::opcode_e'(opcode))
 
-              // Register command handler here. they should own their own read/write signals.
-              // Register these in the in_r_en / out_w_en MUX assignments.
-              // Out_fifo is owned by this always_ff block and is the intended output register
-              // for any response data.
+            // Register command handler here. they should own their own read/write signals.
+            // Register these in the in_r_en / out_w_en MUX assignments.
+            // Out_fifo is owned by this always_ff block and is the intended output register
+            // for any response data.
 
-              ECHO: begin
-                if (!out_full && !in_empty) begin
-                    out_fifo <= in_fifo;
-                    echo_w_en <= 1'b1;
-                    echo_r_en  <= 1'b1;
+            ECHO: begin
+              if (!out_full && !in_empty) begin
+                out_fifo  <= in_fifo;
+                echo_w_en <= 1'b1;
+                echo_r_en <= 1'b1;
+              end else begin
+                echo_done <= 1'b1;
+              end
+            end
+
+            INFO: begin
+              if (!info_done) begin
+                send_info <= 1'b1;
+                if (info_w_en) begin
+                  out_fifo <= info_fifo;
+                end
+              end else send_info <= 1'b0;
+            end
+
+            WRITE_LINE: begin
+              if (!write_line_done) begin
+                send_write_line <= 1'b1;
+              end else send_write_line <= 1'b0;
+            end
+
+            READ_LINE: begin
+              if (!read_line_done) begin
+                send_read_line <= 1'b1;
+                if (_w_en) begin
+                  out_fifo <= read_line_fifo;
+                end
+              end else send_read_line <= 1'b0;
+            end
+
+            FAILED: begin
+              if (!out_full) begin
+                if (!in_empty) begin
+                  fail_r_en <= 1'b1;
                 end else begin
-                    echo_done <= 1'b1;
+                  out_fifo <= 8'hE0;
+                  fail_w_en <= 1'b1;
+                  opcode <= UNSET;
                 end
               end
+            end
 
-              INFO: begin
-                if (!info_done) begin
-                    send_info <= 1'b1;
-                    if (info_w_en) begin
-                      out_fifo <= info_fifo;
-                    end
-                end
-                else
-                    send_info <= 1'b0;
-              end
-
-              WRITE_LINE: begin
-                if(!write_line_done) begin
-                  send_write_line <= 1'b1;
-                end
-                else
-                  send_write_line <= 1'b0;
-              end
-
-              READ_LINE: begin
-                if(!read_line_done) begin
-                  send_read_line <= 1'b1;
-                  if(_w_en) begin
-                    out_fifo <= read_line_fifo;
-                  end
-                end
-                else
-                  send_read_line <= 1'b0;
-              end
-
-              FAILED: begin
-                if (!out_full) begin
-                  if(!in_empty) begin
-                    fail_r_en <= 1'b1;
-                  end
-                  else begin
-                    out_fifo <= 8'hE0;
-                    fail_w_en <= 1'b1;
-                    opcode <= UNSET;
-                  end
-                end
-              end
-
-              default: begin
-                opcode <= FAILED;
-              end
+            default: begin
+              opcode <= FAILED;
+            end
           endcase
         end
 
@@ -168,46 +163,46 @@ module spi_processor #(
     end
   end
 
-  info info_cmd_processor(
-    .clk(clk),
-    .info_fifo(info_fifo),
-    .out_full(out_full),
-    .info_done(info_done),
-    .info_w_en(info_w_en),
-    .send_info(send_info)
+  info info_cmd_processor (
+      .clk(clk),
+      .info_fifo(info_fifo),
+      .out_full(out_full),
+      .info_done(info_done),
+      .info_w_en(info_w_en),
+      .send_info(send_info)
   );
 
-  write_cons write_cons_cmd_processor(
-    .clk(clk),
-    .ck_rst(ck_rst),
-    .data_rdy(data_rdy),
-    .mem_busy(mem_busy),
-    .mem_len(mem_len),
-    .mem_addr(mem_addr),
-    .mem_func(mem_transaction),
-    .mem_in_fifo(mem_in),
-    .mem_toggle(mem_toggle),
-    .in_fifo(in_fifo),
-    .write_cons_fifo(write_cons_fifo),
-    .write_cons_done(write_cons_done),
-    .write_cons_r_en(write_cons_r_en)
+  write_cons write_cons_cmd_processor (
+      .clk(clk),
+      .ck_rst(ck_rst),
+      .data_rdy(data_rdy),
+      .mem_busy(mem_busy),
+      .mem_len(mem_len),
+      .mem_addr(mem_addr),
+      .mem_func(mem_transaction),
+      .mem_in_fifo(mem_in),
+      .mem_toggle(mem_toggle),
+      .in_fifo(in_fifo),
+      .write_cons_fifo(write_cons_fifo),
+      .write_cons_done(write_cons_done),
+      .write_cons_r_en(write_cons_r_en)
   );
 
-  read_cons read_cons_cmd_processor(
-    .clk(clk),
-    .ck_rst(ck_rst),
-    .data_rdy(data_rdy),
-    .in_fifo(in_fifo),
-    .mem_len(mem_len),
-    .mem_busy(mem_busy),
-    .mem_toggle(mem_toggle),
-    .mem_addr(mem_addr),
-    .mem_func(mem_func),
-    .mem_out_fifo(mem_out_fifo),
-    .read_cons_fifo(read_cons_fifo),
-    .read_cons_done(read_cons_done),
-    .read_cons_w_en(read_cons_w_en),
-    .read_cons_r_en(read_cons_r_en)
+  read_cons read_cons_cmd_processor (
+      .clk(clk),
+      .ck_rst(ck_rst),
+      .data_rdy(data_rdy),
+      .in_fifo(in_fifo),
+      .mem_len(mem_len),
+      .mem_busy(mem_busy),
+      .mem_toggle(mem_toggle),
+      .mem_addr(mem_addr),
+      .mem_func(mem_func),
+      .mem_out_fifo(mem_out_fifo),
+      .read_cons_fifo(read_cons_fifo),
+      .read_cons_done(read_cons_done),
+      .read_cons_w_en(read_cons_w_en),
+      .read_cons_r_en(read_cons_r_en)
   );
 
 endmodule

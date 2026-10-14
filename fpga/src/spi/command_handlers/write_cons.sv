@@ -4,6 +4,7 @@ module write_cons #(
     input wire clk,
     ck_rst,
     data_rdy,
+    mem_busy,
     input logic [7:0] in_fifo,
     output logic [7:0] write_cons_fifo,
     mem_len,

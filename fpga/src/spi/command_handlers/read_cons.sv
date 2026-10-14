@@ -4,6 +4,7 @@ module read_cons #(
     input wire clk,
     ck_rst,
     data_rdy,
+    mem_busy,
     input logic [7:0] mem_out_fifo,
     in_fifo,
     output logic [7:0] read_cons_fifo,
@@ -81,7 +82,7 @@ module read_cons #(
         end
         DATA: begin
           if (!mem_busy) begin
-            mem_func <= WRITE;
+            mem_func <= READ;
             mem_addr <= memAddr;
             state <= RX_WAIT;
           end

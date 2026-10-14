@@ -4,7 +4,7 @@ package mem_pkg;
     parameter int unsigned BytesPerGridPixel = 4'd2;
 
     parameter int unsigned SpriteMemLocationStart = config_pkg::ActiveWidth
-        *config_pkg::ActiveHeigth
+        *config_pkg::ActiveHeight
         * BytesPerGridPixel;
 
 
@@ -23,6 +23,6 @@ package mem_pkg;
     } mem_state_e;
 
     function static [32] GridPosToMemAddr (input logic [15:0] x, input logic [15:0] y);
-        return GridMemLocation + y * config_pkg::ActiveWidth + x;
+        return GridMemLocationStart + y * config_pkg::ActiveWidth + x;
     endfunction
 endpackage

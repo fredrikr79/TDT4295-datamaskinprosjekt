@@ -11,12 +11,12 @@ module spi_processor #(
     proc_r_en,
     proc_done,
     mem_toggle,
-    output logic [3:0] mem_transaction,
     output logic [7:0] out_fifo,
     mem_out,
     mem_in,
     mem_len,
     output logic [31:0] mem_addr,
+    output memory_pkg::transaction_e mem_transaction,
     output spi_pck::opcode_e opcode
 );
 
@@ -41,7 +41,7 @@ module spi_processor #(
   logic info_done;
   logic write_line_done;
   logic read_line_done;
-  assign proc_done = echo_done | info_done;
+  assign proc_done = echo_done | info_done | write_line_done | read_line_done;
 
   // Run signals
   logic send_info = 1'b0;
@@ -124,7 +124,7 @@ module spi_processor #(
 
               WRITE_LINE: begin
                 if(!write_line_done) begin
-                  send_write_line_done <= 1'b1;
+                  send_write_line <= 1'b1;
                 end
                 else
                   send_write_line <= 1'b0;
@@ -132,7 +132,7 @@ module spi_processor #(
 
               READ_LINE: begin
                 if(!read_line_done) begin
-                  send_read_line_done <= 1'b1;
+                  send_read_line <= 1'b1;
                   if(_w_en) begin
                     out_fifo <= read_line_fifo;
                   end
@@ -181,6 +181,7 @@ module spi_processor #(
     .clk(clk),
     .ck_rst(ck_rst),
     .data_rdy(data_rdy),
+    .mem_busy(mem_busy),
     .mem_len(mem_len),
     .mem_addr(mem_addr),
     .mem_func(mem_transaction),
@@ -198,6 +199,7 @@ module spi_processor #(
     .data_rdy(data_rdy),
     .in_fifo(in_fifo),
     .mem_len(mem_len),
+    .mem_busy(mem_busy),
     .mem_toggle(mem_toggle),
     .mem_addr(mem_addr),
     .mem_func(mem_func),

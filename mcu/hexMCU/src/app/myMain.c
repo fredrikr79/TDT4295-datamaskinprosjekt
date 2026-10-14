@@ -2,6 +2,7 @@
 #include "cli.h"
 #include "transport.h"
 #include "fpga.h"
+#include "usb_input.h"
 
 void myMain(void)
 {
@@ -12,6 +13,7 @@ void myMain(void)
         transport_poll();   /* fake FPGA timing on host; no-op on hardware */
         fpga_poll();        /* advance the running FPGA command, if any    */
         cli_poll();
+        usb_poll();
     }
 }
 

@@ -63,6 +63,12 @@ void usb_init(void);
 void usb_poll(void);            /* runs the backend; call it often    */
 void input_take(input_t *out);  /* snapshot + reset the per-frame parts */
 
+/* Debug: log what changed in a snapshot (keys and buttons down/up, wheel,
+ * connect/disconnect). Mouse movement is added up and logged at most
+ * 10 times a second. Call it with each snapshot you take. */
+void input_log(const input_t *in);
+const char *key_name(uint8_t key);  /* "W", "SPACE", "LSHIFT", "0x47" ... */
+
 static inline bool input_bit_(const uint8_t *map, uint8_t key)
 {
     return (map[key >> 3] >> (key & 7)) & 1u;

@@ -8,6 +8,9 @@
  * HUD pixel, unless it is DISPLAY_HUD_CLEAR, then the SIM pixel -- and
  * hands that to SDL as an RGB565 texture. 640x360 is ~230k pixels, cheap
  * enough to redo every frame, so nothing tracks what changed.
+ *
+ * Keyboard and mouse events belong to usb_backend_sdl.c; this file only
+ * handles quit (window close or Esc) and drops the other event types.
  * ====================================================================== */
 
 #include "display_host.h"
@@ -110,11 +113,17 @@ bool display_poll(void)
     if (now < next_frame_ns) return true;   /* not time for a frame yet */
     next_frame_ns = now + FRAME_NS;
 
-    SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_EVENT_QUIT) return false;
-        if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) return false;
-    }
+    /* The event queue is shared with usb_backend_sdl.c, which takes the
+     * keyboard and mouse events. Here: quit, and throw away everything
+     * else -- but never those two ranges, or input gets lost. */
+    SDL_PumpEvents();
+    if (SDL_PeepEvents(NULL, 0, SDL_PEEKEVENT, SDL_EVENT_QUIT, SDL_EVENT_QUIT) > 0)
+        return false;
+    if (SDL_GetKeyboardState(NULL)[SDL_SCANCODE_ESCAPE])
+        return false;
+    SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_KEY_DOWN - 1);
+    SDL_FlushEvents(SDL_EVENT_KEY_UP + 1, SDL_EVENT_MOUSE_MOTION - 1);
+    SDL_FlushEvents(SDL_EVENT_MOUSE_WHEEL + 1, SDL_EVENT_LAST);
 
     composite();
     SDL_UpdateTexture(tex, NULL, frame, DISPLAY_W * (int)sizeof frame[0]);

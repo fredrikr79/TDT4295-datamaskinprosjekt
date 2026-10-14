@@ -10,10 +10,15 @@
  * Limitation: all keyboards share one key state. Two keyboards typing at
  * once would fight; one keyboard and one mouse is the expected setup. */
 
+#define LOG_TAG "input"
+
+#include <stdio.h>
 #include <string.h>
 
 #include "usb_input.h"
 #include "usb_backend.h"
+#include "log.h"
+#include "platform.h"
 
 #define KEYMAP_BYTES 32u
 #define BIT_SET(map, k) ((map)[(k) >> 3] |= (uint8_t)(1u << ((k) & 7u)))
@@ -59,7 +64,7 @@ void input_take(input_t *out)
     memset(&acc, 0, sizeof acc);
 }
 
-/* keyboard */
+/* ---- keyboard ------------------------------------------------------------ */
 static void keyboard_set(const uint8_t now[KEYMAP_BYTES])
 {
     for (unsigned i = 0; i < KEYMAP_BYTES; i++) {
@@ -89,7 +94,7 @@ void usb_input_keyboard_report(const uint8_t *r, uint16_t len)
     keyboard_set(now);
 }
 
-/* mouse */
+/* ---- mouse --------------------------------------------------------------- */
 static void mouse_set_buttons(uint8_t b)
 {
     acc.mouse_pressed  |= (uint8_t)(b & ~cur.mouse_held);
@@ -107,7 +112,7 @@ void usb_input_mouse_report(const uint8_t *r, uint16_t len)
     if (len >= 5) acc.pan   += (int8_t)r[4];
 }
 
-/* plug / unplug
+/* ---- plug / unplug ---------------------------------------------------------
  * Unplugging releases everything, so no key stays stuck down. */
 void usb_input_connected(usb_device_kind_t kind, bool connected)
 {
@@ -127,5 +132,91 @@ void usb_input_connected(usb_device_kind_t kind, bool connected)
             cur.mice--;
             mouse_set_buttons(0);
         }
+    }
+}
+
+/* ---- debug logging ---------------------------------------------------------- */
+#define MOVE_LOG_MS 100u
+
+const char *key_name(uint8_t key)
+{
+    static const char *const special[] = {     /* 0x28 .. 0x39 */
+        "ENTER", "ESC", "BACKSPACE", "TAB", "SPACE", "-", "=", "[", "]", "\\",
+        "#", ";", "'", "`", ",", ".", "/", "CAPSLOCK",
+    };
+    static const char *const arrows[] = { "RIGHT", "LEFT", "DOWN", "UP" };
+    static const char *const mods[] = {
+        "LCTRL", "LSHIFT", "LALT", "LGUI", "RCTRL", "RSHIFT", "RALT", "RGUI",
+    };
+    static char buf[8];
+
+    if (key >= KEY_A && key <= KEY_Z)  { buf[0] = (char)('A' + key - KEY_A); buf[1] = 0; return buf; }
+    if (key >= KEY_1 && key <= KEY_9)  { buf[0] = (char)('1' + key - KEY_1); buf[1] = 0; return buf; }
+    if (key == KEY_0)                  return "0";
+    if (key >= KEY_ENTER && key <= KEY_CAPSLOCK) return special[key - KEY_ENTER];
+    if (key >= KEY_F1 && key <= KEY_F12) { snprintf(buf, sizeof buf, "F%d", key - KEY_F1 + 1); return buf; }
+    if (key >= KEY_RIGHT && key <= KEY_UP) return arrows[key - KEY_RIGHT];
+    if (key >= KEY_LCTRL && key <= KEY_RGUI) return mods[key - KEY_LCTRL];
+    snprintf(buf, sizeof buf, "0x%02X", key);
+    return buf;
+}
+
+static const char *button_name(uint8_t bit)
+{
+    switch (bit) {
+    case MOUSE_LEFT:    return "LEFT";
+    case MOUSE_RIGHT:   return "RIGHT";
+    case MOUSE_MIDDLE:  return "MIDDLE";
+    case MOUSE_BACK:    return "BACK";
+    case MOUSE_FORWARD: return "FORWARD";
+    default:            return "?";
+    }
+}
+
+/* "W LSHIFT" for every bit set in a key map; returns the length */
+static int list_keys(const uint8_t map[32], char *out, size_t size)
+{
+    int n = 0;
+    out[0] = 0;
+    for (unsigned k = 0; k < 256 && (size_t)n < size; k++)
+        if (map[k >> 3] & (1u << (k & 7)))
+            n += snprintf(out + n, size - (size_t)n, "%s%s", n ? " " : "", key_name((uint8_t)k));
+    return n;
+}
+
+void input_log(const input_t *in)
+{
+    static bool     was_kb, was_mouse;
+    static int32_t  dx, dy;
+    static uint32_t last_move;
+    char list[128];
+
+    if (in->keyboard != was_kb)   LOG_INFO("keyboard %s", in->keyboard ? "connected" : "gone");
+    if (in->mouse != was_mouse)   LOG_INFO("mouse %s",    in->mouse    ? "connected" : "gone");
+    was_kb    = in->keyboard;
+    was_mouse = in->mouse;
+
+    if (list_keys(in->pressed, list, sizeof list)) {
+        char held[128];
+        list_keys(in->held, held, sizeof held);
+        LOG_INFO("down: %-12s held: %s", list, held);
+    }
+    if (list_keys(in->released, list, sizeof list))
+        LOG_INFO("up:   %s", list);
+
+    for (uint8_t b = 1; b && b <= MOUSE_FORWARD; b = (uint8_t)(b << 1)) {
+        if (in->mouse_pressed & b)  LOG_INFO("mouse %s down", button_name(b));
+        if (in->mouse_released & b) LOG_INFO("mouse %s up",   button_name(b));
+    }
+    if (in->wheel) LOG_INFO("wheel %+ld", (long)in->wheel);
+    if (in->pan)   LOG_INFO("pan %+ld",   (long)in->pan);
+
+    dx += in->mouse_dx;
+    dy += in->mouse_dy;
+    uint32_t now = plat_millis();
+    if ((dx || dy) && now - last_move >= MOVE_LOG_MS) {
+        LOG_INFO("move %+ld,%+ld", (long)dx, (long)dy);
+        dx = dy = 0;
+        last_move = now;
     }
 }

@@ -24,16 +24,18 @@ module memory_controller (
     inout wire [7:0] dq,
     inout wire rwds
 );
-  logic [7:0] dq_in;
-  logic [7:0] dq_out;
-  logic       rwds_in;
-  logic       rwds_out;
+  logic                        [7:0] dq_in;
+  logic                        [7:0] dq_out;
+  logic                              rwds_in;
+  logic                              rwds_out;
 
-  logic       dq_oe;
-  logic       rwds_oe;
+  logic                              dq_oe;
+  logic                              rwds_oe;
 
-  logic       double_latency;
-  logic       current_transaction_toggle;
+  logic                              double_latency;
+  logic                              current_transaction_toggle;
+  memory_pkg::address_t              current_address;
+  memory_pkg::message_length_t       current_length;
 
 
   assign dq_in   = dq;
@@ -159,8 +161,11 @@ module memory_controller (
     if (reset) current_transaction <= memory_pkg::NONE;
     else if (enable
              && current_state == memory_pkg::IDLE
-             && transaction_toggle != current_transaction_toggle)
+           && transaction_toggle != current_transaction_toggle) begin
       current_transaction <= next_transaction;
+      current_address <= address;
+      current_lenght <= length;
+    end
     current_transaction_toggle <= transaction_toggle;
   end
   always @(negedge clk) begin
@@ -227,7 +232,7 @@ module memory_controller (
   mem_txn_write_any_register write_any_register_transaction (
       .reset(reset),
       .enable(enable),
-      .address(address),
+      .address(current_address),
       .write_data,
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
@@ -238,7 +243,7 @@ module memory_controller (
       .reset(reset),
       .enable(enable),
       .dq_in(dq_in),
-      .address(address),
+      .address(current_address),
       .double_latency,
       .read_data,
       .current_state(current_state),
@@ -261,8 +266,8 @@ module memory_controller (
       .reset(reset),
       .enable(enable),
       .dq_in(dq_in),
-      .address(address),
-      .read_length(length),
+      .address(current_address),
+      .read_length(current_length),
       .double_latency,
       .read_data,
       .current_state(current_state),
@@ -274,8 +279,8 @@ module memory_controller (
       .reset(reset),
       .enable(enable),
       .dq_in(dq_in),
-      .address(address),
-      .write_length(length),
+      .address(current_address),
+      .write_length(current_length),
       .double_latency,
       .write_data,
       .current_state(current_state),

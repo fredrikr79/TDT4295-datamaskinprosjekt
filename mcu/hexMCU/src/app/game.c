@@ -8,6 +8,7 @@
 #include "log.h"
 #include "frame_sync.h"
 #include "game.h"
+#include "usb_input.h"
 
 /* things the MCU side has to agree with the FPGA on */
 #define PX_BYTES        2u          /* RGB565, MSB first on the wire     */
@@ -124,11 +125,17 @@ static struct {
     uint32_t sync_seen;         /* SYNC count we last started a frame at */
 } run;
 
+int x, y;
+
 /* Frames that went by while probing or loading don't count as missed. */
 static void run_enter(void)
 {
     run.sync_seen = frame_sync_count();
     /* TODO: set up per-room game state */
+    const fpga_info_t *in = fpga_link_info();
+    x = in->width / 2;
+    y = in->height / 2;
+
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -140,8 +147,29 @@ static void run_frame(uint32_t n)
 
 static void run_poll(void)
 {
+    //static uint32_t t;
+    // if (plat_millis() - t >= 20) {
+    //     t = plat_millis();
+    //     input_t in;
+    //     input_take(&in);
+    //     //input_log(&in);
+    // }
+
+    // accumilate x y even tho we are not on the next frame.
+    const fpga_info_t *screen = fpga_link_info();
+    input_t in;
+    input_take(&in);
+    x += in->mouse_dx;
+    if(x<0)
+        x = 0;
+    if(x>screen->width):
+        x = screen->width;
+    y += in->mouse_dy;
+
     uint32_t n = frame_sync_take(&run.sync_seen);
     if (n) run_frame(n);
+    //same check for y
+
 }
 
 /* Leave the current room: save it, then load `to`.

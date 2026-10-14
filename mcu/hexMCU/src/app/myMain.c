@@ -18,7 +18,6 @@ void myMain(void)
         cli_poll();
         game_poll();
         usb_poll();
-        usb_poll();
         static uint32_t t;
         if (plat_millis() - t >= 20) {
             t = plat_millis();

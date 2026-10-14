@@ -2,6 +2,7 @@
 #include "cli.h"
 #include "transport.h"
 #include "fpga.h"
+#include "game.h"
 #include "usb_input.h"
 #include "platform.h"
 
@@ -15,6 +16,7 @@ void myMain(void)
         transport_poll();   /* fake FPGA timing on host; no-op on hardware */
         fpga_poll();        /* advance the running FPGA command, if any    */
         cli_poll();
+        game_poll();
         usb_poll();
         usb_poll();
         static uint32_t t;

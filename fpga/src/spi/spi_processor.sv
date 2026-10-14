@@ -171,7 +171,7 @@ module spi_processor #(
     .send_info(send_info)
   );
 
-  write_line write_line_cmd_processor(
+  write_cons write_cons_cmd_processor(
     .clk(clk),
     .ck_rst(ck_rst),
     .buffer(), // TODO add memory input buffer
@@ -180,7 +180,7 @@ module spi_processor #(
     .write_line_r_en(write_line_r_en),
   );
 
-  read_line read_line_cmd_processor(
+  read_cons read_cons_cmd_processor(
     .clk(clk),
     .ck_rst(ck_rst),
     .buffer(), // TODO add memory output buffer

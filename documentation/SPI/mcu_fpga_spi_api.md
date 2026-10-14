@@ -20,8 +20,8 @@ FAILED / ACKNACK flag 3 bits,
 |-----------------|------------------|-----------------------------|----------|--------------|-------------|
 |1. ECHO          | [B1][B2] .. [BN] |  [B1][B2]...[BN]            |  0001    |  01          |yes          |
 |2. INFO          | VOID             |  [B1][B2]...[BN]            |  0001    |  01          |yes          |
-|3. Send_line     | [X][Y][N]        |  VOID                       |  0010    |  02          |no           |
-|4. Read_line     | [X][Y][N]        |  [tileID][Meta1][Meta2]...  |  0011    |  03          |no           |
+|3. Send_Cons     | [X][Y][N]        |  VOID                       |  0010    |  02          |no           |
+|4. Read_Cons     | [X][Y][N]        |  [tileID][Meta1][Meta2]...  |  0011    |  03          |no           |
 |5. Send_HUD_box  | [X1][Y1][X2][Y2] |  VOID                       |  0100    |  04          |no           |
 |6. Read_HUD_box  | [X1][Y1][X2][Y2] |  [tileID][Meta1][Meta2]...  |  0101    |  05          |no           |
 |7. Send_SIM_box  | [X1][Y1][X2][Y2] |  VOID                       |  0110    |  06          |no           |

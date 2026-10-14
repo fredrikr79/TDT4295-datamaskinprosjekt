@@ -7,10 +7,16 @@ module spi_processor #(
     in_empty,
     reset_s,
     clk,
-    output logic [7:0] out_fifo,
     output logic proc_w_en,
     proc_r_en,
     proc_done,
+    mem_toggle,
+    output logic [3:0] mem_transaction,
+    output logic [7:0] out_fifo,
+    mem_out,
+    mem_in,
+    mem_len,
+    output logic [31:0] mem_addr,
     output spi_pck::opcode_e opcode
 );
 
@@ -174,19 +180,32 @@ module spi_processor #(
   write_cons write_cons_cmd_processor(
     .clk(clk),
     .ck_rst(ck_rst),
-    .buffer(), // TODO add memory input buffer
+    .data_rdy(data_rdy),
+    .mem_len(mem_len),
+    .mem_addr(mem_addr),
+    .mem_func(mem_transaction),
+    .mem_in_fifo(mem_in),
+    .mem_toggle(mem_toggle),
     .in_fifo(in_fifo),
-    .write_line_done(write_line_done),
-    .write_line_r_en(write_line_r_en),
+    .write_cons_fifo(write_cons_fifo),
+    .write_cons_done(write_cons_done),
+    .write_cons_r_en(write_cons_r_en)
   );
 
   read_cons read_cons_cmd_processor(
     .clk(clk),
     .ck_rst(ck_rst),
-    .buffer(), // TODO add memory output buffer
-    .read_line_fifo(read_line_fifo),
-    .read_line_done(read_line_done),
-    .read_line_w_en(read_line_w_en),
+    .data_rdy(data_rdy),
+    .in_fifo(in_fifo),
+    .mem_len(mem_len),
+    .mem_toggle(mem_toggle),
+    .mem_addr(mem_addr),
+    .mem_func(mem_func),
+    .mem_out_fifo(mem_out_fifo),
+    .read_cons_fifo(read_cons_fifo),
+    .read_cons_done(read_cons_done),
+    .read_cons_w_en(read_cons_w_en),
+    .read_cons_r_en(read_cons_r_en)
   );
 
 endmodule

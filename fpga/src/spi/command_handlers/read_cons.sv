@@ -1,13 +1,19 @@
 module read_cons #(
-    logic [7:0] N_BYTES = config_pkg::activeWidth
+
 ) (
     input wire clk,
-    ck_rst, data_rdy,
-    input logic [7:0] mem_out_fifo, in_fifo,
-    output logic [7:0] read_cons_fifo, mem_len, mem_in_fifo,
+    ck_rst,
+    data_rdy,
+    input logic [7:0] mem_out_fifo,
+    in_fifo,
+    output logic [7:0] read_cons_fifo,
+    mem_len,
     output logic read_cons_done,
     read_cons_w_en,
-    read_cons_r_en
+    read_cons_r_en,
+    mem_toggle,
+    output logic [31:0] mem_addr,
+    output memory_pkg::transaction_e mem_func
 );
 
 
@@ -17,21 +23,21 @@ module read_cons #(
 
   logic [7:0] rx_index = 8'd0;
   logic [15:0] gridX, gridY;
-  logic [7:0] length;
+  logic [7:0] mem_len;
   logic [31:0] memAddr;
-  logic toggle_init; // Init captures toggle at the start of the transaction.
+  logic toggle_init;  // Init captures toggle at the start of the transaction.
 
   read_states_e state = START;
 
   always_ff @(posedge clk) begin
 
     if (!ck_rst) begin
-          rx_index <= 8'd0;
-          read_cons_done <= 1'b0;
-          read_cons_w_en <= 1'b0;
-          read_cons_r_en <= 1'b0;
-          read_cons_fifo <= 8'd0;
-          state <= START;
+      rx_index <= 8'd0;
+      read_cons_done <= 1'b0;
+      read_cons_w_en <= 1'b0;
+      read_cons_r_en <= 1'b0;
+      read_cons_fifo <= 8'd0;
+      state <= START;
 
     end else begin
       read_cons_w_en <= 1'b0;
@@ -39,11 +45,11 @@ module read_cons #(
       read_cons_done <= 1'b0;
 
       // Fetch target memory address
-      case(state)
+      case (state)
         START: begin
           read_cons_r_en <= 1'b1;
           state <= GET_X_TOP;
-          toggle_init <= toggle;
+          toggle_init <= mem_toggle;
         end
         GET_X_TOP: begin
           read_cons_r_en <= 1'b1;
@@ -66,32 +72,32 @@ module read_cons #(
           state <= GET_MSG_LENGTH;
         end
         GET_MSG_LENGTH: begin
-          length <= in_fifo;
-          state <= GET_MEM_ADDR;
+          mem_len <= in_fifo;
+          state   <= GET_MEM_ADDR;
         end
         GET_MEM_ADDR: begin
           memAddr <= GridPosToMemAddr(gridX, gridY);
-          state <= DATA;
+          state   <= DATA;
         end
         DATA: begin
-          if(!mem_busy) begin
-            mem_len <= length;
+          if (!mem_busy) begin
             mem_func <= WRITE;
             mem_addr <= memAddr;
             state <= RX_WAIT;
           end
         end
         RX_WAIT: begin
-          if(data_rdy) begin
+          if (data_rdy) begin
             state <= RX;
           end
         end
         RX: begin
-          toggle <= !toggle_init;
+          mem_toggle <= !toggle_init;
 
-          if(data_rdy) begin
+          if (rx_index < mem_len && data_rdy) begin
             read_cons_fifo <= mem_out_fifo;
             read_cons_w_en <= 1'b1;
+            rx_index <= rx_index + 8'd1;
           end else begin
             rx_index <= 8'd0;
             read_cons_done <= 1'b1;

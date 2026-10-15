@@ -98,9 +98,9 @@ module write_box #(
             // cycle as data is pushed
             mem_toggle <= !toggle_init;
 
-            // Read N bytes from in_queue to mem_in_fifo
+            // Read N bytes from in_queue to mem_in
             if (col_index <= cols && data_rdy) begin // include final boundary
-              mem_in_fifo <= in_fifo;
+              mem_in <= in_fifo;
               write_cons_r_en <= 1'b1;
               col_index <= col_index + 8'd1;
             end else begin

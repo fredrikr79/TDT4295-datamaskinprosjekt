@@ -102,7 +102,7 @@ module read_box #(
           mem_toggle <= !toggle_init;
 
           if (col_index <= cols && data_rdy) begin
-            read_cons_fifo <= mem_out_fifo;
+            read_cons_fifo <= mem_out;
             read_cons_w_en <= 1'b1;
             col_index <= col_index + 8'd1;
           end else begin

@@ -440,13 +440,10 @@ fpga_cmd_t fpga_cmd_read_sim_box(fpga_box_t b, uint8_t *buf, uint16_t len)
 
 fpga_cmd_t fpga_cmd_sim_run(bool run_it)
 {
-    /* DMA reads the payload after submit returns, so it can't live on the
-     * stack. [XXXXXXX0] = stop, [XXXXXXX1] = start. */
-    static const uint8_t bit[2] = { 0x00u, 0x01u };
+    /* Opcode only: which one says start or stop. */
     return (fpga_cmd_t){ .hdr = { .opcode = run_it ? START_SIM_OPCODE
-                                                   : STOP_SIM_OPCODE,
-                                  .len = 1 },
-                         .tx = &bit[run_it ? 1 : 0], .kind = FPGA_KIND_WRITE };
+                                                   : STOP_SIM_OPCODE },
+                         .kind = FPGA_KIND_WRITE };
 }
 
 fpga_cmd_t fpga_cmd_info(void)

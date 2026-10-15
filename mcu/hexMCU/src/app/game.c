@@ -31,6 +31,8 @@
  * was interrupted. If not, everything on it is gone and the current
  * room is loaded again.
  * ====================================================================== */
+ 
+/* This is the higher state machine that is responsible for error recovery and switching of scenes */
 typedef enum { S_PROBE, S_PROBING, S_INFO, S_INFO_WAIT, S_SAVE, S_LOAD, S_RUN } state_t;
 static const char *const state_names[] =
     { "probe", "probing", "info", "info-wait", "save", "load", "run" };
@@ -126,6 +128,18 @@ static struct {
     int32_t  cx, cy;            /* cursor position, follows the mouse    */
 } run;
 
+/* State machine for run, handels if we are showing menu or doing other actions. */
+typedef enum { RS_SIM, RS_MENU } run_state_t;
+static const char *const run_state_names[] =
+    { "simulating", "menu" };
+
+static run_state_t  run_state = RS_SIM;
+
+static void r_go(run_state_t s)
+{
+    if (s != run_state) LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
+    run_state = s;
+}
 static render_cube_t cursor = RENDER_CUBE_INIT(CURSOR_SIZE, CURSOR_COLOUR);
 
 static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
@@ -157,6 +171,11 @@ static void run_frame(uint32_t n)
 
     /* busy: the last cursor frame isn't back yet, try again next frame */
     render_cube(&cursor, (int16_t)run.cx, (int16_t)run.cy);
+
+    switch (run_state) {
+    case RS_SIM:  /* do sim */  break;
+    case RS_MENU: /* do menu */ break;
+    }
 }
 
 static void run_poll(void)
@@ -169,8 +188,11 @@ static void run_poll(void)
     run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - CURSOR_SIZE);
     run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - CURSOR_SIZE);
 
-    if (!render_cube_poll(&cursor)) { failed = true; return; }
+    if (key_pressed(&in, KEY_ESCAPE))
+        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
+        
 
+    if (!render_cube_poll(&cursor)) { failed = true; return; }
     uint32_t n = frame_sync_take(&run.sync_seen);
     if (n) run_frame(n);
 }

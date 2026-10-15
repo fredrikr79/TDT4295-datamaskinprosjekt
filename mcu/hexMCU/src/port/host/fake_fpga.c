@@ -216,9 +216,9 @@ int32_t fake_fpga_write(const transport_hdr_t *h, const uint8_t *data,
     case STOP_SIM_OPCODE:
     case START_SIM_OPCODE: {
         bool run = h->opcode == START_SIM_OPCODE;
-        if (len != 1 || (data[0] & 1u) != (run ? 1u : 0u))
-            LOG_WARN("%s: expected payload [XXXXXXX%u]", run ? "start_sim"
-                     : "stop_sim", run ? 1u : 0u);
+        if (len != 0 || h->fields != 0)
+            LOG_WARN("%s: expected the opcode only, got %u payload bytes "
+                     "(fields 0x%X)", run ? "start_sim" : "stop_sim", len, h->fields);
         if (ff.sim_running != run)
             LOG_INFO("simulation %s", run ? "started" : "stopped");
         ff.sim_running = run;

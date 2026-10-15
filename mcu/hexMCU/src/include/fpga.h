@@ -12,8 +12,8 @@
  * | Read_HUD_box  | 05 | [X][Y]         | [W][H]   (32b)  | -              | pixels
  * | Send_SIM_box  | 06 | [X][Y]         | [W][H]   (32b)  | pixels         | -
  * | Read_SIM_box  | 07 | [X][Y]         | [W][H]   (32b)  | -              | pixels
- * | Stop_SIM      | 08 | -              | -               | [XXXXXXX0]     | -
- * | Start_SIM     | 09 | -              | -               | [XXXXXXX1]     | -
+ * | Stop_SIM      | 08 | -              | -               | -              | -
+ * | Start_SIM     | 09 | -              | -               | -              | -
  * | INFO          | 0A | -              | -               | -              | [W][H][N][SID]
  * ------------------------------------------------------------------------------------
  * Boxes: X,Y is the top-left pixel, W the pixels per row, H the rows. The

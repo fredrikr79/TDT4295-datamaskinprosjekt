@@ -119,7 +119,7 @@ bool display_poll(void)
     SDL_PumpEvents();
     if (SDL_PeepEvents(NULL, 0, SDL_PEEKEVENT, SDL_EVENT_QUIT, SDL_EVENT_QUIT) > 0)
         return false;
-    if (SDL_GetKeyboardState(NULL)[SDL_SCANCODE_ESCAPE])
+    if (SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F4])    /* quit key (was Esc) */
         return false;
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_KEY_DOWN - 1);
     SDL_FlushEvents(SDL_EVENT_KEY_UP + 1, SDL_EVENT_MOUSE_MOTION - 1);

@@ -20,7 +20,9 @@ package spi_pck;
     INFO        = 0002,
     WRITE_LINE  = 0003,
     READ_LINE   = 0004,
-    FAILED      = 0005
+    START_SIM   = 0005,
+    STOP_SIM    = 0006,
+    FAILED      = 0015
   } opcode_e;
 
 endpackage

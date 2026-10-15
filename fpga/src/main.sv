@@ -36,6 +36,9 @@ module main (
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
 
+  // Sim running
+  logic sim_running = 1'b0;
+
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
   logic [31:0] mem_addr;
@@ -111,6 +114,9 @@ module main (
       .out_empty(out_empty),
       .in_almost_full(in_almost_full),
       .in_full(in_full),
+
+      // Sim running
+      .sim_running(sim_running)
 
       // Memory module fall-through signals
       .mem_busy(mem_busy),

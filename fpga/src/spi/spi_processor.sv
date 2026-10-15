@@ -12,6 +12,7 @@ module spi_processor #(
     output logic proc_w_en,
     proc_r_en,
     proc_done,
+    sim_running,
     mem_toggle,
     output logic [7:0] out_fifo,
     mem_out,
@@ -41,12 +42,16 @@ module spi_processor #(
   // Done signals
   logic echo_done = 1'b0;
   logic info_done;
+  logic start_sim_done;
+  logic stop_sim_done;
   logic write_cons_done;
   logic read_cons_done;
   assign proc_done = echo_done |
     info_done                  |
     write_cons_done            |
-    read_cons_done;
+    read_cons_done             |
+    start_sim_done             |
+    stop_sim_done;
 
   // Run signals
   logic send_info = 1'b0;
@@ -85,6 +90,8 @@ module spi_processor #(
       fail_w_en      <= 1'b0;
       fail_r_en      <= 1'b0;
       echo_done      <= 1'b0;
+      start_sim_done <= 1'b0;
+      stop_sim_done  <= 1'b0;
 
       case (state)
 
@@ -139,6 +146,16 @@ module spi_processor #(
                   out_fifo <= read_cons_fifo;
                 end
               end else send_read_cons <= 1'b0;
+            end
+
+            START_SIM: begin
+              sim_running <= 1'b1;
+              start_sim_done <= 1'b1;
+            end
+
+            STOP_SIM: begin
+              sim_running   <= 1'b0;
+              stop_sim_done <= 1'b1;
             end
 
             FAILED: begin

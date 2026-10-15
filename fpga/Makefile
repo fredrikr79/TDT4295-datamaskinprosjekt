@@ -55,7 +55,7 @@ vivado-build: scripts/vivado.sh scripts/build.tcl $(SOURCES) .vivado.env
 	sh scripts/vivado.sh -mode batch -source $(CURDIR)/scripts/build.tcl
 
 # Generate verible file for lsp
-verible.filelist:
+verible.filelist: $(SOURCES)
 	@printf '%s\n' $(SOURCES) | sort > $@
 # Set up configuration files
 include config.mk

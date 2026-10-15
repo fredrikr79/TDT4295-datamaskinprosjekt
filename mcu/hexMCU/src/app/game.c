@@ -11,6 +11,8 @@
 #include "usb_input.h"
 #include "render.h"                 /* also PX_BYTES, HUD_CLEAR, RGB565 */
 #include "font.h"
+#include "text.h"
+#include "font.h"       /* test font; or font_kiwisoda.h */
 
 /* tuning */
 #define PROBE_LEN       100u
@@ -18,6 +20,9 @@
 #define FIRST_ROOM      0u
 #define CURSOR_SIZE     8
 #define CURSOR_COLOUR   RGB565(255, 255, 255)
+#define TEST_FONT       font_kiwisoda
+#define TEST_SCALE      2           /* 8 px font -> 16 px letters */
+#define TEST_TEXT       "Gaming"
 
 /* ======================================================================
  * The state machine
@@ -50,6 +55,7 @@ static uint16_t next_room;          /* where the door leads: loaded after SAVE *
 
 static void run_enter(void);
 static void room_enter(void);
+static void test_text_draw(void);
 
 static void go(state_t s)
 {
@@ -142,6 +148,7 @@ static void r_go(run_state_t s)
     run_state = s;
 }
 static render_cube_t cursor = RENDER_CUBE_INIT(CURSOR_SIZE, CURSOR_COLOUR);
+static text_t        test_text;
 
 static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
 {
@@ -154,6 +161,18 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
 static void run_enter(void)
 {
     run.sync_seen = frame_sync_count();
+    test_text_draw();
+}
+
+/* Test: a sentence centred near the top of the screen. Drawn on every way
+ * into RUN, so it comes back after a resync that may have cut it short. */
+static void test_text_draw(void)
+{
+    const fpga_info_t *scr = fpga_link_info();
+    int32_t w = font_text_width(&TEST_FONT, TEST_TEXT) * TEST_SCALE;
+    int32_t x = w < scr->width ? (scr->width - w) / 2 : 0;
+    text_draw(&test_text, (int16_t)x, 16, &TEST_FONT, TEST_TEXT,
+              RGB565(255, 220, 0), HUD_CLEAR, TEST_SCALE);
 }
 
 /* Per-room game state: from load_start(), once per room. */
@@ -194,6 +213,7 @@ static void run_poll(void)
         
 
     if (!render_cube_poll(&cursor)) { failed = true; return; }
+    if (!text_poll(&test_text))     { failed = true; return; }
     uint32_t n = frame_sync_take(&run.sync_seen);
     if (n) run_frame(n);
 }
@@ -242,6 +262,7 @@ static void resync(void)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */
     render_cube_lost(&cursor);   /* ...so these come after them      */
+    text_lost(&test_text);
     failed   = false;
     retry_at = plat_millis();
     go(S_PROBE);

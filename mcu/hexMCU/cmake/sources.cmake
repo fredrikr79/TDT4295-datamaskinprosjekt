@@ -12,6 +12,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/usb_input.c
     ${APP_ROOT}/src/app/render.c
     ${APP_ROOT}/src/app/font.c
+    ${APP_ROOT}/src/app/text.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

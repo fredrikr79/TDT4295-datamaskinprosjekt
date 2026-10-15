@@ -11,6 +11,8 @@ module spi_processor #(
     output logic proc_w_en,
     proc_r_en,
     proc_done,
+    sim_running,
+    output logic [7:0] out_fifo,
     output spi_pck::opcode_e opcode
 );
 
@@ -31,7 +33,13 @@ module spi_processor #(
   // Done signals
   logic info_done;
   logic echo_done = 1'b0;
-  assign proc_done = echo_done | info_done;
+  logic info_done;
+  logic start_sim_done;
+  logic stop_sim_done;
+  assign proc_done = echo_done |
+    info_done                  |
+    start_sim_done             |
+    stop_sim_done;
 
   // Run signals
   logic send_info = 1'b0;
@@ -58,11 +66,14 @@ module spi_processor #(
       send_info <= 1'b0;
     end else begin
 
-      echo_r_en  <= 1'b0;
-      echo_w_en <= 1'b0;
-      echo_done <= 1'b0;
-      fail_w_en <= 1'b0;
-      fail_r_en <= 1'b0;
+      // Most signals are handled by respective submodules
+      echo_r_en      <= 1'b0;
+      echo_w_en      <= 1'b0;
+      fail_w_en      <= 1'b0;
+      fail_r_en      <= 1'b0;
+      echo_done      <= 1'b0;
+      start_sim_done <= 1'b0;
+      stop_sim_done  <= 1'b0;
 
       case (state)
 
@@ -95,16 +106,24 @@ module spi_processor #(
                 end
               end
 
-              INFO: begin
-                if (!info_done) begin
-                    send_info <= 1'b1;
-                    if (info_w_en) begin
-                      out_fifo <= info_fifo;
-                    end
+            INFO: begin
+              if (!info_done) begin
+                send_info <= 1'b1;
+                if (info_w_en) begin
+                  out_fifo <= info_fifo;
                 end
-                else
-                    send_info <= 1'b0;
-              end
+              end else send_info <= 1'b0;
+            end
+
+            START_SIM: begin
+              sim_running <= 1'b1;
+              start_sim_done <= 1'b1;
+            end
+
+            STOP_SIM: begin
+              sim_running   <= 1'b0;
+              stop_sim_done <= 1'b1;
+            end
 
               FAILED: begin
                 if (!out_full) begin

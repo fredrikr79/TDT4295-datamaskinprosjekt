@@ -269,7 +269,7 @@ static void load_poll(void)
             exit(1);
         }
 
-        fpga_box_t box = { load.x, load.y, w, h };
+        fpga_box_t box = fpga_box(load.x, load.y, w, h);
         fpga_cmd_t c = fpga_cmd_send_sim_box(box, b->data, (uint16_t)(w * h * PX_BYTES));
         c.done = load_done;
         c.ctx  = b;
@@ -368,7 +368,7 @@ static void cube_build_frame(void)
     cube.n_cmds = cube.next_cmd = 0;
     for (uint16_t r = 0; r < h; r = (uint16_t)(r + rows)) {
         uint16_t bh = min16(rows, h - r);
-        fpga_box_t box = { (uint16_t)x0, (uint16_t)(y0 + r), w, bh };
+        fpga_box_t box = fpga_box((uint16_t)x0, (uint16_t)(y0 + r), w, bh);
         fpga_cmd_t c = fpga_cmd_send_hud_box(box, &cube.buf[r * w * PX_BYTES],
                                              (uint16_t)(w * bh * PX_BYTES));
         c.done = cube_done;

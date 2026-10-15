@@ -22,19 +22,21 @@ create_project bloata $vivado_dir \
     -part xc7a35tcsg324-1 \
     -force
 
-# Add Verilog files (searches subdirectories too)
-proc find_verilog {dir} {
-    set found [glob -nocomplain -types f \
-        [file join $dir *.v] \
-        [file join $dir *.sv] \
-    ]
+# Collect source files matching any of $patterns (searches subdirectories too)
+proc find_sources {dir patterns} {
+    set found {}
+    foreach pattern $patterns {
+        set found [concat $found \
+            [glob -nocomplain -types f [file join $dir $pattern]]]
+    }
     foreach sub [glob -nocomplain -types d [file join $dir *]] {
-        set found [concat $found [find_verilog $sub]]
+        set found [concat $found [find_sources $sub $patterns]]
     }
     return $found
 }
 
-set verilog_files [find_verilog $src_dir]
+set verilog_files [find_sources $src_dir {*.v *.sv}]
+set ip_files [find_sources $src_dir {*.xci}]
 # Done adding verilog files
 
 
@@ -44,6 +46,13 @@ if {[llength $verilog_files] == 0} {
 }
 
 add_files $verilog_files
+
+# Add Vivado IP cores
+if {[llength $ip_files] > 0} {
+    import_ip $ip_files
+    upgrade_ip -quiet [get_ips]
+    generate_target all [get_ips]
+}
 
 # Add constraints
 set xdc_file [file join $constraints_dir arty_a7_35T.xdc]

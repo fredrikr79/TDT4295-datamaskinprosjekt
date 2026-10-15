@@ -8,9 +8,9 @@ module world_loader (
   import cell_pkg::*;
   import spawn_screen_pkg::word_at; // Decides what screen we are loading.
 
-  logic [WordXBits-1:0] word_x;
-  grid_y_t              row_y;
-  logic                 loading;
+  logic [WordXBits-1:0] word_x = '0;
+  grid_y_t              row_y = '0;
+  logic                 loading = 1'b1;
   grid_x_t              word_full_address;
   assign word_full_address = {word_x, {CellIndexBits{1'b0}}}; // Concatenate indexing bits.
 
@@ -30,7 +30,7 @@ module world_loader (
         if (word_x == WordXBits'(WordsPerRow - 1)) begin
           word_x <= '0;
           row_y  <= row_y + 1;
-          if (row_y == grid_y_t'(GridHeight - 1)) loading <= 1'b0;
+          if (row_y == grid_y_t'(CellGridHeight - 1)) loading <= 1'b0;
         end else begin
           word_x <= word_x + 1;
         end

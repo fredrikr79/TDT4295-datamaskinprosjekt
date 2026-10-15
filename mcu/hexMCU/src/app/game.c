@@ -53,6 +53,9 @@ static uint16_t session;            /* the FPGA session we drew into    */
 static uint16_t room = FIRST_ROOM;  /* the room on the FPGA / being loaded */
 static uint16_t next_room;          /* where the door leads: loaded after SAVE */
 
+static bool sending_room_to_fpga = false;
+static bool receiving_room_from_fpga = false;
+
 static void run_enter(void);
 static void room_enter(void);
 static void test_text_draw(void);
@@ -87,6 +90,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err);
 static void save_start(void)
 {
     LOG_INFO("saving room %u", room);
+    receiving_room_from_fpga = true;
     /* TODO: reset save progress */
     go(S_SAVE);
 }
@@ -98,11 +102,16 @@ static void save_resume(void)
     go(S_SAVE);
 }
 
+/* Change variable to indicate that all the data from the FPGA has be received */
+void save_finish(void)
+{
+    receiving_room_from_fpga = false;
+}
+
 /* Returns true once everything is saved and no commands are in flight. */
 static bool save_poll(void)
 {
-    /* TODO */
-    return true;
+    return receiving_room_from_fpga;
 }
 
 /* LOAD: scene for `room` -> FPGA
@@ -110,6 +119,7 @@ static bool save_poll(void)
 static void load_start(void)
 {
     LOG_INFO("loading room %u", room);
+    sending_room_to_fpga = true;
     /* TODO: reset load progress */
     room_enter();
     go(S_LOAD);
@@ -122,11 +132,16 @@ static void load_resume(void)
     go(S_LOAD);
 }
 
+/* Change variable to indicate that all the data has been sendt to the FPGA */
+void load_finish(void)
+{
+    sending_room_to_fpga = false;
+}
+
 /* Returns true once the scene is loaded and no commands are in flight. */
 static bool load_poll(void)
 {
-    /* TODO */
-    return true;
+    return sending_room_to_fpga;
 }
 
 /* RUN: the game itself  */

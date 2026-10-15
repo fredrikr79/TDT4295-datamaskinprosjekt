@@ -2719,7 +2719,7 @@
 		(in_bom yes)
 		(on_board yes)
 		(in_pos_files yes)
-		(dnp no)
+		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "3cd97f11-d099-4e24-9c35-05fd4e9ff663")
 		(property "Reference" "R60"

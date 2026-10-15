@@ -1,12 +1,12 @@
 package cell_pkg;
-  localparam int unsigned GridWidth = config_pkg::ActiveWidth;
-  localparam int unsigned GridHeight = config_pkg::ActiveHeight;
+  localparam int unsigned CellGridWidth = config_pkg::ActiveWidth;
+  localparam int unsigned CellGridHeight = config_pkg::ActiveHeight;
 
   localparam int unsigned MaterialBits = 4;  // support for 16 materials
   localparam int unsigned CellsPerWord = 8;  // 8x4 = 32 which fits cleanly in registers
   localparam int unsigned WordBits = CellsPerWord * MaterialBits;  // 32: a word contains 8 4-bit cells
-  localparam int unsigned WordsPerRow = GridWidth / CellsPerWord;  // 80: a row contains 640 pixels, we contain 8 pixels in one word, 640/8 = 80 which is our screen resolution
-  localparam int unsigned TotalWords = WordsPerRow * GridHeight;  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
+  localparam int unsigned WordsPerRow = CellGridWidth / CellsPerWord;  // 80: a row contains 640 pixels, we contain 8 pixels in one word, 640/8 = 80 which is our screen resolution
+  localparam int unsigned TotalWords = WordsPerRow * CellGridHeight;  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
   localparam int unsigned AddrBits = $clog2(TotalWords);  // 15 = 32,768, enough to address all of TotalWords
 
   typedef logic [MaterialBits-1:0] material_t;
@@ -15,8 +15,8 @@ package cell_pkg;
   localparam int unsigned CellIndexBits = $clog2(CellsPerWord);  // 3: which cell inside a word
   localparam int unsigned WordXBits = $clog2(WordsPerRow);  // 7: which word inside a row
 
-  localparam int unsigned GridXBits = $clog2(GridWidth);  // 10 needed to represent 640
-  localparam int unsigned GridYBits = $clog2(GridHeight);  // 9 needed to represent 360
+  localparam int unsigned GridXBits = $clog2(CellGridWidth);  // 10 needed to represent 640
+  localparam int unsigned GridYBits = $clog2(CellGridHeight);  // 9 needed to represent 360
   typedef logic unsigned [GridXBits-1:0] grid_x_t;
   typedef logic unsigned [GridYBits-1:0] grid_y_t;
 
@@ -27,7 +27,8 @@ package cell_pkg;
   // Cell index 0 is the LEFT-most of the eight pixels in a word
 
   function automatic logic [AddrBits-1:0] get_word_addr(input grid_x_t x, input grid_y_t y);
-    automatic logic [WordXBits-1:0] word_x = x[GridXBits-1:CellIndexBits];  // x / CellsPerWord
+    automatic logic [WordXBits-1:0] word_x;
+    word_x = x[GridXBits-1:CellIndexBits];  // x / CellsPerWord
     return AddrBits'(y * WordsPerRow + word_x);
   endfunction
 
@@ -43,7 +44,6 @@ package cell_pkg;
   localparam material_t MatPortal = 4'd4;
   localparam material_t MatLava = 4'd5;
   localparam material_t MatAcid = 4'd6;
-  localparam material_t MatGameOfLife = 4'd7;
 
   // density: heavier materials sink in lighter ones
   // falls: pulled downward by gravity.
@@ -56,70 +56,71 @@ package cell_pkg;
     color_pkg::color_t color;
   } material_props_t;
 
-  // Lookup Table for materials
-  function automatic material_props_t props(material_t m);
+  // Color lookup table
+  function automatic color_pkg::color_t material_color(input material_t m);
+    logic [11:0] rgb;
     case (m)
-      MatSand:
-      return '{
-          density: 4'd8,
-          falls: 1'b1,
-          spreads: 1'b0,
-          color: '{red: 4'hE, green: 4'hC, blue: 4'h6}
-      };
-      MatWater:
-      return '{
-          density: 4'd4,
-          falls: 1'b1,
-          spreads: 1'b1,
-          color: '{red: 4'h2, green: 4'h5, blue: 4'hF}
-      };
-      MatStone:
-      return '{
-          density: 4'd15,
-          falls: 1'b0,
-          spreads: 1'b0,
-          color: '{red: 4'h7, green: 4'h7, blue: 4'h7}
-      };
-      MatPortal:
-      return '{
-          density: 4'd15,
-          falls: 1'b0,
-          spreads: 1'b0,
-          color: '{red: 4'h5, green: 4'h1, blue: 4'h9}
-      };
-      MatLava:
-      return '{
-          density: 4'd10,
-          falls: 1'b1,
-          spreads: 1'b1,
-          color: '{red: 4'hF, green: 4'h6, blue: 4'h0}
-      };
-      MatAcid:
-      return '{
-          density: 4'd8,
-          falls: 1'b1,
-          spreads: 1'b1,
-          color: '{red: 4'h8, green: 4'hF, blue: 4'h0}
-      };
-      MatGameOfLife:
-      return '{
-          density: 4'd15,
-          falls: 1'b0,
-          spreads: 1'b0,
-          color: '{red: 4'hF, green: 4'hF, blue: 4'hF}
-      };
-      default:  // MatAir, and every unassigned id
-      return '{
-          density: 4'd0,
-          falls: 1'b0,
-          spreads: 1'b0,
-          color: '{red: 4'h0, green: 4'h0, blue: 4'h1}
-      };
+      MatSand:   rgb = 12'hEC6;  // sandy yellow
+      MatWater:  rgb = 12'h25F;  // blue
+      MatStone:  rgb = 12'h777;  // grey
+      MatPortal: rgb = 12'h519;  // purple
+      MatLava:   rgb = 12'hF60;  // orange
+      MatAcid:   rgb = 12'h8F0;  // acid green
+      default:   rgb = 12'h001;  // MatAir, and every unassigned id
     endcase
+    return color_pkg::color_t'(rgb);
+  endfunction
+
+  // Lookup table for materials
+  function automatic material_props_t props(material_t m);
+    material_props_t p;
+    p.color = material_color(m);
+    case (m)
+      MatSand: begin
+        p.density = 4'd8;
+        p.falls   = 1'b1;
+        p.spreads = 1'b0;
+      end
+      MatWater: begin
+        p.density = 4'd4;
+        p.falls   = 1'b1;
+        p.spreads = 1'b1;
+      end
+      MatStone: begin
+        p.density = 4'd15;
+        p.falls   = 1'b0;
+        p.spreads = 1'b0;
+      end
+      MatPortal: begin
+        p.density = 4'd15;
+        p.falls   = 1'b0;
+        p.spreads = 1'b0;
+      end
+      MatLava: begin
+        p.density = 4'd10;
+        p.falls   = 1'b1;
+        p.spreads = 1'b1;
+      end
+      MatAcid: begin
+        p.density = 4'd8;
+        p.falls   = 1'b1;
+        p.spreads = 1'b1;
+      end
+      default: begin  // MatAir, and every unassigned id
+        p.density = 4'd0;
+        p.falls   = 1'b0;
+        p.spreads = 1'b0;
+      end
+    endcase
+    return p;
   endfunction
 
   // Check for if a cell can displace another cell. Used to put the cell with the most density on the bottom.
   function automatic logic can_displace(material_t mover, material_t target);
-    return props(mover).falls && (props(target).density < props(mover).density);
+    material_props_t mover_props;
+    material_props_t target_props;
+    mover_props  = props(mover);
+    target_props = props(target);
+    return mover_props.falls && (target_props.density < mover_props.density);
   endfunction
 endpackage

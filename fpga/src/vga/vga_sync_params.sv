@@ -10,7 +10,10 @@ package vga_sync_params;
   typedef logic unsigned [XCoordinateBits-1:0] x_coordinate_t;
   typedef logic unsigned [YCoordinateBits-1:0] y_coordinate_t;
 
-  // The pixel clock rate is the number of pixels that must be displayed per second. The Delay is the number of global clock cycles per pixel. The delay is rounded to the nearest integer. 
+  // The pixel clock rate is the number of pixels that must be displayed per second. The Delay is the number of global clock cycles per pixel. The delay is rounded to the nearest integer.
   localparam int unsigned PixelClockRate  = TotalWidth * TotalHeight * FPS;
-  localparam int unsigned PixelClockDelay = (GlobalClockFrequency + PixelClockRate / 2) / PixelClockRate; // Basically GlobalClockFrequency/PixelClockRate, only that this round to nearest rather than always flooring.
+
+  // Basically GlobalClockFrequency/PixelClockRate, only that this round to nearest rather than always flooring.
+  localparam int unsigned PixelClockDelay =
+            (GlobalClockFrequency + PixelClockRate / 2) / PixelClockRate;
 endpackage

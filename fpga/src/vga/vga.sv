@@ -3,6 +3,10 @@ module vga #(
     input logic clk,
     reset,
     enable,
+    input color_pkg::color_t color,
+    output logic [3:0] vga_r,
+    vga_g,
+    vga_b,
     output logic h_sync,
     v_sync,
     output vga_sync_params::x_coordinate_t coord_x,
@@ -10,7 +14,7 @@ module vga #(
     output logic active_area, pixel_pulse
 );
   import vga_sync_params::*;
-  clock_enable_pulse #(
+  vga_clock_enable_pulse #(
       .N(PixelClockDelay)
   ) pixel_pulser (
       .clk(clk),
@@ -19,7 +23,7 @@ module vga #(
       .pulse(pixel_pulse)
   );
 
-  frame_counter #() vga_frame_counter (
+  vga_frame_counter #() vga_frame_counter (
       .clk(clk),
       .reset(reset),
       .enable(enable),
@@ -28,12 +32,16 @@ module vga #(
       .horizontal_count(coord_x)
   );
 
-  decoding_circuit #() vga_decoding_circuit (
+  vga_decoding_circuit #() vga_decoding_circuit (
       .horizontal_count(coord_x),
       .vertical_count(coord_y),
       .h_sync(h_sync),
       .v_sync(v_sync),
       .active_area(active_area)
   );
+
+  assign vga_r = color.red;
+  assign vga_g = color.green;
+  assign vga_b = color.blue;
 
 endmodule

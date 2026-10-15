@@ -8,7 +8,7 @@ module write_cons #(
     input logic [7:0] in_fifo,
     output logic [7:0] write_cons_fifo,
     mem_len,
-    mem_in_fifo,
+    mem_in,
     output logic write_cons_done,
     write_cons_r_en,
     mem_toggle,
@@ -74,8 +74,8 @@ module write_cons #(
           state   <= GET_MEM_ADDR;
         end
         GET_MEM_ADDR: begin
-          mem_func <= WRITE;
           memAddr <= GridPosToMemAddr(gridX, gridY);
+          mem_func <= WRITE;
           state <= DATA;
         end
         DATA: begin
@@ -96,9 +96,7 @@ module write_cons #(
             end
           end
         end
-        default: begin
-          // Do nothing
-        end
+        default:;
       endcase
     end
   end

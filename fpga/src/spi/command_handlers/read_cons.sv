@@ -5,7 +5,7 @@ module read_cons #(
     ck_rst,
     data_rdy,
     mem_busy,
-    input logic [7:0] mem_out_fifo,
+    input logic [7:0] mem_out,
     in_fifo,
     output logic [7:0] read_cons_fifo,
     mem_len,
@@ -78,21 +78,10 @@ module read_cons #(
         end
         GET_MEM_ADDR: begin
           memAddr <= GridPosToMemAddr(gridX, gridY);
+          mem_func <= READ;
           state   <= DATA;
         end
         DATA: begin
-          if (!mem_busy) begin
-            mem_func <= READ;
-            mem_addr <= memAddr;
-            state <= RX_WAIT;
-          end
-        end
-        RX_WAIT: begin
-          if (data_rdy) begin
-            state <= RX;
-          end
-        end
-        RX: begin
           mem_toggle <= !toggle_init;
 
           if (rx_index < mem_len && data_rdy) begin
@@ -105,9 +94,7 @@ module read_cons #(
             state <= START;
           end
         end
-        default: begin
-          // Do nothing
-        end
+        default:;
       endcase
     end
   end

@@ -9,7 +9,7 @@ package mem_pkg;
 
 
     // Memory transaction states
-    typedef enum bit [1:0] {
+    typedef enum bit [3:0] {
         START,
         GET_X_TOP,
         GET_X_BOTTOM,
@@ -17,9 +17,7 @@ package mem_pkg;
         GET_Y_BOTTOM,
         GET_MSG_LENGTH,
         CALC_MEM_ADDR,
-        DATA,
-        RX_WAIT,
-        RX
+        DATA
     } mem_state_e;
 
     function static [32] GridPosToMemAddr (input logic [15:0] x, input logic [15:0] y);

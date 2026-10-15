@@ -18,10 +18,12 @@ package spi_pck;
     UNSET       = 0000,
     ECHO        = 0001,
     INFO        = 0002,
-    WRITE_LINE  = 0003,
-    READ_LINE   = 0004,
-    START_SIM   = 0005,
-    STOP_SIM    = 0006,
+    WRITE_CONS  = 0003,
+    READ_CONS   = 0004,
+    WRITE_BOX   = 0005,
+    READ_BOX    = 0006,
+    START_SIM   = 0007,
+    STOP_SIM    = 0008,
     FAILED      = 0015
   } opcode_e;
 

@@ -2,12 +2,12 @@ module cells (
     input  wire                             clk,
     input  wire [3:2]                       sw,
 
-    input logic                             active_area, 
+    input logic                             active_area,
                                             pixel_pulse,
 
     input vga_sync_params::x_coordinate_t   coord_x,
     input vga_sync_params::y_coordinate_t   coord_y,
-    output color_pkg::color_t               color
+    output layer_pkg::layer_px_t            pixel
 );
     wire we;
     wire [cell_pkg::AddrBits-1:0] write_addr, read_addr;
@@ -36,6 +36,6 @@ module cells (
         .coord_y    (coord_y),
         .read_addr  (read_addr),
         .read_data  (read_data),
-        .color      (color)
+        .pixel      (pixel)
     );
 endmodule

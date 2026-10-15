@@ -84,9 +84,9 @@ module write_cons #(
             // cycle as data is pushed
             mem_toggle <= !toggle_init;
 
-            // Read N bytes from in_queue to mem_in_fifo
+            // Read N bytes from in_queue to mem_in
             if (tx_index < mem_len && data_rdy) begin
-              mem_in_fifo <= in_fifo;
+              mem_in <= in_fifo;
               write_cons_r_en <= 1'b1;
               tx_index <= tx_index + 8'd1;
             end else begin

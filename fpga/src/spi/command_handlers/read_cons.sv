@@ -85,7 +85,7 @@ module read_cons #(
           mem_toggle <= !toggle_init;
 
           if (rx_index < mem_len && data_rdy) begin
-            read_cons_fifo <= mem_out_fifo;
+            read_cons_fifo <= mem_out;
             read_cons_w_en <= 1'b1;
             rx_index <= rx_index + 8'd1;
           end else begin

@@ -38,7 +38,7 @@ module main (
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
   logic [31:0] mem_addr;
-  logic [7:0] mem_len, mem_in_fifo, mem_out_fifo;
+  logic [7:0] mem_len, mem_in, mem_out;
   memory_pkg::transaction_e mem_transaction;
 
 
@@ -88,8 +88,8 @@ module main (
       .mem_toggle(mem_toggle),
       .mem_addr(mem_addr),
       .mem_len(mem_len),
-      .mem_in(mem_in_fifo),
-      .mem_out(mem_out_fifo),
+      .mem_in(mem_in),
+      .mem_out(mem_out),
       .mem_transaction(mem_transaction)
   );
 

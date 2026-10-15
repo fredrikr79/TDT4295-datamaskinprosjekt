@@ -26,29 +26,32 @@ module spi_processor #(
 
   // in_read handlers registration MUX proc_1 | proc_2 | ...
   logic echo_r_en = 1'b0;
-  logic write_line_r_en = 1'b0;
+  logic write_cons_r_en = 1'b0;
   logic fail_r_en = 1'b0;
-  assign proc_r_en = echo_r_en | write_line_r_en | fail_r_en;
+  assign proc_r_en = echo_r_en | write_cons_r_en | fail_r_en;
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic echo_w_en = 1'b0;
   logic info_w_en;
-  logic read_line_w_en;
+  logic read_cons_w_en;
   logic fail_w_en = 1'b0;
 
-  assign proc_w_en = echo_w_en | info_w_en | read_line_w_en | fail_w_en;
+  assign proc_w_en = echo_w_en | info_w_en | read_cons_w_en | fail_w_en;
 
   // Done signals
   logic echo_done = 1'b0;
   logic info_done;
-  logic write_line_done;
-  logic read_line_done;
-  assign proc_done = echo_done | info_done | write_line_done | read_line_done;
+  logic write_cons_done;
+  logic read_cons_done;
+  assign proc_done = echo_done |
+    info_done                  |
+    write_cons_done            |
+    read_cons_done;
 
   // Run signals
   logic send_info = 1'b0;
-  logic send_read_line = 1'b0;
-  logic send_write_line = 1'b0;
+  logic send_read_cons = 1'b0;
+  logic send_write_cons = 1'b0;
 
   // Output buffer muxing
   logic [7:0] info_fifo;
@@ -67,20 +70,21 @@ module spi_processor #(
       echo_done <= 1'b0;
       fail_w_en <= 1'b0;
       fail_r_en <= 1'b0;
-      write_line_r_en <= 1'b0;
-      read_line_w_en <= 1'b0;
+      write_cons_r_en <= 1'b0;
+      read_cons_w_en <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
       out_fifo <= 8'h00;
       send_info <= 1'b0;
-      send_write_line <= 1'b0;
-      send_read_line <= 1'b0;
+      send_write_cons <= 1'b0;
+      send_read_cons <= 1'b0;
     end else begin
 
-      echo_r_en <= 1'b0;
-      echo_w_en <= 1'b0;
-      echo_done <= 1'b0;
-      fail_w_en <= 1'b0;
-      fail_r_en <= 1'b0;
+      // Most signals are handled by respective submodules
+      echo_r_en      <= 1'b0;
+      echo_w_en      <= 1'b0;
+      fail_w_en      <= 1'b0;
+      fail_r_en      <= 1'b0;
+      echo_done      <= 1'b0;
 
       case (state)
 
@@ -122,19 +126,19 @@ module spi_processor #(
               end else send_info <= 1'b0;
             end
 
-            WRITE_LINE: begin
-              if (!write_line_done) begin
-                send_write_line <= 1'b1;
-              end else send_write_line <= 1'b0;
+            WRITE_CONS: begin
+              if (!write_cons_done) begin
+                send_write_cons <= 1'b1;
+              end else send_write_cons <= 1'b0;
             end
 
-            READ_LINE: begin
-              if (!read_line_done) begin
-                send_read_line <= 1'b1;
+            READ_CONS: begin
+              if (!read_cons_done) begin
+                send_read_cons <= 1'b1;
                 if (_w_en) begin
-                  out_fifo <= read_line_fifo;
+                  out_fifo <= read_cons_fifo;
                 end
-              end else send_read_line <= 1'b0;
+              end else send_read_cons <= 1'b0;
             end
 
             FAILED: begin

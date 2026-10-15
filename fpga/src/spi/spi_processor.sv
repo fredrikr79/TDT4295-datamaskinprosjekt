@@ -32,7 +32,7 @@ module spi_processor #(
   logic read_box_r_en = 1'b0;
   logic write_box_r_en = 1'b0;
   logic fail_r_en = 1'b0;
-  
+
   assign proc_r_en = echo_r_en | write_cons_r_en | read_box_r_en | write_box_r_en | fail_r_en;
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
@@ -154,10 +154,25 @@ module spi_processor #(
             READ_CONS: begin
               if (!read_cons_done) begin
                 send_read_cons <= 1'b1;
-                if (_w_en) begin
+                if (read_cons_w_en) begin
                   out_fifo <= read_cons_fifo;
                 end
               end else send_read_cons <= 1'b0;
+            end
+
+            WRITE_BOX: begin
+              if (!write_box_done) begin
+                send_write_box <= 1'b1;
+              end else send_write_box <= 1'b0;
+            end
+
+            READ_BOX: begin
+              if (!read_box_done) begin
+                send_read_box <= 1'b1;
+                if (read_box_w_en) begin
+                  out_fifo <= read_box_fifo;
+                end
+              end else send_read_box <= 1'b0;
             end
 
             START_SIM: begin

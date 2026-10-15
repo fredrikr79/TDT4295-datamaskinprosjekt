@@ -8,6 +8,11 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/transport_core.c
     ${APP_ROOT}/src/app/fpga.c
     ${APP_ROOT}/src/app/frame_sync.c
+    ${APP_ROOT}/src/app/game.c
+    ${APP_ROOT}/src/app/usb_input.c
+    ${APP_ROOT}/src/app/render.c
+    ${APP_ROOT}/src/app/font.c
+    ${APP_ROOT}/src/app/text.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

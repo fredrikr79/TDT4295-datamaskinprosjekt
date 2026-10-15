@@ -27,6 +27,7 @@ add_library(hexmcu_host_common OBJECT
     ${APP_ROOT}/src/port/host/transport_host.c
     ${APP_ROOT}/src/port/host/display_host.c
     ${APP_ROOT}/src/port/host/fake_fpga.c
+    ${APP_ROOT}/src/port/host/usb_backend_sdl.c
 )
 
 # PUBLIC: both executables inherit includes, defines, flags and SDL.

@@ -10,6 +10,7 @@
 #include "game.h"
 #include "usb_input.h"
 #include "render.h"                 /* also PX_BYTES, HUD_CLEAR, RGB565 */
+#include "font.h"
 
 /* tuning */
 #define PROBE_LEN       100u

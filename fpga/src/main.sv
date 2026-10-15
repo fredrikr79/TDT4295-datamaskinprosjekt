@@ -20,8 +20,9 @@ module main (
 
     inout wire acknack,
 
-    output wire led,
-    led0_r,
+    output wire [3:0] led,
+
+    output wire led0_r,
     led0_g,
     led0_b,
     ready,
@@ -35,6 +36,22 @@ module main (
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
 
+  // Sim running
+  logic sim_running = 1'b0;
+
+  // Memory signals
+  logic mem_busy, mem_data_on_wire, mem_toggle;
+  logic [31:0] mem_addr;
+  logic [7:0] mem_len, mem_in, mem_out;
+  memory_pkg::transaction_e mem_transaction;
+
+  localparam int unsigned NumLayers = 3;
+  localparam int unsigned LayerCells = 0;
+  localparam int unsigned LayerGol = 1;
+  localparam int unsigned LayerHud = 2;
+
+  layer_pkg::layer_px_t layers[NumLayers];
+
   vga vga_controller (
       .clk(clk),
       .reset(sw[3]),
@@ -44,7 +61,11 @@ module main (
       .coord_x(coord_x),
       .coord_y(coord_y),
       .active_area(active_area),
-      .pixel_pulse(pixel_pulse)
+      .pixel_pulse(pixel_pulse),
+      .vga_r(vga_r),
+      .vga_g(vga_g),
+      .vga_b(vga_b),
+      .color(color)
   );
 
   cells cell_controller (
@@ -54,6 +75,25 @@ module main (
       .pixel_pulse(pixel_pulse),
       .coord_x(coord_x),
       .coord_y(coord_y),
+      .pixel(layers[LayerCells])
+  );
+
+  gol gol_controller (
+      .clk(clk),
+      .reset(sw[3]),
+      .active_area(active_area),
+      .pixel_pulse(pixel_pulse),
+      .pixel(layers[LayerGol])
+  );
+
+  // TODO: Implement HUD layer. Temporarily always transparent. Remove after implementing the HUD layer.
+  assign layers[LayerHud] = layer_pkg::TransparentPixel;
+
+  compositor #(
+      .NumLayers(NumLayers)
+  ) layer_compositor (
+      .active_area(active_area),
+      .layers(layers),
       .color(color)
   );
 
@@ -73,7 +113,20 @@ module main (
       .out_almost_empty(out_almost_empty),
       .out_empty(out_empty),
       .in_almost_full(in_almost_full),
-      .in_full(in_full)
+      .in_full(in_full),
+
+      // Sim running
+      .sim_running(sim_running)
+
+      // Memory module fall-through signals
+      .mem_busy(mem_busy),
+      .mem_data_on_wire(mem_data_on_wire),
+      .mem_toggle(mem_toggle),
+      .mem_addr(mem_addr),
+      .mem_len(mem_len),
+      .mem_in(mem_in),
+      .mem_out(mem_out),
+      .mem_transaction(mem_transaction)
   );
 
 endmodule

@@ -70,7 +70,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${TINYUSB_SOURCES}
-    src/port/stm32/usb_host_stm32.c
+    src/port/stm32/usb/usb_backend_tinyusb.c
+    src/port/stm32/usb/usb_port_stm32u5.c
 )
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${TINYUSB_INCLUDES}

@@ -19,25 +19,34 @@ module spi_processor #(
   // in_read handlers registration MUX proc_1 | proc_2 | ...
   logic echo_r_en = 1'b0;
   logic fail_r_en = 1'b0;
-  assign proc_r_en = echo_r_en | fail_r_en;
+  logic read_box_r_en = 1'b0;
+  logic write_box_r_en = 1'b0;
+  assign proc_r_en = echo_r_en | read_box_r_en | write_box_r_en | fail_r_en;
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic echo_w_en = 1'b0;
   logic info_w_en;
+  logic read_box_w_en = 1'b0;
   logic fail_w_en = 1'b0;
 
-  assign proc_w_en = echo_w_en | info_w_en | fail_w_en;
+  assign proc_w_en = echo_w_en | info_w_en | read_box_w_en | fail_w_en;
 
   // Done signals
   logic info_done;
   logic echo_done = 1'b0;
-  assign proc_done = echo_done | info_done;
+  logic read_box_done;
+  logic write_box_done;
+  assign proc_done = echo_done | info_done | read_box_done;
 
   // Run signals
   logic send_info = 1'b0;
+  logic send_read_box;
+  logic send_write_box;
 
   // Output buffer muxing
   logic [7:0] info_fifo;
+  logic [7:0] read_box_fifo;
+  logic [7:0] write_box_fifo;
 
 
   always_ff @(posedge clk) begin
@@ -140,6 +149,36 @@ module spi_processor #(
     .info_done(info_done),
     .info_w_en(info_w_en),
     .send_info(send_info)
+  );
+
+  read_box read_box_handler (
+    .clk(clk),
+    .ck_rst(ck_rst),
+    .in_fifo(in_fifo),
+    .read_box_fifo(read_box_fifo),
+    .read_box_done(read_box_done),
+    .read_box_w_en(read_box_w_en),
+    .read_box_r_en(read_box_r_en),
+    .mem_busy(mem_busy),
+    .mem_data_on_wire(mem_data_on_wire),
+    .mem_toggle(mem_toggle),
+    .mem_out(mem_out),
+    .mem_addr(mem_addr),
+    .mem_func(mem_func)
+  );
+
+  write_box read_box_handler (
+    .clk(clk),
+    .ck_rst(ck_rst),
+    .in_fifo(in_fifo),
+    .write_box_done(write_box_done),
+    .write_box_r_en(write_box_r_en),
+    .mem_toggle(mem_toggle),
+    .mem_busy(mem_busy),
+    .mem_data_on_wire(mem_data_on_wire),
+    .mem_in(mem_in),
+    .mem_addr(mem_addr),
+    .mem_func(mem_func)
   );
 
 endmodule

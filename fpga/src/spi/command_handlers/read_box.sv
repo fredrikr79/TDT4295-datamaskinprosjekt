@@ -7,7 +7,7 @@ module read_box #(
     mem_busy,
     input logic [7:0] mem_out,
     in_fifo,
-    output logic [7:0] read_cons_fifo,
+    output logic [7:0] read_box_fifo,
     output logic read_cons_done,
     read_cons_w_en,
     read_cons_r_en,

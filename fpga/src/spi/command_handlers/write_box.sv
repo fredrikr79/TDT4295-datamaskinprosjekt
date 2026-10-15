@@ -6,8 +6,7 @@ module write_box #(
     data_rdy,
     mem_busy,
     input logic [7:0] in_fifo,
-    output logic [7:0] write_cons_fifo,
-    mem_in,
+    output logic [7:0] mem_in,
     output logic write_cons_done,
     write_cons_r_en,
     mem_toggle,
@@ -34,13 +33,12 @@ module write_box #(
     if (!ck_rst) begin
       col_index <= 8'd0;
       row_index <= 8'd0;
-      write_cons_done <= 1'b0;
-      write_cons_r_en <= 1'b0;
-      write_cons_fifo <= 8'd0;
+      write_box_done <= 1'b0;
+      write_box_r_en <= 1'b0;
       state <= START;
     end else begin
-      write_cons_r_en <= 1'b0;
-      write_cons_done <= 1'b0;
+      write_box_r_en <= 1'b0;
+      write_box_done <= 1'b0;
 
       // Fetch target memory address
       case (state)

@@ -97,6 +97,12 @@ module main (
       .color(color)
   );
 
+  // HUD sprites LUT declaration
+  hud_pkg::sprite_entry_t [hud_pkg::SpriteLutDepth-1:0] spriteLUT;
+  hud hud_controller (
+      .spriteLUT(spriteLUT)
+  );
+
   spi spi_controller (
       .clk(clk),
       .ck_ss(ck_ss),
@@ -126,7 +132,10 @@ module main (
       .mem_len(mem_len),
       .mem_in(mem_in),
       .mem_out(mem_out),
-      .mem_transaction(mem_transaction)
+      .mem_transaction(mem_transaction),
+
+      // Sprites LUT
+      .spriteLUT(spriteLUT)
   );
 
 endmodule

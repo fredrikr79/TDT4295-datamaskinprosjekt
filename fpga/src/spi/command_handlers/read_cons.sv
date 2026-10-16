@@ -4,6 +4,7 @@ module read_cons #(
     input wire clk,
     ck_rst,
     data_rdy,
+    send_read_cons,
     mem_busy,
     input logic [7:0] mem_out,
     in_fifo,
@@ -44,57 +45,59 @@ module read_cons #(
       read_cons_r_en <= 1'b0;
       read_cons_done <= 1'b0;
 
-      // Fetch target memory address
-      case (state)
-        START: begin
-          read_cons_r_en <= 1'b1;
-          state <= GET_X_TOP;
-          toggle_init <= mem_toggle;
-        end
-        GET_X_TOP: begin
-          read_cons_r_en <= 1'b1;
-          gridX[15:8] <= in_fifo;
-          state <= GET_X_BOTTOM;
-        end
-        GET_X_BOTTOM: begin
-          read_cons_r_en <= 1'b1;
-          gridX[7:0] <= in_fifo;
-          state <= GET_Y_TOP;
-        end
-        GET_Y_TOP: begin
-          read_cons_r_en <= 1'b1;
-          gridY[15:8] <= in_fifo;
-          state <= GET_Y_BOTTOM;
-        end
-        GET_Y_BOTTOM: begin
-          read_cons_r_en <= 1'b1;
-          gridY[7:0] <= in_fifo;
-          state <= GET_MSG_LENGTH;
-        end
-        GET_MSG_LENGTH: begin
-          mem_len <= in_fifo;
-          state   <= GET_MEM_ADDR;
-        end
-        GET_MEM_ADDR: begin
-          mem_addr <= GridPosToMemAddr(gridX, gridY);
-          mem_func <= READ;
-          state   <= DATA;
-        end
-        DATA: begin
-          mem_toggle <= !toggle_init;
-
-          if (rx_index < mem_len && data_rdy) begin
-            read_cons_fifo <= mem_out;
-            read_cons_w_en <= 1'b1;
-            rx_index <= rx_index + 8'd1;
-          end else begin
-            rx_index <= 8'd0;
-            read_cons_done <= 1'b1;
-            state <= START;
+      if(send_read_cons) begin
+        // Fetch target memory address
+        case (state)
+          START: begin
+            read_cons_r_en <= 1'b1;
+            state <= GET_X_TOP;
+            toggle_init <= mem_toggle;
           end
-        end
-        default:;
-      endcase
+          GET_X_TOP: begin
+            read_cons_r_en <= 1'b1;
+            gridX[15:8] <= in_fifo;
+            state <= GET_X_BOTTOM;
+          end
+          GET_X_BOTTOM: begin
+            read_cons_r_en <= 1'b1;
+            gridX[7:0] <= in_fifo;
+            state <= GET_Y_TOP;
+          end
+          GET_Y_TOP: begin
+            read_cons_r_en <= 1'b1;
+            gridY[15:8] <= in_fifo;
+            state <= GET_Y_BOTTOM;
+          end
+          GET_Y_BOTTOM: begin
+            read_cons_r_en <= 1'b1;
+            gridY[7:0] <= in_fifo;
+            state <= GET_MSG_LENGTH;
+          end
+          GET_MSG_LENGTH: begin
+            mem_len <= in_fifo;
+            state   <= GET_MEM_ADDR;
+          end
+          GET_MEM_ADDR: begin
+            mem_addr <= GridPosToMemAddr(gridX, gridY);
+            mem_func <= READ;
+            state   <= DATA;
+          end
+          DATA: begin
+            mem_toggle <= !toggle_init;
+
+            if (rx_index < mem_len && data_rdy) begin
+              read_cons_fifo <= mem_out;
+              read_cons_w_en <= 1'b1;
+              rx_index <= rx_index + 8'd1;
+            end else begin
+              rx_index <= 8'd0;
+              read_cons_done <= 1'b1;
+              state <= START;
+            end
+          end
+          default:;
+        endcase
+      end
     end
   end
 endmodule

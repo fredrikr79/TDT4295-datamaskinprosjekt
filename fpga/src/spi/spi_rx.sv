@@ -21,19 +21,12 @@ module spi_rx #(
 
   import spi_pck::*;
 
-  // MCU WRITE CONDITIONS
-  assign in_w_en = rx_event_trigger && ~in_full;
-
   // RX signals
   wire in_w_en;
   wire in_almost_empty;
   wire in_wr_rst_busy;
   wire in_rd_rst_busy;
   wire in_wr_ack;
-
-  // Event driven RX Capture
-  wire rx_wr_gate = (~ck_ss) && ((state == ST_READY) | (state == ST_RX) | (state == ST_TX_IDLE));
-  wire rx_event_trigger = rx_event_sync[2] ^ rx_event_sync[1];
 
   reg [7:0] rx_capture = 8'h00;
   reg rx_event = 1'b0;
@@ -43,6 +36,13 @@ module spi_rx #(
     if (reset_s) rx_event_sync <= 3'b000;
     else rx_event_sync <= {rx_event_sync[1:0], rx_event};
   end
+
+  // Event driven RX Capture
+  wire rx_wr_gate = (~ck_ss) && ((state == ST_READY) | (state == ST_RX) | (state == ST_TX_IDLE));
+  wire rx_event_trigger = rx_event_sync[2] ^ rx_event_sync[1];
+
+  // MCU WRITE CONDITIONS
+  assign in_w_en = rx_event_trigger && ~in_full;
 
   assign in_ready = ~in_wr_rst_busy && ~in_rd_rst_busy && ~in_full;
 

@@ -33,11 +33,6 @@ module spi #(
   spi_pck::opcode_e opcode;
   reg proc_done;
 
-  // RESET
-  reg rst_en = 1'b0;  // programatic reset
-  wire reset = ~ck_rst || rst_en;
-  wire reset_s = ~ck_rst_s || rst_en;
-
   // READY
   assign ready = (state == ST_READY) || (state == ST_TX_IDLE);
 
@@ -72,6 +67,12 @@ module spi #(
   wire ck_ss_s = ck_ss_sync[2];
   wire ck_rst_s = ck_rst_sync[2];
   wire out_empty_s = out_empty_sync[2];
+
+  // RESET
+  reg rst_en = 1'b0;  // programatic reset
+  wire reset = ~ck_rst || rst_en;
+  wire reset_s = ~ck_rst_s || rst_en;
+
 
   always_ff @(posedge clk) begin
     if (reset) begin

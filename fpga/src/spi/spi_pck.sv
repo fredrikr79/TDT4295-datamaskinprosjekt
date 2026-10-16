@@ -18,8 +18,8 @@ package spi_pck;
     UNSET       = 0000,
     ECHO        = 0001,
     INFO        = 0002,
-    WRITE_LINE  = 0003,
-    READ_LINE   = 0004,
+    WRITE_CONS  = 0003,
+    READ_CONS   = 0004,
     START_SIM   = 0005,
     STOP_SIM    = 0006,
     FAILED      = 0015

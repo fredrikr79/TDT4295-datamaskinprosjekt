@@ -1,4 +1,4 @@
-package mem_pkg;
+package mem_driver_pkg;
 
     parameter int unsigned GridMemLocationStart = 32'd0;
     parameter int unsigned BytesPerGridPixel = 4'd2;
@@ -16,11 +16,11 @@ package mem_pkg;
         GET_Y_TOP,
         GET_Y_BOTTOM,
         GET_MSG_LENGTH,
-        CALC_MEM_ADDR,
+        GET_MEM_ADDR,
         DATA
     } mem_state_e;
 
-    function static [32] GridPosToMemAddr (input logic [15:0] x, input logic [15:0] y);
+    function static logic [31:0] GridPosToMemAddr (input logic [15:0] x, input logic [15:0] y);
         return GridMemLocationStart + y * config_pkg::ActiveWidth + x;
     endfunction
 endpackage

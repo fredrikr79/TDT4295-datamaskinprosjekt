@@ -116,7 +116,7 @@ module main (
       .in_full(in_full),
 
       // Sim running
-      .sim_running(sim_running)
+      .sim_running(sim_running),
 
       // Memory module fall-through signals
       .mem_busy(mem_busy),

@@ -142,7 +142,7 @@ module spi_processor #(
             READ_CONS: begin
               if (!read_cons_done) begin
                 send_read_cons <= 1'b1;
-                if (_w_en) begin
+                if (read_cons_w_en) begin
                   out_fifo <= read_cons_fifo;
                 end
               end else send_read_cons <= 1'b0;

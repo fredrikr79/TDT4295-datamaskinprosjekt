@@ -19,12 +19,11 @@ module write_cons #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_pkg::*;
+  import mem_driver_pkg::*;
+  import memory_pkg::*;
 
   logic [7:0] tx_index = 8'd0;
   logic [15:0] gridX, gridY;
-  logic [7:0] mem_len;
-  logic [31:0] memAddr;
   logic toggle_init;  // Init captures toggle at the start of the transaction.
 
 
@@ -74,13 +73,13 @@ module write_cons #(
           state   <= GET_MEM_ADDR;
         end
         GET_MEM_ADDR: begin
-          memAddr <= GridPosToMemAddr(gridX, gridY);
+          mem_addr <= GridPosToMemAddr(gridX, gridY);
           mem_func <= WRITE;
           state <= DATA;
         end
         DATA: begin
           if (!mem_busy) begin
-            // use captured toggle to signal the new transaction on the same 
+            // use captured toggle to signal the new transaction on the same
             // cycle as data is pushed
             mem_toggle <= !toggle_init;
 

@@ -20,12 +20,11 @@ module read_cons #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_pkg::*;
+  import mem_driver_pkg::*;
+  import memory_pkg::*;
 
   logic [7:0] rx_index = 8'd0;
   logic [15:0] gridX, gridY;
-  logic [7:0] mem_len;
-  logic [31:0] memAddr;
   logic toggle_init;  // Init captures toggle at the start of the transaction.
 
   read_states_e state = START;
@@ -77,7 +76,7 @@ module read_cons #(
           state   <= GET_MEM_ADDR;
         end
         GET_MEM_ADDR: begin
-          memAddr <= GridPosToMemAddr(gridX, gridY);
+          mem_addr <= GridPosToMemAddr(gridX, gridY);
           mem_func <= READ;
           state   <= DATA;
         end

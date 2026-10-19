@@ -80,7 +80,7 @@ module write_cons #(
         end
         DATA: begin
           if (!mem_busy) begin
-            // use captured toggle to signal the new transaction on the same 
+            // use captured toggle to signal the new transaction on the same
             // cycle as data is pushed
             mem_toggle <= !toggle_init;
 

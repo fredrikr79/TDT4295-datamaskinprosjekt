@@ -24,8 +24,8 @@ FAILED / ACKNACK flag 3 bits,
 |4. Read_Cons     | [X][Y][N]        |  [tileID][Meta1][Meta2]...  |  0011    |  03          |yes          |
 |5. Send_HUD_box  | [X1][Y1][X2][Y2] |  VOID                       |  0100    |  04          |no           |
 |6. Read_HUD_box  | [X1][Y1][X2][Y2] |  [tileID][Meta1][Meta2]...  |  0101    |  05          |no           |
-|7. Send_SIM_box  | [X1][Y1][X2][Y2] |  VOID                       |  0110    |  06          |no           |
-|8. Read_SIM_box  | [X1][Y1][X2][Y2] |  [tileID][Meta1][Meta2]...  |  0111    |  07          |no           |
+|7. Send_SIM_box  | [X1][Y1][X2][Y2] |  VOID                       |  0110    |  06          |yes          |
+|8. Read_SIM_box  | [X1][Y1][X2][Y2] |  [tileID][Meta1][Meta2]...  |  0111    |  07          |yes          |
 |9. Stop_SIM      |                  |  VOID                       |  1000    |  08          |yes          |
 |10. Start_SIM    |                  |  VOID                       |  1001    |  09          |yes          |
 

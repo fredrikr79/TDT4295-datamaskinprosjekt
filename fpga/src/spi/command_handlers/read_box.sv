@@ -4,6 +4,7 @@ module read_box #(
     input wire clk,
     ck_rst,
     data_rdy,
+    send_read_box,
     mem_busy,
     input logic [7:0] mem_out,
     in_fifo,
@@ -61,79 +62,80 @@ module read_box #(
       read_box_r_en <= 1'b0;
       read_box_done <= 1'b0;
 
-      // Fetch target memory address
-      case (state)
-        START: begin
-          read_box_r_en <= 1'b1;
-          toggle_init <= mem_toggle;
-          state <= GET_X_TOP;
-        end
-        GET_X_TOP: begin
-          read_box_r_en <= 1'b1;
-          gridX[15:8] <= in_fifo;
-          state <= GET_X_BOTTOM;
-        end
-        GET_X_BOTTOM: begin
-          read_box_r_en <= 1'b1;
-          gridX[7:0] <= in_fifo;
-          state <= GET_Y_TOP;
-        end
-        GET_Y_TOP: begin
-          read_box_r_en <= 1'b1;
-          gridY[15:8] <= in_fifo;
-          state <= GET_Y_BOTTOM;
-        end
-        GET_Y_BOTTOM: begin
-          read_box_r_en <= 1'b1;
-          gridY[7:0] <= in_fifo;
-          state <= GET_WIDTH_TOP;
-        end
-        GET_WIDTH_TOP: begin
-          read_box_r_en <= 1'b1;
-          cols[15:8] <= in_fifo;
-          state <= GET_WIDTH_BOTTOM;
-        end
-        GET_WIDTH_BOTTOM: begin
-          read_box_r_en <= 1'b1;
-          cols[7:0] <= in_fifo;
-          state <= GET_HEIGHT_TOP;
-        end
-        GET_HEIGHT_TOP: begin
-          read_box_r_en <= 1'b1;
-          rows[15:8] <= in_fifo;
-          state <= GET_HEIGHT_BOTTOM;
-        end
-        GET_HEIGHT_BOTTOM: begin
-          read_box_r_en <= 1'b1;
-          rows[7:0] <= in_fifo;
-          state <= GET_MEM_ADDR;
-        end
-        GET_MEM_ADDR: begin
-          memAddr <= GridPosToMemAddr(gridX, gridY + row_index);
-          mem_func <= READ;
-          state   <= DATA;
-        end
-        DATA: begin
-          mem_toggle <= !toggle_init;
+      if(send_read_box) begin
+        case (state)
+          START: begin
+            read_box_r_en <= 1'b1;
+            toggle_init <= mem_toggle;
+            state <= GET_X_TOP;
+          end
+          GET_X_TOP: begin
+            read_box_r_en <= 1'b1;
+            gridX[15:8] <= in_fifo;
+            state <= GET_X_BOTTOM;
+          end
+          GET_X_BOTTOM: begin
+            read_box_r_en <= 1'b1;
+            gridX[7:0] <= in_fifo;
+            state <= GET_Y_TOP;
+          end
+          GET_Y_TOP: begin
+            read_box_r_en <= 1'b1;
+            gridY[15:8] <= in_fifo;
+            state <= GET_Y_BOTTOM;
+          end
+          GET_Y_BOTTOM: begin
+            read_box_r_en <= 1'b1;
+            gridY[7:0] <= in_fifo;
+            state <= GET_WIDTH_TOP;
+          end
+          GET_WIDTH_TOP: begin
+            read_box_r_en <= 1'b1;
+            cols[15:8] <= in_fifo;
+            state <= GET_WIDTH_BOTTOM;
+          end
+          GET_WIDTH_BOTTOM: begin
+            read_box_r_en <= 1'b1;
+            cols[7:0] <= in_fifo;
+            state <= GET_HEIGHT_TOP;
+          end
+          GET_HEIGHT_TOP: begin
+            read_box_r_en <= 1'b1;
+            rows[15:8] <= in_fifo;
+            state <= GET_HEIGHT_BOTTOM;
+          end
+          GET_HEIGHT_BOTTOM: begin
+            read_box_r_en <= 1'b1;
+            rows[7:0] <= in_fifo;
+            state <= GET_MEM_ADDR;
+          end
+          GET_MEM_ADDR: begin
+            memAddr <= GridPosToMemAddr(gridX, gridY + row_index);
+            mem_func <= READ;
+            state   <= DATA;
+          end
+          DATA: begin
+            mem_toggle <= !toggle_init;
 
-          if (col_index <= cols && data_rdy) begin
-            read_box_fifo <= mem_out;
-            read_box_w_en <= 1'b1;
-            col_index <= col_index + 8'd1;
-          end else begin
-            col_index <= 8'd0;
-            if (row_index < rows) begin
-                row_index <= row_index + 8'd1;
-                state <= GET_MEM_ADDR;
+            if (col_index <= cols && data_rdy) begin
+              read_box_fifo <= mem_out;
+              read_box_w_en <= 1'b1;
+              col_index <= col_index + 8'd1;
             end else begin
-                row_index <= 8'd0;
-                read_box_done <= 1'b1;
-                state <= START;
+              col_index <= 8'd0;
+              if (row_index < rows) begin
+                  row_index <= row_index + 8'd1;
+                  state <= GET_MEM_ADDR;
+              end else begin
+                  row_index <= 8'd0;
+                  read_box_done <= 1'b1;
+                  state <= START;
+              end
             end
           end
-        end
-        default:;
-      endcase
+          default:;
+        endcase
+      end
     end
   end
 endmodule

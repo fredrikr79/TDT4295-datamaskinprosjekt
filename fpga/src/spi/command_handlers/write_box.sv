@@ -4,6 +4,7 @@ module write_box #(
     input wire clk,
     ck_rst,
     data_rdy,
+    send_write_box,
     mem_busy,
     input logic [7:0] in_fifo,
     output logic [7:0] mem_in,
@@ -54,85 +55,86 @@ module write_box #(
       write_box_r_en <= 1'b0;
       write_box_done <= 1'b0;
 
-      // Fetch target memory address
-      case (state)
-        START: begin
-          write_box_r_en <= 1'b1;
-          toggle_init <= mem_toggle;
-          state <= GET_X_TOP;
-        end
-        GET_X_TOP: begin
-          write_box_r_en <= 1'b1;
-          gridX[15:8] <= in_fifo;
-          state <= GET_X_BOTTOM;
-        end
-        GET_X_BOTTOM: begin
-          write_box_r_en <= 1'b1;
-          gridX[7:0] <= in_fifo;
-          state <= GET_Y_TOP;
-        end
-        GET_Y_TOP: begin
-          write_box_r_en <= 1'b1;
-          gridY[15:8] <= in_fifo;
-          state <= GET_Y_BOTTOM;
-        end
-        GET_Y_BOTTOM: begin
-          write_box_r_en <= 1'b1;
-          gridY[7:0] <= in_fifo;
-          state <= GET_WIDTH_TOP;
-        end
-        GET_WIDTH_TOP: begin
-          write_box_r_en <= 1'b1;
-          cols[15:8] <= in_fifo;
-          state <= GET_WIDTH_BOTTOM;
-        end
-        GET_WIDTH_BOTTOM: begin
-          write_box_r_en <= 1'b1;
-          cols[7:0] <= in_fifo;
-          state <= GET_HEIGHT_TOP;
-        end
-        GET_HEIGHT_TOP: begin
-          write_box_r_en <= 1'b1;
-          rows[15:8] <= in_fifo;
-          state <= GET_HEIGHT_BOTTOM;
-        end
-        GET_HEIGHT_BOTTOM: begin
-          write_box_r_en <= 1'b1;
-          rows[7:0] <= in_fifo;
-          state <= GET_MEM_ADDR;
-        end
-        GET_MEM_ADDR: begin
-          memAddr <= GridPosToMemAddr(gridX, gridY + row_index);
-          mem_func <= WRITE;
-          state <= DATA;
-        end
-        DATA: begin
-          if (!mem_busy) begin
-            // use captured toggle to signal the new transaction on the same
-            // cycle as data is pushed
-            mem_toggle <= !toggle_init;
+      if(send_write_box) begin
+        case (state)
+          START: begin
+            write_box_r_en <= 1'b1;
+            toggle_init <= mem_toggle;
+            state <= GET_X_TOP;
+          end
+          GET_X_TOP: begin
+            write_box_r_en <= 1'b1;
+            gridX[15:8] <= in_fifo;
+            state <= GET_X_BOTTOM;
+          end
+          GET_X_BOTTOM: begin
+            write_box_r_en <= 1'b1;
+            gridX[7:0] <= in_fifo;
+            state <= GET_Y_TOP;
+          end
+          GET_Y_TOP: begin
+            write_box_r_en <= 1'b1;
+            gridY[15:8] <= in_fifo;
+            state <= GET_Y_BOTTOM;
+          end
+          GET_Y_BOTTOM: begin
+            write_box_r_en <= 1'b1;
+            gridY[7:0] <= in_fifo;
+            state <= GET_WIDTH_TOP;
+          end
+          GET_WIDTH_TOP: begin
+            write_box_r_en <= 1'b1;
+            cols[15:8] <= in_fifo;
+            state <= GET_WIDTH_BOTTOM;
+          end
+          GET_WIDTH_BOTTOM: begin
+            write_box_r_en <= 1'b1;
+            cols[7:0] <= in_fifo;
+            state <= GET_HEIGHT_TOP;
+          end
+          GET_HEIGHT_TOP: begin
+            write_box_r_en <= 1'b1;
+            rows[15:8] <= in_fifo;
+            state <= GET_HEIGHT_BOTTOM;
+          end
+          GET_HEIGHT_BOTTOM: begin
+            write_box_r_en <= 1'b1;
+            rows[7:0] <= in_fifo;
+            state <= GET_MEM_ADDR;
+          end
+          GET_MEM_ADDR: begin
+            memAddr <= GridPosToMemAddr(gridX, gridY + row_index);
+            mem_func <= WRITE;
+            state <= DATA;
+          end
+          DATA: begin
+            if (!mem_busy) begin
+              // use captured toggle to signal the new transaction on the same
+              // cycle as data is pushed
+              mem_toggle <= !toggle_init;
 
-            // Read N bytes from in_queue to mem_in
-            if (col_index <= cols && data_rdy) begin // include final boundary
-              mem_in <= in_fifo;
-              write_box_r_en <= 1'b1;
-              col_index <= col_index + 8'd1;
-            end else begin
-              col_index <= 8'd0;
-
-              if(row_index < rows) begin
-                row_index <= row_index + 8'd1;
-                state <= GET_MEM_ADDR;
+              // Read N bytes from in_queue to mem_in
+              if (col_index <= cols && data_rdy) begin // include final boundary
+                mem_in <= in_fifo;
+                write_box_r_en <= 1'b1;
+                col_index <= col_index + 8'd1;
               end else begin
-                row_index <= 8'd0;
-                write_box_done <= 1'b1;
-                state <= START;
+                col_index <= 8'd0;
+
+                if(row_index < rows) begin
+                  row_index <= row_index + 8'd1;
+                  state <= GET_MEM_ADDR;
+                end else begin
+                  row_index <= 8'd0;
+                  write_box_done <= 1'b1;
+                  state <= START;
+                end
               end
             end
           end
-        end
-        default:;
-      endcase
+          default:;
+        endcase
+      end
     end
   end
 endmodule

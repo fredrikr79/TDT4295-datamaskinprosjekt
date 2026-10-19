@@ -1,4 +1,4 @@
-module memory_intializer (
+module memory_initializer (
     input clk,
     reset,
     enable,

@@ -36,8 +36,15 @@ module spi_processor #(
   logic info_w_en;
   logic read_cons_w_en;
   logic fail_w_en = 1'b0;
+  logic write_sprite_w_en = 1'b0;
+  logic sprite_write_w_en = 1'b0;
 
-  assign proc_w_en = echo_w_en | info_w_en | read_cons_w_en | fail_w_en;
+  assign proc_w_en = echo_w_en |
+    info_w_en                  |
+    read_cons_w_en             |
+    fail_w_en                  |
+    write_sprite_w_en          |
+    sprite_write_w_en;
 
   // Done signals
   logic echo_done = 1'b0;
@@ -46,20 +53,36 @@ module spi_processor #(
   logic stop_sim_done;
   logic write_cons_done;
   logic read_cons_done;
+  logic write_sprite_done;
+  logic sprite_write_done;
+  logic sprite_update_done;
+  logic sprite_delete_done;
   assign proc_done = echo_done |
     info_done                  |
     write_cons_done            |
     read_cons_done             |
     start_sim_done             |
-    stop_sim_done;
+    stop_sim_done              |
+    write_sprite_done          |
+    sprite_write_done          |
+    sprite_update_done         |
+    sprite_delete_done;
 
   // Run signals
   logic send_info = 1'b0;
   logic send_read_cons = 1'b0;
   logic send_write_cons = 1'b0;
+  logic send_write_sprite = 1'b0;
+  logic send_sprite_write = 1'b0;
+  logic send_sprite_update = 1'b0;
+  logic send_sprite_delete = 1'b0;
 
   // Output buffer muxing
   logic [7:0] info_fifo;
+  logic [7:0] read_cons_fifo;
+  logic [7:0] read_box_fifo;
+  logic [7:0] write_sprite_fifo;
+  logic [7:0] sprite_write_fifo;
 
 
   always_ff @(posedge clk) begin
@@ -82,6 +105,10 @@ module spi_processor #(
       send_info <= 1'b0;
       send_write_cons <= 1'b0;
       send_read_cons <= 1'b0;
+      send_write_sprite <= 1'b0;
+      send_sprite_write <= 1'b0;
+      send_sprite_update <= 1'b0;
+      send_sprite_delete <= 1'b0;
     end else begin
 
       // Most signals are handled by respective submodules
@@ -146,6 +173,36 @@ module spi_processor #(
                   out_fifo <= read_cons_fifo;
                 end
               end else send_read_cons <= 1'b0;
+            end
+
+            WRITE_SPRITE: begin
+              if (!write_sprite_done) begin
+                  send_write_sprite <= 1'b1;
+                  if (write_sprite_w_en) begin
+                    out_fifo <= write_sprite_fifo;
+                  end
+              end else send_write_sprite <= 1'b0;
+            end
+
+            SPRITE_WRITE: begin
+              if (!sprite_write_done) begin
+                  send_sprite_write <= 1'b1;
+                  if (sprite_write_w_en) begin
+                    out_fifo <= sprite_write_fifo;
+                  end
+              end else send_sprite_write <= 1'b0;
+            end
+
+            SPRITE_UPDATE: begin
+              if (!sprite_update_done) begin
+                send_sprite_update <= 1'b1;
+              end else send_sprite_update <= 1'b0;
+            end
+
+            SPRITE_DELETE: begin
+              if (!sprite_delete_done) begin
+                sprite_delete_done <= 1'b1;
+              end else sprite_delete_done <= 1'b0;
             end
 
             START_SIM: begin

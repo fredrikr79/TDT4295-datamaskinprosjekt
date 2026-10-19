@@ -2,7 +2,6 @@ package mem_driver_pkg;
 
     parameter int unsigned GridMemLocationStart = 32'd0;
     parameter int unsigned BytesPerGridPixel = 4'd2;
-
     parameter int unsigned SpriteMemLocationStart = config_pkg::ActiveWidth
         *config_pkg::ActiveHeight
         * BytesPerGridPixel;

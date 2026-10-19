@@ -4,7 +4,8 @@ module sprite_delete #(
     input wire clk, send_sprite_delete,
     input reg [0:0] sprite_delete_r_en,
     input logic [7:0] in_fifo,
-    output hud_pkg::sprite_entry_t spriteLUT [hud_pkg::SpriteLutDepth]
+    output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth],
+    output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap
 );
 
 import hud_pkg::*;
@@ -35,6 +36,7 @@ always_ff @(posedge clk) begin
             end
             EXECUTE: begin
                 hud_pkg::deleteSprite(spriteLUT, param_id);
+                sprite_id_bitmap[param_id] <= 1'b0;
                 state <= START;
             end
             default: ;

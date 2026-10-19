@@ -67,6 +67,8 @@ module spi_processor #(
   logic send_info = 1'b0;
   logic send_read_cons = 1'b0;
   logic send_write_cons = 1'b0;
+  logic send_read_box = 1'b0;
+  logic send_write_box = 1'b0;
 
   // Output buffer muxing
   logic [7:0] info_fifo;
@@ -269,7 +271,7 @@ module spi_processor #(
     .mem_func(mem_func)
   );
 
-  write_box read_box_handler (
+  write_box write_box_handler (
     .clk(clk),
     .ck_rst(ck_rst),
     .in_fifo(in_fifo),

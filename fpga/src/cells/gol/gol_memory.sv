@@ -26,6 +26,7 @@ module gol_ring_buffer #(
 ) (
     input  wire  clk,
     input  wire  en,
+    input  wire  we,
     input  wire  data_in,
     output logic data_out
 );
@@ -46,7 +47,7 @@ module gol_ring_buffer #(
   always_ff @(posedge clk) begin
     if (en) begin
       target_gol_cell <= mem[addr];  // Read first
-      mem[addr] <= data_in;  // Then overwrite with new data
+      if (we) mem[addr] <= data_in;  // Then overwrite with new data
     end
   end
 

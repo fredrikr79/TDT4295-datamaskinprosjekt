@@ -71,6 +71,7 @@ module main (
   cells cell_controller (
       .clk(clk),
       .sw(sw),
+      .sim_running(sim_running),
       .active_area(active_area),
       .pixel_pulse(pixel_pulse),
       .coord_x(coord_x),
@@ -81,6 +82,7 @@ module main (
   gol gol_controller (
       .clk(clk),
       .reset(sw[3]),
+      .sim_running(sim_running),
       .active_area(active_area),
       .pixel_pulse(pixel_pulse),
       .pixel(layers[LayerGol])

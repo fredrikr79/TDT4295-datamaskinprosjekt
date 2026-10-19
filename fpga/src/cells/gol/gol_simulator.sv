@@ -3,6 +3,7 @@ module gol_simulator (
     input  wire clk,
     input  wire reset,
     input  wire en,
+    input  wire sim_running,
     output wire alive
 );
   import gol_pkg::*;
@@ -20,7 +21,7 @@ module gol_simulator (
 
   logic [31:0] lfsr = 32'hACE1_2345; // Linear feedback shift register acting as pseudo-randomizer.
   always_ff @(posedge clk) begin
-    if (en) lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
+    if (en && sim_running) lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
   end
   
   wire seed_bit = lfsr[31] & lfsr[17];
@@ -33,7 +34,7 @@ module gol_simulator (
       seeding <= 1'b1;
       seed_count <= '0;
     end 
-    else if (en && seeding) begin
+    else if (en && sim_running && seeding) begin
       seed_count <= seed_count + 1'b1;
       if (seed_count == SeedCountBits'(FrameLen - 1)) seeding <= 1'b0;
     end
@@ -44,6 +45,7 @@ module gol_simulator (
   ) fb_shift_reg (
       .clk (clk),
       .en  (en),
+      .we  (sim_running),
       .data_in(seeding ? seed_bit : output_pixel),
       .data_out(pixel_out_fifo)
   );

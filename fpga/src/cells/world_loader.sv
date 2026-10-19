@@ -1,6 +1,7 @@
 module world_loader (
     input wire clk,
     input wire reset,
+    input wire en,
     output logic                          we,
     output logic [cell_pkg::AddrBits-1:0] write_addr,
     output cell_pkg::cell_word_t          data
@@ -20,6 +21,8 @@ module world_loader (
       row_y   <= '0;
       we      <= 1'b0;
       loading <= 1'b1;
+    end else if (!en) begin
+      we <= 1'b0;
     end else begin
       we   <= loading;
       write_addr <= get_word_addr(word_full_address, row_y);

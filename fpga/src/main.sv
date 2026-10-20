@@ -37,7 +37,7 @@ module main (
   color_pkg::color_t color;
 
   // Sim running
-  logic sim_running = 1'b0;
+  logic sim_running = 1'b1; // Temporarily 1
 
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
@@ -99,37 +99,37 @@ module main (
       .color(color)
   );
 
-  spi spi_controller (
-      .clk(clk),
-      .ck_ss(ck_ss),
-      .ck_sck(ck_sck),
-      .ck_rst(ck_rst),
-      .octo_spi(octo_spi),
-      .acknack(acknack),
-      .led(led),
-      .led0_r(led0_r),
-      .led0_g(led0_g),
-      .led0_b(led0_b),
-      .ready(ready),
+//   spi spi_controller (
+//       .clk(clk),
+//       .ck_ss(ck_ss),
+//       .ck_sck(ck_sck),
+//       .ck_rst(ck_rst),
+//       .octo_spi(octo_spi),
+//       .acknack(acknack),
+//       .led(led),
+//       .led0_r(led0_r),
+//       .led0_g(led0_g),
+//       .led0_b(led0_b),
+//       .ready(ready),
 
-      .out_almost_empty(out_almost_empty),
-      .out_empty(out_empty),
-      .in_almost_full(in_almost_full),
-      .in_full(in_full),
+//       .out_almost_empty(out_almost_empty),
+//       .out_empty(out_empty),
+//       .in_almost_full(in_almost_full),
+//       .in_full(in_full),
 
-      // Sim running
-      .sim_running(sim_running),
+//       // Sim running
+//       .sim_running(sim_running),
 
-      // Memory module fall-through signals
-      .mem_busy(mem_busy),
-      .mem_data_on_wire(mem_data_on_wire),
-      .mem_toggle(mem_toggle),
-      .mem_addr(mem_addr),
-      .mem_len(mem_len),
-      .mem_in(mem_in),
-      .mem_out(mem_out),
-      .mem_transaction(mem_transaction)
-  );
+//       // Memory module fall-through signals
+//       .mem_busy(mem_busy),
+//       .mem_data_on_wire(mem_data_on_wire),
+//       .mem_toggle(mem_toggle),
+//       .mem_addr(mem_addr),
+//       .mem_len(mem_len),
+//       .mem_in(mem_in),
+//       .mem_out(mem_out),
+//       .mem_transaction(mem_transaction)
+//   );
 
 endmodule
 

@@ -37,6 +37,8 @@ module spi_processor #(
       echo_r_en = 1'b0,
       read_cons_r_en = 1'b0,
       write_cons_r_en = 1'b0,
+      read_box_r_en = 1'b0,
+      write_box_r_en = 1'b0,
       write_sprite_r_en = 1'b0,
       sprite_write_r_en = 1'b0,
       sprite_update_r_en = 1'b0,
@@ -47,6 +49,8 @@ module spi_processor #(
     echo_r_en                  |
     read_cons_r_en             |
     write_cons_r_en            |
+    read_box_r_en              |
+    write_box_r_en             |
     write_sprite_r_en          |
     sprite_write_r_en          |
     sprite_update_r_en         |
@@ -58,6 +62,7 @@ module spi_processor #(
       echo_w_en = 1'b0,
       info_w_en = 1'b0,
       read_cons_w_en = 1'b0,
+      read_box_w_en = 1'b0,
       fail_w_en = 1'b0,
       write_sprite_w_en = 1'b0,
       sprite_write_w_en = 1'b0;
@@ -65,6 +70,7 @@ module spi_processor #(
   assign proc_w_en = echo_w_en |
     info_w_en                  |
     read_cons_w_en             |
+    read_box_w_en              |
     fail_w_en                  |
     write_sprite_w_en          |
     sprite_write_w_en;
@@ -77,6 +83,8 @@ module spi_processor #(
       stop_sim_done,
       write_cons_done,
       read_cons_done,
+      write_box_done,
+      read_box_done,
       write_sprite_done,
       sprite_write_done,
       sprite_update_done,
@@ -86,6 +94,8 @@ module spi_processor #(
     info_done                  |
     write_cons_done            |
     read_cons_done             |
+    read_box_done              |
+    write_box_done             |
     start_sim_done             |
     stop_sim_done              |
     write_sprite_done          |
@@ -98,13 +108,19 @@ module spi_processor #(
       send_info = 1'b0,
       send_read_cons = 1'b0,
       send_write_cons = 1'b0,
+      send_read_box = 1'b0,
+      send_write_box = 1'b0,
       send_write_sprite = 1'b0,
       send_sprite_write = 1'b0,
       send_sprite_update = 1'b0,
       send_sprite_delete = 1'b0;
 
   // Output buffer muxing
-  logic [7:0] info_fifo, read_cons_fifo, read_box_fifo, write_sprite_fifo, sprite_write_fifo;
+  logic [7:0] info_fifo,
+    read_cons_fifo,
+    read_box_fifo,
+    write_sprite_fifo,
+    sprite_write_fifo;
 
 
   // Mem transaction toggle mux
@@ -223,6 +239,21 @@ module spi_processor #(
               end else send_read_cons <= 1'b0;
             end
 
+            WRITE_BOX: begin
+              if (!write_box_done) begin
+                send_write_box <= 1'b1;
+              end else send_write_box <= 1'b0;
+            end
+
+            READ_BOX: begin
+              if (!read_box_done) begin
+                send_read_box <= 1'b1;
+                if (read_box_w_en) begin
+                  out_fifo <= read_box_fifo;
+                end
+              end else send_read_box <= 1'b0;
+            end
+
             WRITE_SPRITE: begin
               if (!write_sprite_done) begin
                 send_write_sprite <= 1'b1;
@@ -334,6 +365,36 @@ module spi_processor #(
       .read_cons_done(read_cons_done),
       .read_cons_w_en(read_cons_w_en),
       .read_cons_r_en(read_cons_r_en)
+  );
+
+  read_box read_box_handler (
+    .clk(clk),
+    .ck_rst(ck_rst),
+    .in_fifo(in_fifo),
+    .read_box_fifo(read_box_fifo),
+    .read_box_done(read_box_done),
+    .read_box_w_en(read_box_w_en),
+    .read_box_r_en(read_box_r_en),
+    .mem_busy(mem_busy),
+    .mem_data_on_wire(mem_data_on_wire),
+    .mem_toggle(mem_toggle),
+    .mem_out(mem_out),
+    .mem_addr(mem_addr),
+    .mem_func(mem_func)
+  );
+
+  write_box write_box_handler (
+    .clk(clk),
+    .ck_rst(ck_rst),
+    .in_fifo(in_fifo),
+    .write_box_done(write_box_done),
+    .write_box_r_en(write_box_r_en),
+    .mem_toggle(mem_toggle),
+    .mem_busy(mem_busy),
+    .mem_data_on_wire(mem_data_on_wire),
+    .mem_in(mem_in),
+    .mem_addr(mem_addr),
+    .mem_func(mem_func)
   );
 
   write_sprite write_sprite_cmd_processor (

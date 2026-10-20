@@ -164,7 +164,7 @@ module memory_controller (
            && transaction_toggle != current_transaction_toggle) begin
       current_transaction <= next_transaction;
       current_address <= address;
-      current_lenght <= length;
+      current_length <= length;
     end
     current_transaction_toggle <= transaction_toggle;
   end

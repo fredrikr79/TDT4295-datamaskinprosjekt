@@ -143,6 +143,7 @@ module spi #(
   // Command processing module
   spi_processor processor (
       .clk(clk),
+      .reset_s(ck_rst),
       .state(state),
       .in_fifo(in_fifo),
       .out_full(out_full),
@@ -152,7 +153,21 @@ module spi #(
       .proc_r_en(proc_r_en),
       .out_fifo(out_fifo),
       .opcode(opcode),
-      .proc_done(proc_done)
+      .proc_done(proc_done),
+      .mem_in(mem_in),
+      .mem_out(mem_out),
+      .mem_len(mem_len),
+      .mem_addr(mem_addr),
+      .mem_transaction(mem_transaction),
+      .mem_busy(mem_busy),
+      .mem_data_on_wire(mem_data_on_wire),
+      .mem_toggle(mem_toggle),
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_found(sprite_id_found),
+      .sprite_req_valid(sprite_req_valid),
+      .sprite_req_body(sprite_req_body),
+      .sprite_req_op(sprite_req_op)
+
   );
 
   // DEBUG

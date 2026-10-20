@@ -91,9 +91,13 @@ module write_cons #(
               end else begin
                 write_cons_done <= 1'b1;
                 tx_index <= 8'd0;
-                state <= START;
+                state <= DONE;
               end
             end
+          end
+          DONE: begin
+            // Simply wait one cycle for done signal to be processed.
+            state <= START;
           end
           default:;
         endcase

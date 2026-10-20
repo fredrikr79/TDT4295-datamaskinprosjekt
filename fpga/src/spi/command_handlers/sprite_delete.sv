@@ -12,10 +12,11 @@ module sprite_delete #(
 import hud_pkg::*;
 
 
-typedef enum {
+typedef enum bit [1:0] {
     START,
     GET_ID,
-    EXECUTE
+    EXECUTE,
+    DONE
 } sprite_delete_states_e;
 
 sprite_delete_state_e state = START;
@@ -40,6 +41,10 @@ always_ff @(posedge clk) begin
                 hud_pkg::deleteSprite(spriteLUT, param_id);
                 sprite_id_bitmap[param_id] <= 1'b0;
                 sprite_delete_done <= 1'b1;
+                state <= DONE;
+            end
+            DONE: begin
+                // Simply wait one cycle for done signal to be processed.
                 state <= START;
             end
             default: ;

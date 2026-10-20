@@ -11,7 +11,7 @@ module sprite_write #(
 
 import hud_pkg::*;
 
-typedef enum {
+typedef enum bit [3:0] {
     START,
     GET_MEM_ID,
     GET_ACTIVE,
@@ -23,7 +23,8 @@ typedef enum {
     GET_WIDTH_BOTTOM,
     GET_HEIGTH_TOP,
     GET_HEIGTH_BOTTOM,
-    EXECUTE
+    EXECUTE,
+    DONE
 } sprite_write_states_e;
 
 sprite_update_state_e state = START;
@@ -126,6 +127,10 @@ always_ff @(posedge clk) begin
                 sprite_write_w_en <= 1'b1;
                 sprite_write_fifo <= param_id;
                 sprite_write_done <= 1'b1;
+                state <= DONE;
+            end
+            DONE: begin
+                // Simply wait one cycle for done signal to be processed.
                 state <= START;
             end
             default:;

@@ -92,8 +92,12 @@ module read_cons #(
             end else begin
               rx_index <= 8'd0;
               read_cons_done <= 1'b1;
-              state <= START;
+              state <= DONE;
             end
+          end
+          DONE: begin
+            // Simply wait one cycle for done signal to be processed.
+            state <= START;
           end
           default:;
         endcase

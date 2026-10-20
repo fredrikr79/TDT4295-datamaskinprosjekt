@@ -101,9 +101,13 @@ module write_sprite #(
                 mem_addr <= mem_addr + mem_len;
                 write_sprite_fifo <= next_id;
                 next_id <= next_id + 1'b1;
-                state <= START;
+                state <= DONE;
               end
             end
+          end
+          DONE: begin
+            // Simply wait one cycle for done signal to be processed.
+            state <= START;
           end
           default:;
         endcase

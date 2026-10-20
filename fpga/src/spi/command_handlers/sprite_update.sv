@@ -10,7 +10,7 @@ module sprite_update #(
 
 import hud_pkg::*;
 
-typedef enum {
+typedef enum bit [3:0] {
     START,
     GET_ID,
     GET_ACTIVE,
@@ -18,7 +18,8 @@ typedef enum {
     GET_X_BOTTOM,
     GET_Y_TOP,
     GET_Y_BOTTOM,
-    EXECUTE
+    EXECUTE,
+    DONE
 } sprite_update_states_e;
 
 sprite_update_state_e state = START;
@@ -69,6 +70,10 @@ always_ff @(posedge clk) begin
             EXECUTE: begin
                 hud_pkg::updateSprite(spriteLUT, param_id, param_active, param_x, param_y);
                 sprite_update_done <= 1'b1;
+                state <= DONE;
+            end
+            DONE: begin
+                // Simply wait one cycle for done signal to be processed.
                 state <= START;
             end
             default:;

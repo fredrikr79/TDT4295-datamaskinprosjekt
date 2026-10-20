@@ -16,7 +16,8 @@ package mem_driver_pkg;
         GET_Y_BOTTOM,
         GET_MSG_LENGTH,
         GET_MEM_ADDR,
-        DATA
+        DATA,
+        DONE
     } mem_state_e;
 
     function static logic [31:0] GridPosToMemAddr (input logic [15:0] x, input logic [15:0] y);

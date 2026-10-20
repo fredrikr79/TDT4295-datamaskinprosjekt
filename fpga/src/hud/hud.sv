@@ -27,16 +27,23 @@ always_comb begin
     end
 end
 
+// Allocate LUT for SpriteMemDepth number of sprite id <-> base pointer pairs
+logic [31:0] sprite_mem_lut [SpriteMemDepth];
+
+always_ff @(posedge clk) begin
+    sprite_mem_lut[sprite_mem_id] <= sprite_w_mem_addr;
+end
+
 always_ff @(posedge clk) begin
     if(req_valid) begin
         case(req_op)
-            WRITE: begin
+            LUT_WRITE: begin
                 addSprite(spriteLUT, sprite_id_bitmap, req_body);
             end
-            UPDATE: begin
+            LUT_UPDATE: begin
                 updateSprite(spriteLUT, req_body);
             end
-            DELETE: begin
+            LUT_DELETE: begin
                 deleteSprite(spriteLUT, sprite_id_bitmap, req_body);
             end
             default:;

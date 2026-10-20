@@ -19,25 +19,41 @@ module spi_processor #(
     mem_in,
     mem_len,
     output logic [31:0] mem_addr,
+    output spi_pck::opcode_e opcode,
     output memory_pkg::transaction_e mem_transaction,
-    output spi_pck::opcode_e opcode
+    output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth],
+    output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap
+
 );
 
   import spi_pck::*;
 
   // in_read handlers registration MUX proc_1 | proc_2 | ...
-  logic echo_r_en = 1'b0;
-  logic write_cons_r_en = 1'b0;
-  logic fail_r_en = 1'b0;
-  assign proc_r_en = echo_r_en | write_cons_r_en | fail_r_en;
+  logic echo_r_en          = 1'b0,
+        read_cons_r_en     = 1'b0,
+        write_cons_r_en    = 1'b0,
+        write_sprite_r_en  = 1'b0,
+        sprite_write_r_en  = 1'b0,
+        sprite_update_r_en = 1'b0,
+        sprite_delete_r_en = 1'b0,
+        fail_r_en          = 1'b0;
+
+  assign proc_r_en = echo_r_en |
+    read_cons_r_en             |
+    write_cons_r_en            |
+    write_sprite_r_en          |
+    sprite_write_r_en          |
+    sprite_update_r_en         |
+    sprite_delete_r_en         |
+    fail_r_en;
 
   // out_write handlers registration MUX proc_1 | proc_2 | ...
-  logic echo_w_en = 1'b0;
-  logic info_w_en;
-  logic read_cons_w_en;
-  logic fail_w_en = 1'b0;
-  logic write_sprite_w_en = 1'b0;
-  logic sprite_write_w_en = 1'b0;
+  logic echo_w_en          = 1'b0,
+        info_w_en          = 1'b0,
+        read_cons_w_en     = 1'b0,
+        fail_w_en          = 1'b0,
+        write_sprite_w_en  = 1'b0,
+        sprite_write_w_en  = 1'b0;
 
   assign proc_w_en = echo_w_en |
     info_w_en                  |
@@ -47,16 +63,17 @@ module spi_processor #(
     sprite_write_w_en;
 
   // Done signals
-  logic echo_done = 1'b0;
-  logic info_done;
-  logic start_sim_done;
-  logic stop_sim_done;
-  logic write_cons_done;
-  logic read_cons_done;
-  logic write_sprite_done;
-  logic sprite_write_done;
-  logic sprite_update_done;
-  logic sprite_delete_done;
+  logic echo_done,
+        info_done,
+        start_sim_done,
+        stop_sim_done,
+        write_cons_done,
+        read_cons_done,
+        write_sprite_done,
+        sprite_write_done,
+        sprite_update_done,
+        sprite_delete_done;
+
   assign proc_done = echo_done |
     info_done                  |
     write_cons_done            |
@@ -69,20 +86,20 @@ module spi_processor #(
     sprite_delete_done;
 
   // Run signals
-  logic send_info = 1'b0;
-  logic send_read_cons = 1'b0;
-  logic send_write_cons = 1'b0;
-  logic send_write_sprite = 1'b0;
-  logic send_sprite_write = 1'b0;
-  logic send_sprite_update = 1'b0;
-  logic send_sprite_delete = 1'b0;
+  logic send_info          = 1'b0,
+        send_read_cons     = 1'b0,
+        send_write_cons    = 1'b0,
+        send_write_sprite  = 1'b0,
+        send_sprite_write  = 1'b0,
+        send_sprite_update = 1'b0,
+        send_sprite_delete = 1'b0;
 
   // Output buffer muxing
-  logic [7:0] info_fifo;
-  logic [7:0] read_cons_fifo;
-  logic [7:0] read_box_fifo;
-  logic [7:0] write_sprite_fifo;
-  logic [7:0] sprite_write_fifo;
+  logic [7:0] info_fifo,
+              read_cons_fifo,
+              read_box_fifo,
+              write_sprite_fifo,
+              sprite_write_fifo;
 
 
   always_ff @(posedge clk) begin
@@ -93,15 +110,13 @@ module spi_processor #(
     // e.g in_r_en = cmd1_in_r_en | cmd2_in_r_en
 
     if (reset_s) begin
-      echo_r_en <= 1'b0;
-      echo_w_en <= 1'b0;
-      echo_done <= 1'b0;
-      fail_w_en <= 1'b0;
-      fail_r_en <= 1'b0;
-      write_cons_r_en <= 1'b0;
-      read_cons_w_en <= 1'b0;
+      sim_running <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
       out_fifo <= 8'h00;
+      echo_r_en <= 1'b0;
+      fail_r_en <= 1'b0;
+      echo_w_en <= 1'b0;
+      fail_w_en <= 1'b0;
       send_info <= 1'b0;
       send_write_cons <= 1'b0;
       send_read_cons <= 1'b0;
@@ -109,6 +124,9 @@ module spi_processor #(
       send_sprite_write <= 1'b0;
       send_sprite_update <= 1'b0;
       send_sprite_delete <= 1'b0;
+      echo_done <= 1'b0;
+      start_sim_done <= 1'b0;
+      stop_sim_done  <= 1'b0;
     end else begin
 
       // Most signals are handled by respective submodules
@@ -201,8 +219,8 @@ module spi_processor #(
 
             SPRITE_DELETE: begin
               if (!sprite_delete_done) begin
-                sprite_delete_done <= 1'b1;
-              end else sprite_delete_done <= 1'b0;
+                send_sprite_delete <= 1'b1;
+              end else send_sprite_delete <= 1'b0;
             end
 
             START_SIM: begin
@@ -252,12 +270,13 @@ module spi_processor #(
 
   write_cons write_cons_cmd_processor (
       .clk(clk),
-      .ck_rst(ck_rst),
-      .data_rdy(data_rdy),
+      .ck_rst(reset_s),
+      .send_write_cons(send_write_cons),
+      .mem_data_on_wire(mem_data_on_wire),
       .mem_busy(mem_busy),
       .mem_len(mem_len),
       .mem_addr(mem_addr),
-      .mem_func(mem_transaction),
+      .mem_transaction(mem_transaction),
       .mem_in(mem_in),
       .mem_toggle(mem_toggle),
       .in_fifo(in_fifo),
@@ -268,19 +287,69 @@ module spi_processor #(
 
   read_cons read_cons_cmd_processor (
       .clk(clk),
-      .ck_rst(ck_rst),
-      .data_rdy(data_rdy),
+      .ck_rst(reset_s),
+      .send_read_cons(send_read_cons),
+      .mem_data_on_wire(mem_data_on_wire),
       .in_fifo(in_fifo),
       .mem_len(mem_len),
       .mem_busy(mem_busy),
       .mem_toggle(mem_toggle),
       .mem_addr(mem_addr),
-      .mem_func(mem_func),
+      .mem_transaction(mem_transaction),
       .mem_out(mem_out),
       .read_cons_fifo(read_cons_fifo),
       .read_cons_done(read_cons_done),
       .read_cons_w_en(read_cons_w_en),
       .read_cons_r_en(read_cons_r_en)
   );
+
+  write_sprite write_sprite_cmd_processor (
+    .clk(clk),
+    .mem_data_on_wire(mem_data_on_wire),
+    .send_write_sprite(send_write_sprite),
+    .mem_busy(mem_busy),
+    .in_fifo(in_fifo),
+    .write_sprite_fifo(write_sprite_fifo),
+    .mem_len(mem_len),
+    .mem_in(mem_in),
+    .write_sprite_done(write_sprite_done),
+    .write_sprite_r_en(write_sprite_r_en),
+    .write_sprite_w_en(write_sprite_w_en),
+    .mem_toggle(mem_toggle),
+    .mem_addr(mem_addr),
+    .mem_transaction(mem_transaction)
+  );
+
+  sprite_write sprite_write_cmd_processor (
+    .clk(clk),
+    .send_sprite_write(send_sprite_write),
+    .sprite_write_done(sprite_write_done),
+    .in_fifo(in_fifo),
+    .sprite_write_r_en(sprite_write_r_en),
+    .sprite_write_w_en(sprite_write_w_en),
+    .sprite_write_fifo(sprite_write_w_en),
+    .spriteLUT(spriteLUT),
+    .sprite_id_bitmap(sprite_id_bitmap)
+  );
+
+  sprite_update sprite_update_cmd_processor (
+    .clk(clk),
+    .send_sprite_update(send_sprite_update),
+    .sprite_update_done(sprite_update_done),
+    .sprite_update_r_en(sprite_update_r_en),
+    .in_fifo(in_fifo),
+    .spriteLUT(spriteLUT)
+  );
+
+  sprite_delete sprite_delete_cmd_processor (
+    .clk(clk),
+    .send_sprite_delete(send_sprite_delete),
+    .sprite_delete_done(sprite_delete_done),
+    .sprite_delete_r_en(sprite_delete_r_en),
+    .in_fifo(in_fifo),
+    .spriteLUT(spriteLUT),
+    .sprite_id_bitmap(sprite_id_bitmap)
+  );
+
 
 endmodule

@@ -2,13 +2,13 @@ module sprite_update #(
 
 )(
     input wire clk, send_sprite_update,
-    input reg [0:0] sprite_update_r_en,
+    input reg sprite_update_r_en,
     input logic [7:0] in_fifo,
+    output logic sprite_update_done,
     output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth]
 );
 
 import hud_pkg::*;
-
 
 typedef enum {
     START,
@@ -29,6 +29,7 @@ logic [15:0] param_x, param_y;
 
 always_ff @(posedge clk) begin
     sprite_update_r_en <= 1'b0;
+    sprite_update_done <= 1'b0;
 
     if(send_sprite_update) begin
         case (state)
@@ -67,6 +68,7 @@ always_ff @(posedge clk) begin
             end
             EXECUTE: begin
                 hud_pkg::updateSprite(spriteLUT, param_id, param_active, param_x, param_y);
+                sprite_update_done <= 1'b1;
                 state <= START;
             end
             default:;

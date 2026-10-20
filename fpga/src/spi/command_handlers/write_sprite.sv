@@ -3,7 +3,7 @@ module write_sprite #(
 ) (
     input wire clk,
     ck_rst,
-    data_rdy,
+    mem_data_on_wire,
     send_write_sprite,
     mem_busy,
     input logic [7:0] in_fifo,
@@ -12,9 +12,10 @@ module write_sprite #(
     mem_in,
     output logic write_sprite_done,
     write_sprite_r_en,
+    write_sprite_w_en,
     mem_toggle,
     output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_func
+    output memory_pkg::transaction_e mem_transaction
 );
 
   import hud_pkg::*;
@@ -38,10 +39,12 @@ module write_sprite #(
       tx_index <= 8'd0;
       write_sprite_done <= 1'b0;
       write_sprite_r_en <= 1'b0;
+      write_sprite_w_en <= 1'b0;
       write_sprite_fifo <= 8'd0;
       state <= START;
     end else begin
       write_sprite_r_en <= 1'b0;
+      write_sprite_w_en <= 1'b0;
       write_sprite_done <= 1'b0;
 
       if(send_write_sprite) begin
@@ -77,7 +80,7 @@ module write_sprite #(
             state   <= GET_MEM_ADDR;
           end
           GET_MEM_ADDR: begin
-            mem_func <= WRITE;
+            mem_transaction <= WRITE;
             state <= DATA;
           end
           DATA: begin
@@ -87,12 +90,13 @@ module write_sprite #(
               mem_toggle <= !toggle_init;
 
               // Read N bytes from in_queue to mem_in
-              if (tx_index < mem_len && data_rdy) begin
+              if (tx_index < mem_len && mem_data_on_wire) begin
                 mem_in <= in_fifo;
                 write_sprite_r_en <= 1'b1;
                 tx_index <= tx_index + 8'd1;
               end else begin
                 write_sprite_done <= 1'b1;
+                write_sprite_w_en <= 1'b1;
                 tx_index <= 8'd0;
                 mem_addr <= mem_addr + mem_len;
                 write_sprite_fifo <= next_id;

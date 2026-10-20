@@ -2,8 +2,9 @@ module sprite_write #(
 
 )(
     input wire clk, send_sprite_write,
-    input logic [7:0] in_fifo, sprite_write_id,
-    output reg [0:0] sprite_write_r_en,
+    input logic [7:0] in_fifo,
+    output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done,
+    output logic [7:0] sprite_write_fifo,
     output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth],
     output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap
 );
@@ -50,6 +51,8 @@ end
 
 always_ff @(posedge clk) begin
     sprite_write_r_en <= 1'b0;
+    sprite_write_w_en <= 1'b0;
+    sprite_write_done <= 1'b0;
 
     if(send_sprite_write) begin
         case (state)
@@ -120,6 +123,9 @@ always_ff @(posedge clk) begin
                     param_h,
                     param_w
                 );
+                sprite_write_w_en <= 1'b1;
+                sprite_write_fifo <= param_id;
+                sprite_write_done <= 1'b1;
                 state <= START;
             end
             default:;

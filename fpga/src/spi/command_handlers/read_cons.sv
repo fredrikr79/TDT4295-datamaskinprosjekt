@@ -3,7 +3,7 @@ module read_cons #(
 ) (
     input wire clk,
     ck_rst,
-    data_rdy,
+    mem_data_on_wire,
     send_read_cons,
     mem_busy,
     input logic [7:0] mem_out,
@@ -15,7 +15,7 @@ module read_cons #(
     read_cons_r_en,
     mem_toggle,
     output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_func
+    output memory_pkg::transaction_e mem_transaction
 );
 
 
@@ -79,13 +79,13 @@ module read_cons #(
           end
           GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX, gridY);
-            mem_func <= READ;
+            mem_transaction <= READ;
             state   <= DATA;
           end
           DATA: begin
             mem_toggle <= !toggle_init;
 
-            if (rx_index < mem_len && data_rdy) begin
+            if (rx_index < mem_len && mem_data_on_wire) begin
               read_cons_fifo <= mem_out;
               read_cons_w_en <= 1'b1;
               rx_index <= rx_index + 8'd1;

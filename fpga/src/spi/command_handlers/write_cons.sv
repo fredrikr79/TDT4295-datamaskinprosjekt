@@ -3,18 +3,17 @@ module write_cons #(
 ) (
     input wire clk,
     ck_rst,
-    data_rdy,
+    mem_data_on_wire,
     send_write_cons,
     mem_busy,
     input logic [7:0] in_fifo,
-    output logic [7:0] write_cons_fifo,
-    mem_len,
+    output logic [7:0] mem_len,
     mem_in,
     output logic write_cons_done,
     write_cons_r_en,
     mem_toggle,
     output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_func
+    output memory_pkg::transaction_e mem_transaction
 );
 
 
@@ -36,7 +35,6 @@ module write_cons #(
       tx_index <= 8'd0;
       write_cons_done <= 1'b0;
       write_cons_r_en <= 1'b0;
-      write_cons_fifo <= 8'd0;
       state <= START;
     end else begin
       write_cons_r_en <= 1'b0;
@@ -76,7 +74,7 @@ module write_cons #(
           end
           GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX, gridY);
-            mem_func <= WRITE;
+            mem_transaction <= WRITE;
             state <= DATA;
           end
           DATA: begin
@@ -86,7 +84,7 @@ module write_cons #(
               mem_toggle <= !toggle_init;
 
               // Read N bytes from in_queue to mem_in
-              if (tx_index < mem_len && data_rdy) begin
+              if (tx_index < mem_len && mem_data_on_wire) begin
                 mem_in <= in_fifo;
                 write_cons_r_en <= 1'b1;
                 tx_index <= tx_index + 8'd1;

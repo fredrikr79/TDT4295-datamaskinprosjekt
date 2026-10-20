@@ -16,6 +16,7 @@ package mem_driver_pkg;
         GET_Y_BOTTOM,
         GET_MSG_LENGTH,
         GET_MEM_ADDR,
+        INIT_REQ,
         DATA,
         DONE
     } mem_state_e;

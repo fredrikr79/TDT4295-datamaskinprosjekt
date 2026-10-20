@@ -3,7 +3,7 @@ module sprite_write #(
 )(
     input wire clk, ck_rst, send_sprite_write,
     input logic [7:0] in_fifo,
-    input logic [$clog2(hud_pkg::SpriteLutDepth)-1:0] available_id,
+    input logic [$clog2(hud_pkg::SpriteLutDepth)-1:0] sprite_available_id, sprite_id_found,
     output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done, sprite_req_valid,
     output logic [7:0] sprite_write_fifo,
     output hud_pkg::sprite_inst_entry_t sprite_w_body
@@ -27,7 +27,7 @@ typedef enum bit [3:0] {
     DONE
 } sprite_write_states_e;
 
-sprite_update_states_e state = START;
+sprite_write_states_e state = START;
 
 logic param_active;
 logic [7:0]  param_id, param_mem_id;
@@ -48,9 +48,9 @@ always_ff @(posedge clk) begin
         case (state)
             START: begin
                 // Await available ID
-                if(available_id != 0) begin
+                if(sprite_id_found) begin
                     sprite_write_r_en <= 1'b1;
-                    param_id <= available_id;
+                    param_id <= sprite_available_id;
                     state <= GET_MEM_ID;
                 end
             end
@@ -109,7 +109,7 @@ always_ff @(posedge clk) begin
                     param_mem_id,
                     param_x,
                     param_y,
-                    param_w.
+                    param_w,
                     param_h
                 };
                 sprite_req_valid <= 1'b1;

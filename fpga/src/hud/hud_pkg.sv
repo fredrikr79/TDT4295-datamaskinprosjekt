@@ -16,9 +16,9 @@ package hud_pkg;
     localparam int SpriteLutDepth = 256; // Number of sprites we can keep track of in the system.
 
     typedef enum bit [1:0] {
-        WRITE,
-        UPDATE,
-        DELETE
+        LUT_WRITE,
+        LUT_UPDATE,
+        LUT_DELETE
     } sprite_op_e;
 
     function automatic void addSprite (

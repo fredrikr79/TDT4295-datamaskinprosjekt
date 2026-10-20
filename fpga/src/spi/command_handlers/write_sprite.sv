@@ -13,9 +13,8 @@ module write_sprite #(
     output logic write_sprite_done,
     write_sprite_r_en,
     write_sprite_w_en,
-    mem_toggle,
-    output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_transaction
+    mem_req,
+    output logic [31:0] mem_addr
 );
 
   import hud_pkg::*;
@@ -29,7 +28,6 @@ module write_sprite #(
 
   read_states_e state = START;
 
-  initial mem_addr = 32'd0; // Keep track of sprite base pointer
   logic [$clog2(SpriteMemDepth)-1:0] next_id = 0;
 
   always_ff @(posedge clk) begin
@@ -42,29 +40,31 @@ module write_sprite #(
       write_sprite_r_en <= 1'b0;
       write_sprite_w_en <= 1'b0;
       write_sprite_done <= 1'b0;
-      mem_toggle        <= 1'b0;
+      mem_req           <= 1'b0;
 
       if(send_write_sprite) begin
         // Fetch target memory address
         case (state)
           START: begin
             write_sprite_r_en <= 1'b1;
-            state <= GET_X_TOP;
+            state <= GET_MSG_LENGTH;
           end
           GET_MSG_LENGTH: begin
             mem_len <= in_fifo;
             state   <= GET_MEM_ADDR;
           end
           GET_MEM_ADDR: begin
-            mem_transaction <= WRITE;
             state <= DATA;
+          end
+          INIT_REQ: begin
+            // The signal is delayed one cycle in the SPI controller.
+            if (!mem_busy) begin
+              mem_req <= 1'b1;
+              state <= DATA;
+            end
           end
           DATA: begin
             if (!mem_busy) begin
-              // use captured toggle to signal the new transaction on the same
-              // cycle as data is pushed
-              mem_toggle <= 1'b1;
-
                 // Read N bytes from in_queue to mem_in
                 if (tx_index >= mem_len) begin
                   write_sprite_done <= 1'b1;

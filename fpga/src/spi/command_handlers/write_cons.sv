@@ -11,9 +11,8 @@ module write_cons #(
     mem_in,
     output logic write_cons_done,
     write_cons_r_en,
-    mem_toggle,
-    output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_transaction
+    mem_req,
+    output logic [31:0] mem_addr
 );
 
 
@@ -37,7 +36,7 @@ module write_cons #(
     end else begin
       write_cons_r_en <= 1'b0;
       write_cons_done <= 1'b0;
-      mem_toggle      <= 1'b0;
+      mem_req      <= 1'b0;
 
       if(send_write_cons) begin
         // Fetch target memory address
@@ -72,14 +71,19 @@ module write_cons #(
           end
           GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX, gridY);
-            mem_transaction <= WRITE;
-            state <= DATA;
+            state <= INIT_REQ;
+          end
+          INIT_REQ: begin
+            // The signal is delayed one cycle in the SPI controller.
+            if (!mem_busy) begin
+              mem_req <= 1'b1;
+              state <= DATA;
+            end
           end
           DATA: begin
             if (!mem_busy) begin
               // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
-              mem_toggle <= 1'b1;
 
               // Read N bytes from in_queue to mem_in
               if (tx_index >= mem_len) begin

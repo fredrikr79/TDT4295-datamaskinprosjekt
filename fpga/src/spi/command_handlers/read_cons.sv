@@ -13,9 +13,8 @@ module read_cons #(
     output logic read_cons_done,
     read_cons_w_en,
     read_cons_r_en,
-    mem_toggle,
-    output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_transaction
+    mem_req,
+    output logic [31:0] mem_addr
 );
 
 
@@ -43,7 +42,7 @@ module read_cons #(
       read_cons_w_en <= 1'b0;
       read_cons_r_en <= 1'b0;
       read_cons_done <= 1'b0;
-      mem_toggle     <= 1'b0;
+      mem_req        <= 1'b0;
 
       if(send_read_cons) begin
         // Fetch target memory address
@@ -78,13 +77,17 @@ module read_cons #(
           end
           GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX, gridY);
-            mem_transaction <= READ;
             state   <= DATA;
+          end
+          INIT_REQ: begin
+            // The signal is delayed one cycle in the SPI controller.
+            if (!mem_busy) begin
+              mem_req <= 1'b1;
+              state <= DATA;
+            end
           end
           DATA: begin
             if(!mem_busy) begin
-              mem_toggle <= 1'b1;
-
               if (rx_index >= mem_len) begin
                   rx_index <= 8'd0;
                   read_cons_done <= 1'b1;

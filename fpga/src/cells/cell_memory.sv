@@ -8,7 +8,7 @@ module cell_memory (
 );
   import cell_pkg::*;
 
-  logic [WordBits-1:0] grid[TotalWords]; // cell_word_t grid[TotalWords] is a nightmare, synthesizer-wise, uses flipflops instead of BRAM
+  logic [WordBits-1:0] grid[TotalCellWords]; // cell_word_t grid[TotalCellWords] is a nightmare, synthesizer-wise, uses flipflops instead of BRAM
 
   always_ff @(posedge clk) begin
     if (we) grid[write_addr] <= write_data;

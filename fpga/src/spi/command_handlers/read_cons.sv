@@ -20,7 +20,7 @@ module read_cons #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_pkg::*;
+  import mem_driver_pkg::*;
 
   logic [7:0] rx_index = 8'd0;
   logic [15:0] gridX, gridY;

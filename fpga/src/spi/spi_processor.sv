@@ -132,7 +132,11 @@ module spi_processor #(
   end
 
   // Mem transaction addr mux
-  logic [31:0] read_cons_mem_addr, write_cons_mem_addr, write_sprite_mem_addr;
+  logic [31:0] read_cons_mem_addr,
+    write_cons_mem_addr,
+    read_box_mem_addr,
+    write_box_mem_addr,
+    write_sprite_mem_addr;
 
   // Sprite LUT & Bitmap write request mux
   sprite_inst_entry_t sprite_w_body, sprite_u_body, sprite_d_body;
@@ -242,12 +246,16 @@ module spi_processor #(
             WRITE_BOX: begin
               if (!write_box_done) begin
                 send_write_box <= 1'b1;
+                mem_addr <= write_box_mem_addr;
+                mem_transaction <= WRITE;
               end else send_write_box <= 1'b0;
             end
 
             READ_BOX: begin
               if (!read_box_done) begin
                 send_read_box <= 1'b1;
+                mem_addr <= read_box_mem_addr;
+                mem_transaction <= READ;
                 if (read_box_w_en) begin
                   out_fifo <= read_box_fifo;
                 end

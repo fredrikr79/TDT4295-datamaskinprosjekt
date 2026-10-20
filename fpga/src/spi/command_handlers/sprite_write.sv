@@ -34,22 +34,6 @@ logic [7:0]  param_id, param_mem_id;
 logic [15:0] param_x, param_y, param_w, param_h;
 logic [31:0] param_mem_addr;
 
-// Allways on req find an available id to hand out to a new sprite write
-logic found;
-logic [$clog2(SpriteLutDepth)-1:0] available_id;
-always_comb begin
-    found = 1'b0;
-    available_id = '0;
-
-    for (int i = 0; i < SpriteLutDepth; i++) begin
-        if(!sprite_id_bitmap[i] && !found) begin
-            available_id = i;
-            found = 1'b1;
-        end
-    end
-end
-
-
 always_ff @(posedge clk) begin
     sprite_write_r_en <= 1'b0;
     sprite_write_w_en <= 1'b0;
@@ -124,7 +108,6 @@ always_ff @(posedge clk) begin
                     1'b1,
                     param_id,
                     param_mem_id,
-                    param_active,
                     param_x,
                     param_y,
                     param_w,

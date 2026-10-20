@@ -181,7 +181,7 @@ module spi_processor #(
     // Processes are registered in DECODE, it is recommended to MUX read / write toggles to subprocesses
     // e.g in_r_en = cmd1_in_r_en | cmd2_in_r_en
 
-    if (reset_s) begin
+    if (!reset_s) begin
       sim_running <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
       out_fifo <= 8'h00;

@@ -24,8 +24,6 @@ module write_cons #(
 
   logic [7:0] tx_index = 8'd0;
   logic [15:0] gridX, gridY;
-  logic toggle_init;  // Init captures toggle at the start of the transaction.
-
 
   read_states_e state = START;
 
@@ -39,6 +37,7 @@ module write_cons #(
     end else begin
       write_cons_r_en <= 1'b0;
       write_cons_done <= 1'b0;
+      mem_toggle      <= 1'b0;
 
       if(send_write_cons) begin
         // Fetch target memory address
@@ -46,7 +45,6 @@ module write_cons #(
           START: begin
             write_cons_r_en <= 1'b1;
             state <= GET_X_TOP;
-            toggle_init <= mem_toggle;
           end
           GET_X_TOP: begin
             write_cons_r_en <= 1'b1;
@@ -81,17 +79,17 @@ module write_cons #(
             if (!mem_busy) begin
               // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
-              mem_toggle <= !toggle_init;
+              mem_toggle <= 1'b1;
 
               // Read N bytes from in_queue to mem_in
-              if (tx_index < mem_len && mem_data_on_wire) begin
-                mem_in <= in_fifo;
-                write_cons_r_en <= 1'b1;
-                tx_index <= tx_index + 8'd1;
-              end else begin
+              if (tx_index >= mem_len) begin
                 write_cons_done <= 1'b1;
                 tx_index <= 8'd0;
                 state <= DONE;
+              end else if(mem_data_on_wire) begin
+                mem_in <= in_fifo;
+                write_cons_r_en <= 1'b1;
+                tx_index <= tx_index + 8'd1;
               end
             end
           end

@@ -98,7 +98,7 @@ module main (
   );
 
   // HUD sprites LUT declaration
-  hud_pkg::sprite_entry_t [hud_pkg::SpriteLutDepth-1:0] spriteLUT;
+  hud_pkg::sprite_inst_entry_t [hud_pkg::SpriteLutDepth-1:0] spriteLUT;
   hud hud_controller (
       .spriteLUT(spriteLUT)
   );

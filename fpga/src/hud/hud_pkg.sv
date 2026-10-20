@@ -15,48 +15,43 @@ package hud_pkg;
 
     localparam int SpriteLutDepth = 256; // Number of sprites we can keep track of in the system.
 
+    typedef enum bit [1:0] {
+        WRITE,
+        UPDATE,
+        DELETE
+    } sprite_op_e;
+
     function automatic void addSprite (
         ref   sprite_inst_entry_t   lut [SpriteLutDepth],
-        input logic [7:0]      id,
-        input logic [7:0]      mem_id,
-        input logic            active,
-        input logic [15:0]     x,
-        input logic [15:0]     y,
-        input logic [15:0]     w,
-        input logic [15:0]     h
+        logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+        sprite_inst_entry_t body
     );
-        lut[id].active   = active;
-        lut[id].id       = id;
-        lut[id].mem_id   = mem_id;
-        lut[id].x        = x;
-        lut[id].y        = y;
-        lut[id].w        = w;
-        lut[id].h        = h;
+        sprite_id_bitmap[body.id] = 1'b1;
+        lut[body.id]              = body;
     endfunction
 
     function automatic void updateSprite (
         ref   sprite_inst_entry_t   lut [SpriteLutDepth],
-        input logic [7:0]      id,
-        input logic            active,
-        input logic [15:0]     x,
-        input logic [15:0]     y
+        sprite_inst_entry_t body
     );
-        lut[id].active = active;
-        lut[id].x      = x;
-        lut[id].y      = y;
+        lut[body.id].active = body.active;
+        lut[body.id].x      = body.x;
+        lut[body.id].y      = body.y;
     endfunction
 
     function automatic void deleteSprite (
         ref   sprite_inst_entry_t   lut [SpriteLutDepth],
+        logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
         input logic [7:0] id
     );
-        lut[id].active   = 0;
-        lut[id].mem_id       = 0;
-        lut[id].mem_base = 0;
-        lut[id].x        = 0;
-        lut[id].y        = 0;
-        lut[id].w        = 0;
-        lut[id].h        = 0;
+        sprite_id_bitmap[id]  = 1'b0;
+        lut[id].active        = 0;
+        lut[id].mem_id        = 0;
+        lut[id].mem_base      = 0;
+        lut[id].x             = 0;
+        lut[id].y             = 0;
+        lut[id].w             = 0;
+        lut[id].h             = 0;
     endfunction
 
 

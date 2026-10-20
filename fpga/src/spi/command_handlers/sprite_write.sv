@@ -1,12 +1,12 @@
 module sprite_write #(
 
 )(
-    input wire clk, send_sprite_write,
+    input wire clk, ck_rst, send_sprite_write,
     input logic [7:0] in_fifo,
-    output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done,
+    input logic [$clog2(hud_pkg::SpriteLutDepth)-1:0] available_id,
+    output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done, sprite_req_valid,
     output logic [7:0] sprite_write_fifo,
-    output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth],
-    output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap
+    output hud_pkg::sprite_inst_entry_t sprite_w_body
 );
 
 import hud_pkg::*;
@@ -27,42 +27,31 @@ typedef enum bit [3:0] {
     DONE
 } sprite_write_states_e;
 
-sprite_update_state_e state = START;
+sprite_update_states_e state = START;
 
 logic param_active;
 logic [7:0]  param_id, param_mem_id;
 logic [15:0] param_x, param_y, param_w, param_h;
 logic [31:0] param_mem_addr;
 
-// Allways on req find an available id to hand out to a new sprite write
-logic found;
-logic [$clog2(SpriteLutDepth)-1:0] available_id;
-always_comb begin
-    found = 1'b0;
-    available_id = '0;
-
-    for (int i = 0; i < SpriteLutDepth; i++) begin
-        if(!sprite_id_bitmap[i] && !found) begin
-            available_id = i;
-            found = 1'b1;
-        end
-    end
-end
-
-
 always_ff @(posedge clk) begin
     sprite_write_r_en <= 1'b0;
     sprite_write_w_en <= 1'b0;
     sprite_write_done <= 1'b0;
+    sprite_req_valid    <= 1'b0;
 
-    if(send_sprite_write) begin
+    if (!ck_rst) begin
+        sprite_write_fifo <= 8'd0;
+        state <= START;
+    end else begin
+       if(send_sprite_write) begin
         case (state)
             START: begin
-                if(found) begin // wait til there is an available slot
+                // Await available ID
+                if(available_id != 0) begin
                     sprite_write_r_en <= 1'b1;
-                    state <= GET_MEM_ID;
                     param_id <= available_id;
-                    sprite_id_bitmap[available_id] <= 1'b1;
+                    state <= GET_MEM_ID;
                 end
             end
             GET_MEM_ID: begin
@@ -114,16 +103,16 @@ always_ff @(posedge clk) begin
                 state <= EXECUTE;
             end
             EXECUTE: begin
-                hud_pkg::addSprite(
-                    spriteLUT,
+                sprite_w_body <= {
+                    1'b1,
                     param_id,
                     param_mem_id,
-                    param_active,
                     param_x,
                     param_y,
-                    param_h,
-                    param_w
-                );
+                    param_w.
+                    param_h
+                };
+                sprite_req_valid <= 1'b1;
                 sprite_write_w_en <= 1'b1;
                 sprite_write_fifo <= param_id;
                 sprite_write_done <= 1'b1;
@@ -134,7 +123,8 @@ always_ff @(posedge clk) begin
                 state <= START;
             end
             default:;
-        endcase
+            endcase
+        end
     end
 end
 

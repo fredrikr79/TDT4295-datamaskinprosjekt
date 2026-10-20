@@ -26,7 +26,6 @@ module read_cons #(
 
   logic [7:0] rx_index = 8'd0;
   logic [15:0] gridX, gridY;
-  logic toggle_init;  // Init captures toggle at the start of the transaction.
 
   read_states_e state = START;
 
@@ -44,6 +43,7 @@ module read_cons #(
       read_cons_w_en <= 1'b0;
       read_cons_r_en <= 1'b0;
       read_cons_done <= 1'b0;
+      mem_toggle     <= 1'b0;
 
       if(send_read_cons) begin
         // Fetch target memory address
@@ -51,7 +51,6 @@ module read_cons #(
           START: begin
             read_cons_r_en <= 1'b1;
             state <= GET_X_TOP;
-            toggle_init <= mem_toggle;
           end
           GET_X_TOP: begin
             read_cons_r_en <= 1'b1;
@@ -83,16 +82,18 @@ module read_cons #(
             state   <= DATA;
           end
           DATA: begin
-            mem_toggle <= !toggle_init;
+            if(!mem_busy) begin
+              mem_toggle <= 1'b1;
 
-            if (rx_index < mem_len && mem_data_on_wire) begin
-              read_cons_fifo <= mem_out;
-              read_cons_w_en <= 1'b1;
-              rx_index <= rx_index + 8'd1;
-            end else begin
-              rx_index <= 8'd0;
-              read_cons_done <= 1'b1;
-              state <= DONE;
+              if (rx_index >= mem_len) begin
+                  rx_index <= 8'd0;
+                  read_cons_done <= 1'b1;
+                  state <= DONE;
+              end else if(mem_data_on_wire) begin
+                  read_cons_fifo <= mem_out;
+                  read_cons_w_en <= 1'b1;
+                  rx_index <= rx_index + 8'd1;
+              end
             end
           end
           DONE: begin

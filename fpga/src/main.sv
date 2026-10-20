@@ -109,7 +109,8 @@ module main (
       .spriteLUT(spriteLUT),
       .sprite_id_bitmap(sprite_id_bitmap),
       .sprite_available_id(sprite_available_id),
-      .sprite_id_found(sprite_id_found)
+      .sprite_id_found(sprite_id_found),
+      .write_sprite_valid(write_sprite_valid)
   );
 
   spi spi_controller (
@@ -148,7 +149,8 @@ module main (
       .sprite_id_found(sprite_id_found),
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
-      .sprite_req_op(sprite_req_op)
+      .sprite_req_op(sprite_req_op),
+      .write_sprite_valid(write_sprite_valid)
   );
 
 endmodule

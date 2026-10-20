@@ -14,6 +14,7 @@ module write_sprite #(
     write_sprite_r_en,
     write_sprite_w_en,
     mem_req,
+    write_sprite_valid,
     output logic [31:0] mem_addr
 );
 

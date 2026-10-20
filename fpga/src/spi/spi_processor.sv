@@ -17,6 +17,7 @@ module spi_processor #(
     sim_running,
     mem_toggle,
     sprite_req_valid,
+    write_sprite_valid,
     output logic [7:0] out_fifo,
     mem_in,
     mem_len,
@@ -419,7 +420,8 @@ module spi_processor #(
       .write_sprite_r_en(write_sprite_r_en),
       .write_sprite_w_en(write_sprite_w_en),
       .mem_req(write_sprite_mem_toggle),
-      .mem_addr(write_sprite_mem_addr)
+      .mem_addr(write_sprite_mem_addr),
+      .write_sprite_valid(write_sprite_valid)
   );
 
   sprite_write sprite_write_cmd_processor (

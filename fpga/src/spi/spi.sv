@@ -19,7 +19,9 @@ module spi #(
     output wire out_almost_empty,
     output wire out_empty,
     output wire in_almost_full,
-    output wire in_full
+    output wire in_full,
+
+    output logic write_sprite_valid
 );
 
   import spi_pck::*;
@@ -166,7 +168,8 @@ module spi #(
       .sprite_id_found(sprite_id_found),
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
-      .sprite_req_op(sprite_req_op)
+      .sprite_req_op(sprite_req_op),
+      .write_sprite_valid(write_sprite_valid)
 
   );
 

@@ -1,7 +1,7 @@
 module hud #(
 
 )(
-    input wire clk, req_valid,
+    input wire clk, req_valid, write_sprite_valid,
     input [7:0] sprite_mem_id,
     input [31:0] sprite_w_mem_addr,
     input hud_pkg::sprite_op_e sprite_req_op,
@@ -32,7 +32,9 @@ end
 logic [31:0] sprite_mem_lut [SpriteMemDepth];
 
 always_ff @(posedge clk) begin
-    sprite_mem_lut[sprite_mem_id] <= sprite_w_mem_addr;
+    if(write_sprite_valid) begin
+        sprite_mem_lut[sprite_mem_id] <= sprite_w_mem_addr;
+    end
 end
 
 always_ff @(posedge clk) begin

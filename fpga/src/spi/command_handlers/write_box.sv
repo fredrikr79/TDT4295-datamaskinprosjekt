@@ -97,7 +97,6 @@ module write_box #(
             state <= GET_HEIGHT_BOTTOM;
           end
           GET_HEIGHT_BOTTOM: begin
-            write_box_r_en <= 1'b1;
             rows[7:0] <= in_fifo;
             state <= GET_MEM_ADDR;
           end
@@ -112,30 +111,29 @@ module write_box #(
               // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
 
+              if (mem_data_on_wire) begin
+                write_box_r_en <= 1'b1;
+              end
               if(write_box_r_en) begin
                 mem_in <= in_fifo;
 
                 // Read N bytes from in_queue to mem_in
-                if (col_index == cols) begin // include final boundary
-                  col_index <= 8'd0;
+                if (col_index >= cols - 1) begin // include final boundary
+                  col_index <= 16'd0;
                   write_box_r_en <= 1'b0;
 
-                  if(row_index < rows) begin
-                    row_index <= row_index + 8'd1;
+                  if(row_index < rows - 1) begin
+                    row_index <= row_index + 16'd1;
                     state <= GET_MEM_ADDR;
                   end else begin
-                    row_index <= 8'd0;
+                    row_index <= 16'd0;
                     write_box_done <= 1'b1;
                     state <= DONE;
                   end
                 end else begin
-                  col_index <= col_index + 8'd1;
-                  write_box_r_en <= 1'b1;
+                  col_index <= col_index + 16'd1;
+                  write_box_r_en <= mem_data_on_wire;
                 end
-              end else if(mem_data_on_wire) begin
-                mem_in <= in_fifo;
-                write_box_r_en <= 1'b1;
-                col_index <= col_index + 8'd1;
               end
             end
           end

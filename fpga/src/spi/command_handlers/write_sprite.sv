@@ -15,7 +15,7 @@ module write_sprite #(
     write_sprite_w_en,
     mem_req,
     write_sprite_valid,
-    output logic [31:0] mem_addr
+    output logic [31:0] mem_addr = 32'd0
 );
 
   import hud_pkg::*;
@@ -65,23 +65,22 @@ module write_sprite #(
             end
           end
           DATA: begin
-            if (!mem_busy) begin
-              // Read N bytes from in_queue to mem_in
-              if(write_sprite_r_en) begin
-                mem_in <= in_fifo;
-                tx_index <= tx_index + 8'd1;
-              end else if (!mem_busy) begin
-                if (tx_index >= mem_len) begin
-                  write_sprite_done <= 1'b1;
-                  write_sprite_w_en <= 1'b1;
-                  tx_index <= 8'd0;
-                  mem_addr <= mem_addr + mem_len;
-                  write_sprite_fifo <= next_id;
-                  next_id <= next_id + 1'b1;
-                  state <= DONE;
-                end else if (mem_data_on_wire) begin
-                  write_sprite_r_en <= 1'b1;
-                end
+            if (mem_data_on_wire) begin
+              write_sprite_r_en <= 1'b1;
+            end
+            // Read N bytes from in_queue to mem_in
+            if(write_sprite_r_en) begin
+              mem_in <= in_fifo;
+              tx_index <= tx_index + 8'd1;
+            end else if (!mem_busy) begin
+              if (tx_index >= mem_len) begin
+                write_sprite_done <= 1'b1;
+                write_sprite_w_en <= 1'b1;
+                mem_addr <= mem_addr + mem_len;
+                write_sprite_fifo <= next_id;
+                next_id <= next_id + 1'b1;
+                tx_index <= 8'd0;
+                state <= DONE;
               end
             end
           end

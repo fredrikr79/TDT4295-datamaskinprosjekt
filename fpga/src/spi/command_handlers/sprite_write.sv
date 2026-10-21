@@ -80,6 +80,7 @@ always_ff @(posedge clk) begin
                 state <= GET_Y_BOTTOM;
             end
             GET_Y_BOTTOM: begin
+                sprite_write_r_en <= 1'b1;
                 param_y[7:0] <= in_fifo;
                 state <= GET_WIDTH_TOP;
             end

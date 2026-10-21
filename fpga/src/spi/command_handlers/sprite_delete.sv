@@ -28,7 +28,9 @@ always_ff @(posedge clk) begin
     sprite_delete_done <= 1'b0;
     sprite_req_valid   <= 1'b0;
 
-    if(send_sprite_delete) begin
+    if (ck_rst) begin
+        state <= START;
+    end else if(send_sprite_delete) begin
         case (state)
             START: begin
                 sprite_delete_r_en <= 1'b1;

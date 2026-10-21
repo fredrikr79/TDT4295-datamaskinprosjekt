@@ -36,14 +36,14 @@ module spi_processor #(
   logic
       cmd_r_en = 1'b0,
       echo_r_en = 1'b0,
-      read_cons_r_en = 1'b0,
-      write_cons_r_en = 1'b0,
-      read_box_r_en = 1'b0,
-      write_box_r_en = 1'b0,
-      write_sprite_r_en = 1'b0,
-      sprite_write_r_en = 1'b0,
-      sprite_update_r_en = 1'b0,
-      sprite_delete_r_en = 1'b0,
+      read_cons_r_en,
+      write_cons_r_en,
+      read_box_r_en,
+      write_box_r_en,
+      write_sprite_r_en,
+      sprite_write_r_en,
+      sprite_update_r_en,
+      sprite_delete_r_en,
       fail_r_en = 1'b0;
 
   assign proc_r_en = cmd_r_en  |
@@ -61,12 +61,12 @@ module spi_processor #(
   // out_write handlers registration MUX proc_1 | proc_2 | ...
   logic
       echo_w_en = 1'b0,
-      info_w_en = 1'b0,
-      read_cons_w_en = 1'b0,
-      read_box_w_en = 1'b0,
+      info_w_en,
+      read_cons_w_en,
+      read_box_w_en,
       fail_w_en = 1'b0,
-      write_sprite_w_en = 1'b0,
-      sprite_write_w_en = 1'b0;
+      write_sprite_w_en,
+      sprite_write_w_en;
 
   assign proc_w_en = echo_w_en |
     info_w_en                  |
@@ -125,9 +125,19 @@ module spi_processor #(
 
 
   // Mem transaction toggle mux
-  logic read_cons_mem_req, write_cons_mem_req, write_sprite_mem_req;
+  logic read_cons_mem_req,
+    write_cons_mem_req,
+    read_box_mem_req,
+    write_box_mem_req,
+    write_sprite_mem_req;
+
   always_ff @(posedge clk) begin
-    if (read_cons_mem_req | write_cons_mem_req | write_sprite_mem_req) begin
+    if (read_cons_mem_req     |
+        write_cons_mem_req    |
+        read_box_mem_req      |
+        write_box_mem_req     |
+        write_sprite_mem_req
+    ) begin
       mem_toggle <= ~mem_toggle;
     end
   end
@@ -138,6 +148,25 @@ module spi_processor #(
     read_box_mem_addr,
     write_box_mem_addr,
     write_sprite_mem_addr;
+
+
+  // Mem transaction len mux
+  logic [7:0] read_cons_mem_len,
+    write_cons_mem_len,
+    read_box_mem_len,
+    write_box_mem_len,
+    write_sprite_mem_len;
+
+  always_ff @(posedge clk) begin
+    case (opcode)
+      READ_CONS:    mem_len <= read_cons_mem_len;
+      WRITE_CONS:   mem_len <= write_cons_mem_len;
+      READ_BOX:     mem_len <= read_box_mem_len;
+      WRITE_BOX:    mem_len <= write_box_mem_len;
+      WRITE_SPRITE: mem_len <= write_sprite_mem_len;
+      default:      mem_len <= 0;
+    endcase
+  end
 
   // Sprite LUT & Bitmap write request mux
   sprite_inst_entry_t sprite_w_body, sprite_u_body, sprite_d_body;
@@ -350,7 +379,7 @@ module spi_processor #(
       .send_write_cons(send_write_cons),
       .mem_data_on_wire(mem_data_on_wire),
       .mem_busy(mem_busy),
-      .mem_len(mem_len),
+      .mem_len(write_cons_mem_len),
       .mem_addr(write_cons_mem_addr),
       .mem_in(mem_in),
       .mem_req(write_cons_mem_toggle),
@@ -365,7 +394,7 @@ module spi_processor #(
       .send_read_cons(send_read_cons),
       .mem_data_on_wire(mem_data_on_wire),
       .in_fifo(in_fifo),
-      .mem_len(mem_len),
+      .mem_len(read_cons_mem_len),
       .mem_busy(mem_busy),
       .mem_req(read_cons_mem_toggle),
       .mem_addr(read_cons_mem_addr),
@@ -384,12 +413,12 @@ module spi_processor #(
     .read_box_done(read_box_done),
     .read_box_w_en(read_box_w_en),
     .read_box_r_en(read_box_r_en),
+    .mem_len(read_box_mem_len),
     .mem_busy(mem_busy),
     .mem_data_on_wire(mem_data_on_wire),
-    .mem_toggle(mem_toggle),
+    .mem_req(mem_toggle),
     .mem_out(mem_out),
-    .mem_addr(mem_addr),
-    .mem_func(mem_func)
+    .mem_addr(read_box_mem_addr)
   );
 
   write_box write_box_handler (
@@ -398,12 +427,12 @@ module spi_processor #(
     .in_fifo(in_fifo),
     .write_box_done(write_box_done),
     .write_box_r_en(write_box_r_en),
-    .mem_toggle(mem_toggle),
+    .mem_len(write_box_mem_len),
+    .mem_req(mem_toggle),
     .mem_busy(mem_busy),
     .mem_data_on_wire(mem_data_on_wire),
     .mem_in(mem_in),
-    .mem_addr(mem_addr),
-    .mem_func(mem_func)
+    .mem_addr(write_box_mem_addr)
   );
 
   write_sprite write_sprite_cmd_processor (
@@ -414,7 +443,7 @@ module spi_processor #(
       .mem_busy(mem_busy),
       .in_fifo(in_fifo),
       .write_sprite_fifo(write_sprite_fifo),
-      .mem_len(mem_len),
+      .mem_len(write_sprite_mem_len),
       .mem_in(mem_in),
       .write_sprite_done(write_sprite_done),
       .write_sprite_r_en(write_sprite_r_en),

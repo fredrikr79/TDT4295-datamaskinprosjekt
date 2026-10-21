@@ -6,7 +6,7 @@ module sprite_write #(
     input logic [$clog2(hud_pkg::SpriteLutDepth)-1:0] sprite_available_id, sprite_id_found,
     output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done, sprite_req_valid,
     output logic [7:0] sprite_write_fifo,
-    output hud_pkg::sprite_inst_entry_t sprite_w_body
+    output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
 
 import hud_pkg::*;
@@ -103,7 +103,7 @@ always_ff @(posedge clk) begin
                 state <= EXECUTE;
             end
             EXECUTE: begin
-                sprite_w_body <= {
+                sprite_req_body <= {
                     1'b1,
                     param_id,
                     param_mem_id,

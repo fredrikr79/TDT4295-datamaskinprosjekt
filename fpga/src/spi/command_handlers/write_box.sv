@@ -8,6 +8,7 @@ module write_box #(
     mem_busy,
     input logic [7:0] in_fifo,
     output logic [7:0] mem_in,
+    mem_len,
     output logic write_box_done,
     write_box_r_en,
     mem_req,
@@ -102,6 +103,7 @@ module write_box #(
           end
           GET_MEM_ADDR: begin
             mem_req <= 1'b1;
+            mem_len <= cols;
             mem_addr <= GridPosToMemAddr(gridX, gridY + row_index);
             state <= DATA;
           end

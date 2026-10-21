@@ -27,7 +27,7 @@ module write_sprite #(
   logic [7:0] tx_index = 8'd0;
   logic [15:0] gridX, gridY;
 
-  read_states_e state = START;
+  mem_states_e state = START;
 
   logic [$clog2(SpriteMemDepth)-1:0] next_id = 0;
 

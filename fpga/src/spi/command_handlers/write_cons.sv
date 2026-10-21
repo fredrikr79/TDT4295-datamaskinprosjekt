@@ -24,7 +24,7 @@ module write_cons #(
   logic [7:0] tx_index = 8'd0;
   logic [15:0] gridX, gridY;
 
-  read_states_e state = START;
+  mem_states_e state = START;
 
   always_ff @(posedge clk) begin
 

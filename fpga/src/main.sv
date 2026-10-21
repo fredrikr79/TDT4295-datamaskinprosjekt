@@ -37,7 +37,7 @@ module main (
   color_pkg::color_t color;
 
   // Sim running
-  logic sim_running = 1'b0;
+  logic sim_running;
 
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
@@ -98,7 +98,7 @@ module main (
   );
 
   // HUD sprites LUT declaration
-  hud_pkg::sprite_inst_entry_t [hud_pkg::SpriteLutDepth-1:0] spriteLUT;
+  hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth];
   hud hud_controller (
       .clk(clk),
       .req_valid(sprite_req_valid),

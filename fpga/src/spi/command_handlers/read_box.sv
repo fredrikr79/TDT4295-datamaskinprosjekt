@@ -9,6 +9,7 @@ module read_box #(
     input logic [7:0] mem_out,
     in_fifo,
     output logic [7:0] read_box_fifo,
+    mem_len,
     output logic read_box_done,
     read_box_w_en,
     read_box_r_en,
@@ -110,6 +111,7 @@ module read_box #(
           GET_MEM_ADDR: begin
             if (!mem_busy) begin
               mem_req <= 1'b1;
+              mem_len <= cols;
               mem_addr <= GridPosToMemAddr(gridX, gridY + row_index);
               state   <= DATA;
             end

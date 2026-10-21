@@ -19,7 +19,7 @@ package mem_driver_pkg;
         INIT_REQ,
         DATA,
         DONE
-    } mem_state_e;
+    } mem_states_e;
 
     function static logic [31:0] GridPosToMemAddr (input logic [15:0] x, input logic [15:0] y);
         return GridMemLocationStart + y * config_pkg::ActiveWidth + x;

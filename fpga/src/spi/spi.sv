@@ -21,6 +21,25 @@ module spi #(
     output wire in_almost_full,
     output wire in_full,
 
+    output wire sim_running,
+
+    // Memory
+    input logic [7:0] mem_out,
+    output logic [7:0] mem_in,
+    mem_len,
+    input logic mem_busy,
+    mem_data_on_wire,
+    mem_toggle,
+    output logic [31:0] mem_addr,
+    output memory_pkg::transaction_e mem_transaction,
+
+    // Sprite LUT
+    input logic sprite_id_found,
+    input logic [7:0]
+    sprite_available_id,
+    sprite_req_valid,
+    output hud_pkg::sprite_inst_entry_t sprite_req_body,
+    output hud_pkg::sprite_op_e sprite_req_op,
     output logic write_sprite_valid
 );
 
@@ -145,7 +164,6 @@ module spi #(
   // Command processing module
   spi_processor processor (
       .clk(clk),
-      .reset_s(ck_rst),
       .state(state),
       .in_fifo(in_fifo),
       .out_full(out_full),

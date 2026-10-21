@@ -181,7 +181,7 @@ module spi_processor #(
     // Processes are registered in DECODE, it is recommended to MUX read / write toggles to subprocesses
     // e.g in_r_en = cmd1_in_r_en | cmd2_in_r_en
 
-    if (!reset_s) begin
+    if (reset_s) begin
       sim_running <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
       out_fifo <= 8'h00;
@@ -382,7 +382,7 @@ module spi_processor #(
       .mem_len(write_cons_mem_len),
       .mem_addr(write_cons_mem_addr),
       .mem_in(mem_in),
-      .mem_req(write_cons_mem_toggle),
+      .mem_req(write_cons_mem_req),
       .in_fifo(in_fifo),
       .write_cons_done(write_cons_done),
       .write_cons_r_en(write_cons_r_en)
@@ -396,7 +396,7 @@ module spi_processor #(
       .in_fifo(in_fifo),
       .mem_len(read_cons_mem_len),
       .mem_busy(mem_busy),
-      .mem_req(read_cons_mem_toggle),
+      .mem_req(read_cons_mem_req),
       .mem_addr(read_cons_mem_addr),
       .mem_out(mem_out),
       .read_cons_fifo(read_cons_fifo),
@@ -407,7 +407,7 @@ module spi_processor #(
 
   read_box read_box_handler (
     .clk(clk),
-    .ck_rst(ck_rst),
+    .ck_rst(reset_s),
     .in_fifo(in_fifo),
     .read_box_fifo(read_box_fifo),
     .read_box_done(read_box_done),
@@ -416,19 +416,19 @@ module spi_processor #(
     .mem_len(read_box_mem_len),
     .mem_busy(mem_busy),
     .mem_data_on_wire(mem_data_on_wire),
-    .mem_req(mem_toggle),
+    .mem_req(read_box_mem_req),
     .mem_out(mem_out),
     .mem_addr(read_box_mem_addr)
   );
 
   write_box write_box_handler (
     .clk(clk),
-    .ck_rst(ck_rst),
+    .ck_rst(reset_s),
     .in_fifo(in_fifo),
     .write_box_done(write_box_done),
     .write_box_r_en(write_box_r_en),
     .mem_len(write_box_mem_len),
-    .mem_req(mem_toggle),
+    .mem_req(write_box_mem_req),
     .mem_busy(mem_busy),
     .mem_data_on_wire(mem_data_on_wire),
     .mem_in(mem_in),
@@ -448,7 +448,7 @@ module spi_processor #(
       .write_sprite_done(write_sprite_done),
       .write_sprite_r_en(write_sprite_r_en),
       .write_sprite_w_en(write_sprite_w_en),
-      .mem_req(write_sprite_mem_toggle),
+      .mem_req(write_sprite_mem_req),
       .mem_addr(write_sprite_mem_addr),
       .write_sprite_valid(write_sprite_valid)
   );
@@ -463,7 +463,7 @@ module spi_processor #(
       .sprite_write_w_en(sprite_write_w_en),
       .sprite_write_fifo(sprite_write_fifo),
       .sprite_req_valid(sprite_w_valid),
-      .sprite_available_id(available_id),
+      .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),
       .sprite_req_body(sprite_w_body)
   );

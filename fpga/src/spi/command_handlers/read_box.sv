@@ -46,7 +46,7 @@ module read_box #(
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
+    if (ck_rst) begin
       col_index <= 8'd0;
       row_index <= 8'd0;
       read_box_done <= 1'b0;

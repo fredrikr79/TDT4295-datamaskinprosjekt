@@ -28,7 +28,7 @@ module write_cons #(
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
+    if (ck_rst) begin
       tx_index <= 8'd0;
       write_cons_done <= 1'b0;
       write_cons_r_en <= 1'b0;
@@ -81,20 +81,22 @@ module write_cons #(
             end
           end
           DATA: begin
-            if (!mem_busy) begin
               // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
 
               // Read N bytes from in_queue to mem_in
-              if (tx_index >= mem_len) begin
-                write_cons_done <= 1'b1;
-                tx_index <= 8'd0;
-                state <= DONE;
-              end else if(mem_data_on_wire) begin
+              if (write_cons_r_en) begin
+                // Capture data once write_cons is visible to fifo.
                 mem_in <= in_fifo;
-                write_cons_r_en <= 1'b1;
                 tx_index <= tx_index + 8'd1;
-              end
+              end else if (!mem_busy) begin
+                if (tx_index >= mem_len) begin
+                  write_cons_done <= 1'b1;
+                  tx_index <= 8'd0;
+                  state <= DONE;
+                end else if(mem_data_on_wire) begin
+                  write_cons_r_en <= 1'b1;
+                end
             end
           end
           DONE: begin

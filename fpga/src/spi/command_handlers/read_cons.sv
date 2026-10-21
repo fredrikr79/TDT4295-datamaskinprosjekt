@@ -30,7 +30,7 @@ module read_cons #(
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
+    if (ck_rst) begin
       rx_index <= 8'd0;
       read_cons_done <= 1'b0;
       read_cons_w_en <= 1'b0;
@@ -77,7 +77,7 @@ module read_cons #(
           end
           GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX, gridY);
-            state   <= DATA;
+            state   <= INIT_REQ;
           end
           INIT_REQ: begin
             // The signal is delayed one cycle in the SPI controller.
@@ -89,12 +89,12 @@ module read_cons #(
           DATA: begin
             if(!mem_busy) begin
               if (rx_index >= mem_len) begin
-                  rx_index <= 8'd0;
                   read_cons_done <= 1'b1;
+                  rx_index <= 8'd0;
                   state <= DONE;
               end else if(mem_data_on_wire) begin
-                  read_cons_fifo <= mem_out;
                   read_cons_w_en <= 1'b1;
+                  read_cons_fifo <= mem_out;
                   rx_index <= rx_index + 8'd1;
               end
             end

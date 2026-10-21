@@ -34,7 +34,7 @@ always_ff @(posedge clk) begin
     sprite_update_done <= 1'b0;
     sprite_req_valid   <= 1'b0;
 
-    if(!ck_rst) begin
+    if(ck_rst) begin
         // Params will be overwritten during next execution
         state <= START;
         sprite_update_done <= 1'b0;

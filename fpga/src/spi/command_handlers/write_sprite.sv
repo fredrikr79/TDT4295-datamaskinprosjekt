@@ -33,7 +33,7 @@ module write_sprite #(
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
+    if (ck_rst) begin
       tx_index <= 8'd0;
       write_sprite_fifo <= 8'd0;
       state <= START;
@@ -55,7 +55,7 @@ module write_sprite #(
             state   <= GET_MEM_ADDR;
           end
           GET_MEM_ADDR: begin
-            state <= DATA;
+            state <= INIT_REQ;
           end
           INIT_REQ: begin
             // The signal is delayed one cycle in the SPI controller.
@@ -66,7 +66,11 @@ module write_sprite #(
           end
           DATA: begin
             if (!mem_busy) begin
-                // Read N bytes from in_queue to mem_in
+              // Read N bytes from in_queue to mem_in
+              if(write_sprite_r_en) begin
+                mem_in <= in_fifo;
+                tx_index <= tx_index + 8'd1;
+              end else if (!mem_busy) begin
                 if (tx_index >= mem_len) begin
                   write_sprite_done <= 1'b1;
                   write_sprite_w_en <= 1'b1;
@@ -76,10 +80,9 @@ module write_sprite #(
                   next_id <= next_id + 1'b1;
                   state <= DONE;
                 end else if (mem_data_on_wire) begin
-                  mem_in <= in_fifo;
                   write_sprite_r_en <= 1'b1;
-                  tx_index <= tx_index + 8'd1;
                 end
+              end
             end
           end
           DONE: begin

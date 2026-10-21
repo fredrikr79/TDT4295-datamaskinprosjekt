@@ -43,7 +43,7 @@ module write_box #(
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
+    if (ck_rst) begin
       col_index <= 8'd0;
       row_index <= 8'd0;
       write_box_done <= 1'b0;
@@ -112,17 +112,25 @@ module write_box #(
               // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
 
-              // Read N bytes from in_queue to mem_in
-              if (col_index > cols) begin // include final boundary
-                col_index <= 8'd0;
+              if(write_box_r_en) begin
+                mem_in <= in_fifo;
 
-                if(row_index < rows) begin
-                  row_index <= row_index + 8'd1;
-                  state <= GET_MEM_ADDR;
+                // Read N bytes from in_queue to mem_in
+                if (col_index == cols) begin // include final boundary
+                  col_index <= 8'd0;
+                  write_box_r_en <= 1'b0;
+
+                  if(row_index < rows) begin
+                    row_index <= row_index + 8'd1;
+                    state <= GET_MEM_ADDR;
+                  end else begin
+                    row_index <= 8'd0;
+                    write_box_done <= 1'b1;
+                    state <= DONE;
+                  end
                 end else begin
-                  row_index <= 8'd0;
-                  write_box_done <= 1'b1;
-                  state <= DONE;
+                  col_index <= col_index + 8'd1;
+                  write_box_r_en <= 1'b1;
                 end
               end else if(mem_data_on_wire) begin
                 mem_in <= in_fifo;

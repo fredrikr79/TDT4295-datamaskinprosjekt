@@ -117,22 +117,23 @@ module read_box #(
             end
           end
           DATA: begin
-            if(!mem_busy) begin
-              if (col_index > cols) begin
-                col_index <= 8'd0;
+            if(!mem_busy && mem_data_on_wire) begin
+              read_box_fifo <= mem_out;
+              read_box_w_en <= 1'b1;
 
-                if (row_index < rows) begin
+              if (col_index >= cols-1) begin
+                col_index <= 16'b0;
+
+                if (row_index < rows - 1) begin
                     row_index <= row_index + 8'd1;
                     state <= GET_MEM_ADDR;
                 end else begin
-                    row_index <= 8'd0;
+                    row_index <= 16'd0;
                     read_box_done <= 1'b1;
                     state <= DONE;
                 end
               end else if(mem_data_on_wire) begin
-                read_box_fifo <= mem_out;
-                read_box_w_en <= 1'b1;
-                col_index <= col_index + 8'd1;
+                col_index <= col_index + 16'd1;
               end
             end
           end

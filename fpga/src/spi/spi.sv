@@ -29,7 +29,6 @@ module spi #(
     mem_len,
     input logic mem_busy,
     mem_data_on_wire,
-    mem_toggle,
     output logic [31:0] mem_addr,
     output memory_pkg::transaction_e mem_transaction,
 
@@ -37,10 +36,11 @@ module spi #(
     input logic sprite_id_found,
     input logic [7:0]
     sprite_available_id,
-    sprite_req_valid,
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_op_e sprite_req_op,
-    output logic write_sprite_valid
+    output logic write_sprite_valid,
+    mem_toggle,
+    sprite_req_valid
 );
 
   import spi_pck::*;

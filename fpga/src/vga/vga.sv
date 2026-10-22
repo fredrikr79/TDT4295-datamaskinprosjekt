@@ -7,11 +7,16 @@ module vga #(
     output logic [3:0] vga_r,
     vga_g,
     vga_b,
-    output logic h_sync,
-    v_sync,
     output vga_sync_params::x_coordinate_t coord_x,
     output vga_sync_params::y_coordinate_t coord_y,
-    output logic active_area, pixel_pulse
+    output logic    active_area,
+    pixel_pulse,
+    h_sync,
+    v_sync,
+    v_blank,
+    h_blank,
+    frame_start,
+    near_frame_end
 );
   import vga_sync_params::*;
   vga_clock_enable_pulse #(
@@ -38,6 +43,18 @@ module vga #(
       .h_sync(h_sync),
       .v_sync(v_sync),
       .active_area(active_area)
+  );
+
+  vga_phase vga_phase (
+      .clk(clk),
+      .reset(reset),
+      .coord_x(coord_x),
+      .coord_y(coord_y),
+      .pixel_pulse(pixel_pulse),
+      .v_blank(v_blank),
+      .h_blank(h_blank),
+      .frame_start(frame_start),
+      .near_frame_end(near_frame_end)
   );
 
   assign vga_r = color.red;

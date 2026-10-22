@@ -47,7 +47,6 @@ package mem_map_pkg;
     return gol_byte_addr_at_index(gol_pkg::cell_index(x, y));
   endfunction
 
-  // Used by gol_byte_addr
   function automatic memory_pkg::address_t gol_byte_addr_at_index(
       input gol_pkg::cell_index_t cell_index
     );

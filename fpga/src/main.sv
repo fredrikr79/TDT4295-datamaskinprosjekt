@@ -31,7 +31,7 @@ module main (
     in_almost_full,
     in_full
 );
-  logic active_area, pixel_pulse;
+  logic active_area, pixel_pulse, v_blank, h_blank, frame_start, line_end;
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
@@ -65,7 +65,11 @@ module main (
       .vga_r(vga_r),
       .vga_g(vga_g),
       .vga_b(vga_b),
-      .color(color)
+      .color(color),
+      .v_blank(v_blank),
+      .h_blank(h_blank),
+      .frame_start(frame_start),
+      .near_frame_end(near_frame_end)
   );
 
   cells cell_controller (

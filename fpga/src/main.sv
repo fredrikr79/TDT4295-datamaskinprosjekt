@@ -103,37 +103,77 @@ module main (
       .color(color)
   );
 
-//   spi spi_controller (
-//       .clk(clk),
-//       .ck_ss(ck_ss),
-//       .ck_sck(ck_sck),
-//       .ck_rst(ck_rst),
-//       .octo_spi(octo_spi),
-//       .acknack(acknack),
-//       .led(led),
-//       .led0_r(led0_r),
-//       .led0_g(led0_g),
-//       .led0_b(led0_b),
-//       .ready(ready),
+  // HUD sprites LUT declaration
+  hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth];
+  hud hud_controller (
+      .clk(clk),
+      .req_valid(sprite_req_valid),
+      .sprite_mem_id(sprite_mem_id),
+      .sprite_w_mem_addr(mem_addr),
+      .sprite_req_op(sprite_req_op),
+      .sprite_req_body(sprite_req_body),
+      .spriteLUT(spriteLUT),
+      .sprite_id_bitmap(sprite_id_bitmap),
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_found(sprite_id_found),
+      .write_sprite_valid(write_sprite_valid)
+  );
 
-//       .out_almost_empty(out_almost_empty),
-//       .out_empty(out_empty),
-//       .in_almost_full(in_almost_full),
-//       .in_full(in_full),
+  // HUD sprites LUT declaration
+  hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth];
+  hud hud_controller (
+      .clk(clk),
+      .req_valid(sprite_req_valid),
+      .sprite_mem_id(sprite_mem_id),
+      .sprite_w_mem_addr(mem_addr),
+      .sprite_req_op(sprite_req_op),
+      .sprite_req_body(sprite_req_body),
+      .spriteLUT(spriteLUT),
+      .sprite_id_bitmap(sprite_id_bitmap),
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_found(sprite_id_found),
+      .write_sprite_valid(write_sprite_valid)
+  );
+
+  spi spi_controller (
+      .clk(clk),
+      .ck_ss(ck_ss),
+      .ck_sck(ck_sck),
+      .ck_rst(ck_rst),
+      .octo_spi(octo_spi),
+      .acknack(acknack),
+      .led(led),
+      .led0_r(led0_r),
+      .led0_g(led0_g),
+      .led0_b(led0_b),
+      .ready(ready),
+
+      .out_almost_empty(out_almost_empty),
+      .out_empty(out_empty),
+      .in_almost_full(in_almost_full),
+      .in_full(in_full),
 
 //       // Sim running
-//       .sim_running(sim_running),
+      .sim_running(sim_running),
 
-//       // Memory module fall-through signals
-//       .mem_busy(mem_busy),
-//       .mem_data_on_wire(mem_data_on_wire),
-//       .mem_toggle(mem_toggle),
-//       .mem_addr(mem_addr),
-//       .mem_len(mem_len),
-//       .mem_in(mem_in),
-//       .mem_out(mem_out),
-//       .mem_transaction(mem_transaction)
-//   );
+      // Memory module fall-through signals
+      .mem_in(mem_in),
+      .mem_out(mem_out),
+      .mem_len(mem_len),
+      .mem_addr(mem_addr),
+      .mem_transaction(mem_transaction),
+      .mem_busy(mem_busy),
+      .mem_data_on_wire(mem_data_on_wire),
+      .mem_toggle(mem_toggle),
+
+      // Sprite LUT transaction signals
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_found(sprite_id_found),
+      .sprite_req_valid(sprite_req_valid),
+      .sprite_req_body(sprite_req_body),
+      .sprite_req_op(sprite_req_op),
+      .write_sprite_valid(write_sprite_valid)
+  );
 
 endmodule
 

@@ -5,8 +5,10 @@
  *
  * An image is pixels the FPGA keeps in its sprite memory (WRITE_SPRITE,
  * gives a memID). A sprite is an instance of an image on the screen
- * (SPRITE_WRITE, gives a spriteID), which can be moved, hidden or given
- * another image of the same size (SPRITE_UPDATE).
+ * (SPRITE_WRITE, gives a spriteID), which can be moved or hidden
+ * (SPRITE_UPDATE). Its image and size are fixed: for another picture,
+ * remove the sprite and make a new one (images can be shared, so
+ * flipping between uploaded images costs no new memIDs).
  *
  * The game only says what it wants; hud_poll() sends whatever it takes
  * to get the FPGA there -- upload, create, update, delete -- one command
@@ -72,12 +74,10 @@ typedef struct hud_sprite {
     /* what the FPGA has, as far as we know (hud.c) */
     uint8_t      state;
     uint8_t      id;                /* spriteID, valid when live         */
-    hud_image_t *s_img;
     int16_t      s_x, s_y;
     bool         s_visible;
     bool         dirty;             /* an update failed: resend it       */
-    hud_image_t *p_img;             /* the command in flight sends these */
-    int16_t      p_x, p_y;
+    int16_t      p_x, p_y;          /* the command in flight sends these */
     bool         p_visible;
     struct hud_sprite *next;
 } hud_sprite_t;
@@ -93,8 +93,6 @@ void hud_image_init(hud_image_t *img, const uint8_t *px, uint16_t w, uint16_t h)
 void hud_sprite_init(hud_sprite_t *s, hud_image_t *img, int16_t x, int16_t y, bool visible);
 void hud_sprite_move(hud_sprite_t *s, int16_t x, int16_t y);
 void hud_sprite_show(hud_sprite_t *s, bool visible);
-/* Another image of the SAME size (the FPGA can't change W,H). */
-bool hud_sprite_set_image(hud_sprite_t *s, hud_image_t *img);
 /* Delete it on the FPGA and forget it; the struct is free once
  * hud_sprite_gone() says so. */
 void hud_sprite_remove(hud_sprite_t *s);

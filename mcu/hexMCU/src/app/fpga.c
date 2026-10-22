@@ -516,14 +516,12 @@ fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16
     return c;
 }
 
-fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, uint8_t mem_id, bool active,
-                                  uint16_t x, uint16_t y)
+fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y)
 {
-    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_UPDATE_OPCODE, .len = 7 },
+    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_UPDATE_OPCODE, .len = 6 },
                      .param_tx = true, .kind = FPGA_KIND_WRITE };
     uint8_t *p = c.param;
     *p++ = sprite_id;
-    *p++ = mem_id;
     *p++ = active ? 1u : 0u;
     p = put16(p, x);
     put16(p, y);

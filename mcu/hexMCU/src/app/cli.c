@@ -518,7 +518,7 @@ static void cmd_info(int argc, char **argv)
 
 /* sprite upload <w> <h> <colour>               WRITE_SPRITE, a filled image -> memID
  * sprite new <memID> <x> <y> <w> <h> [hide]    SPRITE_WRITE -> spriteID
- * sprite move <id> <memID> <x> <y> [hide]      SPRITE_UPDATE
+ * sprite move <id> <x> <y> [hide]              SPRITE_UPDATE
  * sprite del <id>                              SPRITE_DELETE
  * For bringing up the FPGA's sprites by hand. These IDs are the same ones
  * the game's HUD uses, so mixing the two confuses both. */
@@ -555,14 +555,14 @@ static void cmd_sprite(int argc, char **argv)
                    (uint16_t)a[2], (uint16_t)a[3], (uint16_t)a[4]));
         return;
     }
-    if (strcmp(sub, "move") == 0 && (argc == 6 || argc == 7)) {
-        if (!parse_arg("id", argv[2], 0xFF, &a[0]) || !parse_arg("memID", argv[3], 0xFF, &a[1]) ||
-            !parse_arg("x", argv[4], 0xFFFF, &a[2]) || !parse_arg("y", argv[5], 0xFFFF, &a[3]))
+    if (strcmp(sub, "move") == 0 && (argc == 5 || argc == 6)) {
+        if (!parse_arg("id", argv[2], 0xFF, &a[0]) ||
+            !parse_arg("x", argv[3], 0xFFFF, &a[1]) || !parse_arg("y", argv[4], 0xFFFF, &a[2]))
             return;
-        bool show = !(argc == 7 && strcmp(argv[6], "hide") == 0);
+        bool show = !(argc == 6 && strcmp(argv[5], "hide") == 0);
         if (console_busy()) return;
-        pend_start(PEND_SPR_MOVE, fpga_cmd_sprite_update((uint8_t)a[0], (uint8_t)a[1], show,
-                   (uint16_t)a[2], (uint16_t)a[3]));
+        pend_start(PEND_SPR_MOVE, fpga_cmd_sprite_update((uint8_t)a[0], show,
+                   (uint16_t)a[1], (uint16_t)a[2]));
         return;
     }
     if (strcmp(sub, "del") == 0 && argc == 3) {
@@ -573,7 +573,7 @@ static void cmd_sprite(int argc, char **argv)
     }
     log_raw("usage: sprite upload <w> <h> <colour>\r\n"
             "       sprite new <memID> <x> <y> <w> <h> [hide]\r\n"
-            "       sprite move <id> <memID> <x> <y> [hide]\r\n"
+            "       sprite move <id> <x> <y> [hide]\r\n"
             "       sprite del <id>\r\n");
 }
 

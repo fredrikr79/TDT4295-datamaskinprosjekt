@@ -3,7 +3,7 @@
  * Images:   NONE -> (WRITE_SPRITE x chunks) -> SENDING -> UPLOADED, memID known
  *           -> NO_ROOM if the FPGA's memIDs run out (not retried)
  * Sprites:  NONE -> (SPRITE_WRITE) -> CREATING -> LIVE, spriteID known
- *           LIVE -> (SPRITE_UPDATE when x/y/visible/image differ) -> LIVE
+ *           LIVE -> (SPRITE_UPDATE when x/y/visible differ) -> LIVE
  *           LIVE -> (SPRITE_DELETE after hud_sprite_remove) -> GONE
  *
  * An image bigger than one command is uploaded as several WRITE_SPRITEs
@@ -86,17 +86,6 @@ static void unlink_sprite(hud_sprite_t *s)
 
 void hud_sprite_move(hud_sprite_t *s, int16_t x, int16_t y) { s->x = x; s->y = y; }
 void hud_sprite_show(hud_sprite_t *s, bool visible)         { s->visible = visible; }
-
-bool hud_sprite_set_image(hud_sprite_t *s, hud_image_t *img)
-{
-    if (img->w != s->img->w || img->h != s->img->h) {
-        LOG_WARN("set_image: %ux%u image on a %ux%u sprite -- W,H are fixed",
-                 img->w, img->h, s->img->w, s->img->h);
-        return false;
-    }
-    s->img = img;
-    return true;
-}
 
 void hud_sprite_remove(hud_sprite_t *s)
 {
@@ -181,7 +170,7 @@ static void sprite_done(const fpga_cmd_t *cmd, fpga_err_t err)
         /* fall through */
     case SPR_UPDATING:
         s->state = SPR_LIVE;
-        s->s_img = s->p_img; s->s_x = s->p_x; s->s_y = s->p_y; s->s_visible = s->p_visible;
+        s->s_x = s->p_x; s->s_y = s->p_y; s->s_visible = s->p_visible;
         s->dirty = false;
         break;
     case SPR_DELETING:
@@ -269,7 +258,7 @@ bool hud_poll(void)
         fpga_cmd_t c;
         if (s->state == SPR_NONE && !s->remove) {
             if (s->img->state != IMG_UPLOADED) continue;
-            s->p_img = s->img; s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
+            s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
             c = fpga_cmd_sprite_write(s->img->mem_id, s->visible, clamp_u16(s->x),
                                       clamp_u16(s->y), s->img->w, s->img->h);
             if (!submit(&c, sprite_done, s)) return !failed;
@@ -279,12 +268,10 @@ bool hud_poll(void)
             if (!submit(&c, sprite_done, s)) return !failed;
             s->state = SPR_DELETING;
         } else if (s->state == SPR_LIVE &&
-                   (s->dirty || s->img != s->s_img || s->x != s->s_x ||
-                    s->y != s->s_y || s->visible != s->s_visible)) {
-            if (s->img->state != IMG_UPLOADED) continue;
-            s->p_img = s->img; s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
-            c = fpga_cmd_sprite_update(s->id, s->img->mem_id, s->visible,
-                                       clamp_u16(s->x), clamp_u16(s->y));
+                   (s->dirty || s->x != s->s_x || s->y != s->s_y ||
+                    s->visible != s->s_visible)) {
+            s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
+            c = fpga_cmd_sprite_update(s->id, s->visible, clamp_u16(s->x), clamp_u16(s->y));
             if (!submit(&c, sprite_done, s)) return !failed;
             s->state = SPR_UPDATING;
         }

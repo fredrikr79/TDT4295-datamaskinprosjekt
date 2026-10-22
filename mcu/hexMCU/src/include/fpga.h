@@ -26,8 +26,8 @@
  * ------------------------------------------------------------------------------------------
  * CONS and BOX work on the grid (the SIM layer). The HUD is sprites:
  * WRITE_SPRITE uploads an image once and gives its memID; SPRITE_WRITE
- * places an instance of it and gives its spriteID; SPRITE_UPDATE moves it,
- * swaps its image or hides it (W and H are fixed); SPRITE_DELETE frees it.
+ * places an instance of it and gives its spriteID; SPRITE_UPDATE moves or
+ * hides it (its image and W,H are fixed); SPRITE_DELETE frees it.
  *
  * Sprite memory is append-only: every WRITE_SPRITE goes right after the
  * last one and takes one memID, and nothing can be changed or freed
@@ -246,8 +246,7 @@ fpga_cmd_t fpga_cmd_read_box(fpga_box_t box, uint8_t *buf, uint16_t len);
 fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len);
 fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16_t y,
                                  uint16_t w, uint16_t h);
-fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, uint8_t mem_id, bool active,
-                                  uint16_t x, uint16_t y);
+fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y);
 fpga_cmd_t fpga_cmd_sprite_delete(uint8_t sprite_id);
 
 fpga_cmd_t fpga_cmd_sim_run(bool run);      /* START_SIM / STOP_SIM      */

@@ -254,17 +254,14 @@ static int32_t sprite_write(const uint8_t *p, uint16_t len, uint8_t *status)
 
 static int32_t sprite_update(const uint8_t *p, uint16_t len, uint8_t *status)
 {
-    if (!param_count(len, 7, status, "sprite_update")) return READY_US;
-    uint8_t id = p[0], mem_id = p[1];
-    if (!sprite_used(id) || !image_ok(mem_id))
+    if (!param_count(len, 6, status, "sprite_update")) return READY_US;
+    uint8_t id = p[0];
+    if (!sprite_used(id))
         return fail(status, FPGA_FAIL_UNKNOWN_IDENTIFIER, "sprite_update");
     instance_t *s = &ff.sprite[id];
-    if ((uint32_t)s->w * s->h * PIXEL_BYTES > bytes_from(mem_id))
-        return fail(status, FPGA_FAIL_ILLEGAL_VALUE, "sprite_update");   /* W,H are fixed */
-    s->mem_id = mem_id;
-    s->active = p[2] & 1u;
-    s->x      = be16(&p[3]);
-    s->y      = be16(&p[5]);
+    s->active = p[1] & 1u;
+    s->x      = be16(&p[2]);
+    s->y      = be16(&p[4]);
     return READY_US;
 }
 

@@ -23,12 +23,6 @@ module spi_tx #(
 
   import spi_pck::*;
 
-  // MCU READ CONDITIONS
-  assign out_r_en = (tx_load || tx_event_trigger) && ~out_empty;
-
-  // OCTO_SPI
-  assign octo_spi = (~ck_ss && tx_armed_s) ? tx_out : 8'hzz;
-
   // OUTPUT QUEUE
   wire out_r_en;
   wire out_almost_full;
@@ -58,6 +52,32 @@ module spi_tx #(
   reg [7:0] tx_out;
   assign out_ready = ~out_wr_rst_busy && ~out_rd_rst_busy && ~out_full;
 
+
+  // Synchronization for event driven TX (event = ck_SCK pulse)
+  reg        tx_event = 1'b0;
+  reg  [2:0] tx_event_sync = 3'b000;
+
+  wire       tx_event_trigger = tx_event_sync[2] ^ tx_event_sync[1];
+  wire       tx_stage_allowed = (state == ST_TX_SEND);
+  wire       tx_rd_gate = (~ck_ss) && tx_stage_allowed;
+
+  always @(posedge clk) begin
+    if (reset_s) tx_event_sync <= 3'b000;
+    else tx_event_sync <= {tx_event_sync[1:0], tx_event};
+  end
+
+  // TX handshake
+  reg [2:0] tx_armed_sync = 3'b000;
+
+  // TX arming
+  wire tx_armed_s = tx_armed_sync[2];
+
+  always @(posedge clk) begin
+    if (reset) begin
+      tx_armed_sync <= 3'b000;
+    end else tx_armed_sync <= {tx_armed_sync[1:0], tx_armed};
+  end
+
   // CDC synchronizations CK_SCK -> CLK
   always @(posedge ck_sck) begin
     if (reset_s) begin
@@ -68,30 +88,6 @@ module spi_tx #(
       end
 
     end
-  end
-
-  // TX arming
-  wire tx_armed_s = tx_armed_sync[2];
-
-  // TX handshake
-  reg [2:0] tx_armed_sync = 3'b000;
-  always @(posedge clk) begin
-    if (reset) begin
-      tx_armed_sync <= 3'b000;
-    end else tx_armed_sync <= {tx_armed_sync[1:0], tx_armed};
-  end
-
-  // Synchronization for event driven TX (event = ck_SCK pulse)
-  wire       tx_event_trigger = tx_event_sync[2] ^ tx_event_sync[1];
-  wire       tx_stage_allowed = (state == ST_TX_SEND);
-  wire       tx_rd_gate = (~ck_ss) && tx_stage_allowed;
-
-  reg        tx_event = 1'b0;
-  reg  [2:0] tx_event_sync = 3'b000;
-
-  always @(posedge clk) begin
-    if (reset_s) tx_event_sync <= 3'b000;
-    else tx_event_sync <= {tx_event_sync[1:0], tx_event};
   end
 
   // initialize outgoing event driven buffer, and set conditions for preloading during TX handshake
@@ -144,5 +140,11 @@ module spi_tx #(
       endcase
     end
   end
+
+  // MCU READ CONDITIONS
+  assign out_r_en = (tx_load || tx_event_trigger) && ~out_empty;
+
+  // OCTO_SPI
+  assign octo_spi = (~ck_ss && tx_armed_s) ? tx_out : 8'hzz;
 
 endmodule

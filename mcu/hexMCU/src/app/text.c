@@ -1,8 +1,4 @@
-/* text.c - text on the HUD layer (see text.h).
- *
- * The whole string is laid out into one pixel box first, then sent: whole
- * rows per command if a row fits fpga_max_payload(), else pieces of a row
- * (a full-width line of 640 px is 1280 bytes, more than one command). */
+/* text.c - text on the HUD as FPGA sprites (see text.h). */
 
 #define LOG_TAG "text"
 
@@ -12,126 +8,111 @@
 #include "fpga.h"
 #include "log.h"
 
-static uint16_t min16(uint32_t a, uint32_t b) { return (uint16_t)(a < b ? a : b); }
+/* ---- letter images, shared by all texts ---------------------------------- */
+static struct {
+    hud_image_t  img;
+    const font_t *font;
+    uint32_t     cp;
+    uint16_t     colour;
+    uint8_t      scale;
+} glyphs[TEXT_GLYPH_MAX];
+static unsigned n_glyphs;
 
-static void put_px(uint8_t *dst, uint16_t v)     /* MSB first */
+static uint8_t  arena[TEXT_ARENA_BYTES];    /* their pixels, never freed */
+static uint32_t arena_used;
+
+static bool blank(const font_t *f, const font_glyph_t *g)
 {
-    dst[0] = (uint8_t)(v >> 8);
-    dst[1] = (uint8_t)v;
+    for (int y = 0; y < f->height; y++)
+        for (int x = 0; x < g->width; x++)
+            if (font_pixel(f, g, x, y)) return false;
+    return true;
 }
 
-/* ---- layout ----------------------------------------------------------- */
+/* The image for this letter, made on first use. NULL: nothing to draw
+ * (a space) or no room left. */
+static hud_image_t *glyph_image(const font_t *f, uint32_t cp, uint16_t colour, uint8_t scale)
+{
+    for (unsigned i = 0; i < n_glyphs; i++)
+        if (glyphs[i].font == f && glyphs[i].cp == cp &&
+            glyphs[i].colour == colour && glyphs[i].scale == scale)
+            return &glyphs[i].img;
+
+    const font_glyph_t *g = font_glyph(f, cp);
+    if (g->width == 0 || blank(f, g)) return NULL;
+
+    uint16_t w = (uint16_t)(g->width * scale), h = (uint16_t)(f->height * scale);
+    uint32_t bytes = (uint32_t)w * h * PX_BYTES;
+    if (n_glyphs >= TEXT_GLYPH_MAX || arena_used + bytes > sizeof arena) {
+        LOG_WARN("no room for more letter images (%u, %lu bytes)",
+                 n_glyphs, (unsigned long)arena_used);
+        return NULL;
+    }
+
+    uint8_t *px = &arena[arena_used];
+    arena_used += bytes;
+    hud_fill(px, w, h, HUD_CLEAR);                       /* see-through ... */
+    for (int y = 0; y < f->height; y++)
+        for (int x = 0; x < g->width; x++) {
+            if (!font_pixel(f, g, x, y)) continue;       /* ... but the letter */
+            for (int sy = 0; sy < scale; sy++)
+                for (int sx = 0; sx < scale; sx++)
+                    hud_set_px(px, w, (uint16_t)(x * scale + sx),
+                               (uint16_t)(y * scale + sy), colour);
+        }
+
+    glyphs[n_glyphs].font   = f;
+    glyphs[n_glyphs].cp     = g->cp;
+    glyphs[n_glyphs].colour = colour;
+    glyphs[n_glyphs].scale  = scale;
+    hud_image_init(&glyphs[n_glyphs].img, px, w, h);
+    return &glyphs[n_glyphs++].img;
+}
+
+/* ---- texts ----------------------------------------------------------------- */
+bool text_ready(const text_t *t)
+{
+    for (unsigned i = 0; i < t->n; i++)
+        if (!hud_sprite_gone(&t->spr[i])) return false;
+    return true;
+}
+
 bool text_draw(text_t *t, int16_t x, int16_t y, const font_t *f, const char *s,
-               uint16_t fg, uint16_t bg, uint8_t scale)
+               uint16_t colour, uint8_t scale)
 {
-    if (t->active) return false;
+    if (!text_ready(t)) return false;
     if (scale == 0) scale = 1;
+    t->n = 0;
 
-    /* box = the string, cut to the screen and to the buffer */
     const fpga_info_t *scr = fpga_link_info();
-    int32_t w = (int32_t)font_text_width(f, s) * scale;
-    int32_t h = (int32_t)f->height * scale;
-    if (x < 0 || y < 0 || x >= scr->width || y >= scr->height) return false;
-    if (x + w > scr->width)  w = scr->width  - x;
-    if (y + h > scr->height) h = scr->height - y;
-    if (w > (int32_t)TEXT_MAX_W) w = TEXT_MAX_W;
-    if (h > (int32_t)TEXT_MAX_H) h = TEXT_MAX_H;
-    if (w <= 0 || h <= 0) return false;
-
-    /* background, then the letters on top */
-    for (int32_t i = 0; i < w * h; i++) put_px(&t->buf[i * PX_BYTES], bg);
-
-    int32_t pen = 0;                            /* x of the current glyph */
+    int32_t pen = x;
     uint32_t cp;
-    while ((cp = font_utf8_next(&s)) != 0 && pen < w) {
+    while ((cp = font_utf8_next(&s)) != 0) {
         const font_glyph_t *g = font_glyph(f, cp);
-        for (int gy = 0; gy < f->height; gy++)
-            for (int gx = 0; gx < g->width; gx++) {
-                if (!font_pixel(f, g, gx, gy)) continue;
-                for (int sy = 0; sy < scale; sy++)          /* one font pixel = */
-                    for (int sx = 0; sx < scale; sx++) {    /* scale x scale    */
-                        int32_t px = pen + gx * scale + sx, py = gy * scale + sy;
-                        if (px < w && py < h)
-                            put_px(&t->buf[(py * w + px) * PX_BYTES], fg);
-                    }
+        int32_t gw = g->width * scale, gh = f->height * scale;
+        bool on_screen = pen >= 0 && y >= 0 && pen + gw <= scr->width &&
+                         y + gh <= scr->height;
+        hud_image_t *img = on_screen ? glyph_image(f, cp, colour, scale) : NULL;
+        if (img) {
+            if (t->n >= TEXT_MAX_CHARS) {
+                LOG_WARN("text longer than %u letters, cut", TEXT_MAX_CHARS);
+                break;
             }
-        pen += g->width * scale;
+            hud_sprite_init(&t->spr[t->n++], img, (int16_t)pen, y, true);
+        }
+        pen += gw;
     }
-
-    t->x = x;
-    t->y = y;
-    t->w = (uint16_t)w;
-    t->h = (uint16_t)h;
-    t->row = t->col = 0;
-    t->pending = 0;
-    t->failed = false;
-    t->active = true;
+    t->w = (int16_t)(pen - x);
+    t->h = (int16_t)(f->height * scale);
     return true;
 }
 
-/* ---- sending ---------------------------------------------------------- */
-static void text_done(const fpga_cmd_t *cmd, fpga_err_t err)
+void text_show(text_t *t, bool visible)
 {
-    text_t *t = cmd->ctx;
-    if (t->pending) t->pending--;
-    if (err != FPGA_ERR_NONE) t->failed = true;
+    for (unsigned i = 0; i < t->n; i++) hud_sprite_show(&t->spr[i], visible);
 }
 
-bool text_poll(text_t *t)
+void text_clear(text_t *t)
 {
-    if (t->failed) return false;
-    if (!t->active) return true;
-
-    uint32_t max_px = fpga_max_payload(SEND_HUD_BOX_OPCODE) / PX_BYTES;
-    if (max_px == 0) max_px = 1;                /* submit will say it's too big */
-
-    while (t->row < t->h) {
-        uint16_t rows, cols, x = (uint16_t)t->x, y = (uint16_t)(t->y + t->row);
-        const uint8_t *data;
-        if (max_px >= t->w) {                   /* whole rows */
-            rows = min16(max_px / t->w, t->h - t->row);
-            cols = t->w;
-            data = &t->buf[(uint32_t)t->row * t->w * PX_BYTES];
-        } else {                                /* a piece of one row */
-            rows = 1;
-            cols = min16(max_px, t->w - t->col);
-            x    = (uint16_t)(x + t->col);
-            data = &t->buf[((uint32_t)t->row * t->w + t->col) * PX_BYTES];
-        }
-
-        fpga_cmd_t c = fpga_cmd_send_hud_box(fpga_box(x, y, cols, rows), data,
-                                             (uint16_t)(cols * rows * PX_BYTES));
-        c.done = text_done;
-        c.ctx  = t;
-        fpga_status_t st = fpga_submit(&c);
-        if (st == FPGA_EFULL) return true;      /* same command next poll */
-        if (st != FPGA_OK) {
-            LOG_WARN("submit: %s", fpga_status_str(st));
-            t->failed = true;
-            return false;
-        }
-        t->pending++;
-
-        if (cols < t->w) {                      /* move on: piece, then row */
-            t->col = (uint16_t)(t->col + cols);
-            if (t->col < t->w) continue;
-            t->col = 0;
-        }
-        t->row = (uint16_t)(t->row + rows);
-    }
-
-    if (t->pending == 0) t->active = false;     /* all sent and all back OK */
-    return true;
-}
-
-bool text_busy(const text_t *t)
-{
-    return t->active;
-}
-
-void text_lost(text_t *t)
-{
-    t->active  = false;
-    t->failed  = false;
-    t->pending = 0;
+    for (unsigned i = 0; i < t->n; i++) hud_sprite_remove(&t->spr[i]);
 }

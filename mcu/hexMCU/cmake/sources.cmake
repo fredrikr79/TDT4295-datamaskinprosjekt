@@ -10,7 +10,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/frame_sync.c
     ${APP_ROOT}/src/app/game.c
     ${APP_ROOT}/src/app/usb_input.c
-    ${APP_ROOT}/src/app/render.c
+    ${APP_ROOT}/src/app/hud.c
     ${APP_ROOT}/src/app/font.c
     ${APP_ROOT}/src/app/text.c
 )

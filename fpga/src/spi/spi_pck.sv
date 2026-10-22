@@ -32,7 +32,7 @@ package spi_pck;
   } opcode_e;
 
   typedef enum bit [7:0] {
-    UNKNOWN_COMMAND_ERROR     = E0,
+    NO_ERROR                  = E0,
     MISSING_PARAMETER_ERROR   = E1,
     TOO_MANY_PARAMETERS_ERROR = E2,
     ILLEGAL_VALUE_ERROR       = E3,
@@ -42,8 +42,14 @@ package spi_pck;
     UNKNOWN_VALUE_ERROR       = E7,
     TIMEOUT_ERROR             = E8,
     RESOURCE_EXHAUSTED_ERROR  = E9,
-    INVALID_STATE_ERROR       = EA,
+    ILLEGAL_STATE_ERROR       = EA,
+    UNKNOWN_COMMAND_ERROR     = EB,
     UNKNOWN_ERROR             = EF
   } error_codes_e;
+
+  typedef struct packed {
+    logic valid;
+    logic [7:0] code;
+  } error_event_t;
 
 endpackage

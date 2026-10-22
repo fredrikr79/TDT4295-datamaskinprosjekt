@@ -16,7 +16,9 @@ module spi_rx #(
     in_ready,
     in_full,
     output logic rx_r_en,
-    output wire [7:0] in_fifo
+    error_valid,
+    output logic [7:0] in_fifo,
+    error_code
 );
 
   import spi_pck::*;

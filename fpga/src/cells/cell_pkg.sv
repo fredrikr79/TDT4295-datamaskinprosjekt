@@ -6,8 +6,8 @@ package cell_pkg;
   localparam int unsigned CellsPerWord = 8;  // 8x4 = 32 which fits cleanly in registers
   localparam int unsigned WordBits = CellsPerWord * MaterialBits;  // 32: a word contains 8 4-bit cells
   localparam int unsigned WordsPerRow = CellGridWidth / CellsPerWord;  // 80: a row contains 640 pixels, we contain 8 pixels in one word, 640/8 = 80 which is our screen resolution
-  localparam int unsigned TotalWords = WordsPerRow * CellGridHeight;  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
-  localparam int unsigned AddrBits = $clog2(TotalWords);  // 15 = 32,768, enough to address all of TotalWords
+  localparam int unsigned TotalCellWords = WordsPerRow * CellGridHeight;  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
+  localparam int unsigned AddrBits = $clog2(TotalCellWords);  // 15 = 32,768, enough to address all of TotalCellWords
 
   typedef logic [MaterialBits-1:0] material_t;
   typedef material_t [CellsPerWord-1:0] cell_word_t; // same as logic [7:0][3:0]

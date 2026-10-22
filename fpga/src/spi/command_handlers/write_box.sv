@@ -3,16 +3,16 @@ module write_box #(
 ) (
     input wire clk,
     ck_rst,
-    data_rdy,
+    mem_data_on_wire,
     send_write_box,
     mem_busy,
     input logic [7:0] in_fifo,
     output logic [7:0] mem_in,
+    mem_len,
     output logic write_box_done,
     write_box_r_en,
-    mem_toggle,
-    output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_func
+    mem_req,
+    output logic [31:0] mem_addr
 );
 
   import spi_pck::*;
@@ -31,35 +31,34 @@ module write_box #(
     GET_HEIGHT_TOP,
     GET_HEIGHT_BOTTOM,
     GET_MEM_ADDR,
-    DATA
+    DATA,
+    DONE
   } w_box_states_e;
 
-  logic [7:0] row_index, col_index = 8'd0;
+  logic [15:0] row_index, col_index = 8'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
-  logic [31:0] memAddr;
-  logic toggle_init;  // Init captures toggle at the start of the transaction.
-
 
   w_box_states_e state = START;
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
+    if (ck_rst) begin
       col_index <= 8'd0;
       row_index <= 8'd0;
       write_box_done <= 1'b0;
       write_box_r_en <= 1'b0;
+      mem_req        <= 1'b0;
       state <= START;
     end else begin
       write_box_r_en <= 1'b0;
       write_box_done <= 1'b0;
+      mem_req        <= 1'b0;
 
       if(send_write_box) begin
         case (state)
           START: begin
             write_box_r_en <= 1'b1;
-            toggle_init <= mem_toggle;
             state <= GET_X_TOP;
           end
           GET_X_TOP: begin
@@ -98,39 +97,49 @@ module write_box #(
             state <= GET_HEIGHT_BOTTOM;
           end
           GET_HEIGHT_BOTTOM: begin
-            write_box_r_en <= 1'b1;
             rows[7:0] <= in_fifo;
             state <= GET_MEM_ADDR;
           end
           GET_MEM_ADDR: begin
-            memAddr <= GridPosToMemAddr(gridX, gridY + row_index);
-            mem_func <= WRITE;
+            mem_req <= 1'b1;
+            mem_len <= cols;
+            mem_addr <= GridPosToMemAddr(gridX, gridY + row_index);
             state <= DATA;
           end
           DATA: begin
             if (!mem_busy) begin
               // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
-              mem_toggle <= !toggle_init;
 
-              // Read N bytes from in_queue to mem_in
-              if (col_index <= cols && data_rdy) begin // include final boundary
-                mem_in <= in_fifo;
+              if (mem_data_on_wire) begin
                 write_box_r_en <= 1'b1;
-                col_index <= col_index + 8'd1;
-              end else begin
-                col_index <= 8'd0;
+              end
+              if(write_box_r_en) begin
+                mem_in <= in_fifo;
 
-                if(row_index < rows) begin
-                  row_index <= row_index + 8'd1;
-                  state <= GET_MEM_ADDR;
+                // Read N bytes from in_queue to mem_in
+                if (col_index >= cols - 1) begin // include final boundary
+                  col_index <= 16'd0;
+                  write_box_r_en <= 1'b0;
+
+                  if(row_index < rows - 1) begin
+                    row_index <= row_index + 16'd1;
+                    state <= GET_MEM_ADDR;
+                  end else begin
+                    row_index <= 16'd0;
+                    write_box_done <= 1'b1;
+                    state <= DONE;
+                  end
                 end else begin
-                  row_index <= 8'd0;
-                  write_box_done <= 1'b1;
-                  state <= START;
+                  col_index <= col_index + 16'd1;
+                  write_box_r_en <= mem_data_on_wire;
                 end
               end
             end
+          end
+          DONE: begin
+            // Simply wait one cycle for done signal to be processed.
+            state <= START;
           end
           default:;
         endcase

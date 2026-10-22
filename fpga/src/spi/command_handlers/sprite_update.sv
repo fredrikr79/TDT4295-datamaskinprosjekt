@@ -14,6 +14,7 @@ import hud_pkg::*;
 typedef enum bit [3:0] {
     START,
     GET_ID,
+    GET_MEM_ID,
     GET_ACTIVE,
     GET_X_TOP,
     GET_X_BOTTOM,
@@ -26,7 +27,7 @@ typedef enum bit [3:0] {
 sprite_update_states_e state = START;
 
 logic param_active;
-logic [7:0] param_id;
+logic [7:0] param_id, param_mem_id;
 logic [15:0] param_x, param_y;
 
 always_ff @(posedge clk) begin
@@ -48,6 +49,11 @@ always_ff @(posedge clk) begin
                 GET_ID: begin
                     sprite_update_r_en <= 1'b1;
                     param_id <= in_fifo;
+                    state <= GET_MEM_ID;
+                end
+                GET_MEM_ID: begin
+                    sprite_update_r_en <= 1'b1;
+                    param_mem_id <= in_fifo;
                     state <= GET_ACTIVE;
                 end
                 GET_ACTIVE: begin
@@ -76,6 +82,7 @@ always_ff @(posedge clk) begin
                 end
                 EXECUTE: begin
                     sprite_req_body.id <= param_id;
+                    sprite_req_body.mem_id <= param_mem_id;
                     sprite_req_body.active <= param_active;
                     sprite_req_body.x <= param_x;
                     sprite_req_body.y <= param_y;

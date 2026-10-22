@@ -74,6 +74,11 @@ module read_cons #(
           GET_MSG_LENGTH: begin
             mem_len <= 16'(in_fifo);
             state   <= GET_MEM_ADDR;
+
+            if(in_empty) begin
+              error_valid <= 1'b1;
+              error_code <= MISSING_PARAMETER_ERROR;
+            end
           end
           GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX, gridY);

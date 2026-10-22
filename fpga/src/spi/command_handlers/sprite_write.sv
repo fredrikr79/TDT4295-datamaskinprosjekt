@@ -9,7 +9,9 @@ module sprite_write #(
         sprite_write_done,
         sprite_req_valid,
         sprite_id_found,
+        error_code,
     output logic [7:0] sprite_write_fifo,
+        error_code,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
 
@@ -42,7 +44,8 @@ always_ff @(posedge clk) begin
     sprite_write_r_en <= 1'b0;
     sprite_write_w_en <= 1'b0;
     sprite_write_done <= 1'b0;
-    sprite_req_valid    <= 1'b0;
+    sprite_req_valid  <= 1'b0;
+    error_valid       <= 1'b0;
 
     if (ck_rst) begin
         sprite_write_fifo <= 8'd0;
@@ -56,6 +59,9 @@ always_ff @(posedge clk) begin
                     sprite_write_r_en <= 1'b1;
                     param_id <= sprite_available_id;
                     state <= GET_MEM_ID;
+                end else begin
+                    error_valid <= 1'b1;
+                    error_code <= RESOURCE_EXHAUSTED_ERROR;
                 end
             end
             GET_MEM_ID: begin
@@ -106,6 +112,10 @@ always_ff @(posedge clk) begin
             GET_HEIGTH_BOTTOM: begin
                 param_h[7:0] <= in_fifo;
                 state <= EXECUTE;
+                if(in_empty) begin
+                    error_valid <= 1'b1;
+                    error_code <= MISSING_PARAMETER_ERROR;
+                end
             end
             EXECUTE: begin
                 sprite_req_body <= {

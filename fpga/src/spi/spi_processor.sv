@@ -228,8 +228,13 @@ module spi_processor #(
         error_valid <= stop_sim_error_valid;
       end
       default: begin
-        error_code <= NO_ERROR;
-        error_valid <= 1'b0;
+        if (state == ST_BUSY) begin
+          error_code <= UNKNOWN_COMMAND_ERROR;
+          error_valid <= 1'b1;
+        end else begin
+          error_code <= NO_ERROR;
+          error_valid <= 1'b0;
+        end
       end
       endcase
   end
@@ -286,7 +291,7 @@ module spi_processor #(
         end
 
         ST_BUSY: begin
-          unique case (spi_pck::opcode_e'(opcode))
+          unique case (spi_pck::opcode_e'(opcode)) // Default case handled by ERROR MUX
 
             // Register command handler here. they should own their own read/write signals.
             // Register these in the in_r_en / out_w_en MUX assignments.
@@ -413,9 +418,7 @@ module spi_processor #(
             end
           endcase
         end
-
-        default:;
-
+        default:; // Error handled by spi_fsm
       endcase
     end
   end

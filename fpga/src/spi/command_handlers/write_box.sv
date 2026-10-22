@@ -99,6 +99,11 @@ module write_box #(
           GET_HEIGHT_BOTTOM: begin
             rows[7:0] <= in_fifo;
             state <= GET_MEM_ADDR;
+
+            if(in_empty) begin
+              error_valid <= 1'b1;
+              error_code <= MISSING_PARAMETER_ERROR;
+            end
           end
           GET_MEM_ADDR: begin
             mem_req <= 1'b1;

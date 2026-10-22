@@ -55,6 +55,7 @@ module read_box #(
       read_box_fifo <= 8'd0;
       mem_req       <= 1'b0;
       state <= START;
+      error_valid <= 1'b0;
 
     end else begin
       read_box_w_en <= 1'b0;
@@ -107,6 +108,12 @@ module read_box #(
             read_box_r_en <= 1'b1;
             rows[7:0] <= in_fifo;
             state <= GET_MEM_ADDR;
+
+            // IF empty at this point, too few parameters we're supplied.
+            if(in_empty) begin
+              error_valid <= 1'b1;
+              error_code <= MISSING_PARAMETER_ERROR;
+            end
           end
           GET_MEM_ADDR: begin
             if (!mem_busy) begin

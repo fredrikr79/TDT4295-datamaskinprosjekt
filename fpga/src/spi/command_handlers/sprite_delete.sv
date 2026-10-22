@@ -3,9 +3,12 @@ module sprite_delete #(
 )(
     input wire clk, ck_rst, send_sprite_delete,
     input logic [7:0] in_fifo,
+    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output logic sprite_delete_done,
     sprite_delete_r_en,
     sprite_req_valid,
+    error_valid,
+    output logic [7:0] error_code,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
 
@@ -39,12 +42,21 @@ always_ff @(posedge clk) begin
             GET_ID: begin
                 param_id <= in_fifo;
                 state <= EXECUTE;
+                if(in_empty) begin
+                    error_valid <= 1'b1;
+                    error_code <= MISSING_PARAMETER_ERROR;
+                end
             end
             EXECUTE: begin
-                sprite_req_body.id <= param_id;
-                sprite_req_valid <= 1'b1;
-                sprite_delete_done <= 1'b1;
-                state <= DONE;
+                if(!sprite_id_bitmap[id]) begin
+                    error_valid <= 1'b1;
+                    error_code <= UNKNOWN_IDENTIFIER_ERROR;
+                end else begin
+                    sprite_req_body.id <= param_id;
+                    sprite_req_valid <= 1'b1;
+                    sprite_delete_done <= 1'b1;
+                    state <= DONE;
+                end
             end
             DONE: begin
                 // Simply wait one cycle for done signal to be processed.

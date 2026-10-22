@@ -7,14 +7,16 @@ module write_sprite #(
     send_write_sprite,
     mem_busy,
     input logic [7:0] in_fifo,
-    output logic [7:0] write_sprite_fifo,
-    mem_len,
-    mem_in,
     output logic write_sprite_done,
     write_sprite_r_en,
     write_sprite_w_en,
     mem_req,
     write_sprite_valid,
+    error_valid,
+    output logic [7:0] write_sprite_fifo,
+    mem_len,
+    mem_in,
+    error_code,
     output logic [31:0] mem_addr = 32'd0
 );
 
@@ -42,17 +44,28 @@ module write_sprite #(
       write_sprite_w_en <= 1'b0;
       write_sprite_done <= 1'b0;
       mem_req           <= 1'b0;
+      error_valid       <= 1'b0;
 
       if(send_write_sprite) begin
         // Fetch target memory address
         case (state)
           START: begin
-            write_sprite_r_en <= 1'b1;
-            state <= GET_MSG_LENGTH;
+            if (next_id >= hud_pkg::SpriteMemDepth) begin
+              error_valid <= 1'b1;
+              error_code <= RESOURCE_EXHAUSTED_ERROR;
+            end else begin
+              write_sprite_r_en <= 1'b1;
+              state <= GET_MSG_LENGTH;
+            end
           end
           GET_MSG_LENGTH: begin
             mem_len <= in_fifo;
-            state   <= GET_MEM_ADDR;
+            state <= GET_MEM_ADDR;
+
+            if(in_empty) begin
+              error_valid <= 1'b1;
+              error_code <= MISSING_PARAMETER_ERROR;
+            end
           end
           GET_MEM_ADDR: begin
             state <= INIT_REQ;

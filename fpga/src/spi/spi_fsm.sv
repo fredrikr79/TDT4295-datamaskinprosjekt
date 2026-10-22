@@ -55,21 +55,29 @@ module spi_fsm #(
 
         ST_BUSY: begin
           case (opcode)
-            ECHO: begin
-              if (in_empty && proc_done) begin
-                state <= ST_TX_IDLE;
+            ECHO, INFO, FAILED, READ_CONS, READ_BOX, WRITE_SPRITE, SPRITE_WRITE: begin // Non-void
+              if (proc_done) begin
+                if(in_empty)
+                  state <= ST_TX_IDLE;
+                else begin
+                  error_valid <= 1'b1;
+                  error_code <= TOO_MANY_PARAMETERS_ERROR;
+                end
               end
             end
-            INFO: begin
-              if (in_empty && proc_done) begin
-                state <= ST_TX_IDLE;
+            WRITE_CONS, WRITE_BOX, SPRITE_UPDATE, SPRITE_DELETE, START_SIM, STOP_SIM: begin
+              if(proc_done) begin
+                if(in_empty) begin
+                  state <= ST_READY;
+                end else begin
+                  error_valid <= 1'b1;
+                  error_code <= TOO_MANY_PARAMETERS_ERROR;
+                end
               end
-            end
-            FAILED: begin
-              if (in_empty && proc_done) state <= ST_TX_IDLE;
-            end
+            end // Void
             default: begin
-              state <= ST_FAILED;
+              error_valid <= 1'b1;
+              error_code <= ILLEGAL_STATE_ERROR;
             end
           endcase
         end
@@ -100,8 +108,8 @@ module spi_fsm #(
 
         default: begin
           // Go to fail state handler
-          error_event_m.valid <= 1'b1;
-          error_event_m.code <= ILLEGAL_STATE_ERROR;
+          error_valid <= 1'b1;
+          error_code <= ILLEGAL_STATE_ERROR;
           state <= ST_BUSY;
         end
       endcase

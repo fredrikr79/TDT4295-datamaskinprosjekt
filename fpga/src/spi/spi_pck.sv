@@ -39,11 +39,10 @@ package spi_pck;
     RUNTIME_ERROR             = E4,
     MEMORY_ERROR              = E5,
     UNKNOWN_IDENTIFIER_ERROR  = E6,
-    UNKNOWN_VALUE_ERROR       = E7,
-    TIMEOUT_ERROR             = E8,
-    RESOURCE_EXHAUSTED_ERROR  = E9,
-    ILLEGAL_STATE_ERROR       = EA,
-    UNKNOWN_COMMAND_ERROR     = EB,
+    RESOURCE_EXHAUSTED_ERROR  = E7,
+    ILLEGAL_STATE_ERROR       = E8,
+    UNKNOWN_COMMAND_ERROR     = E9,
+    CRITICAL_ERROR            = EA,
     UNKNOWN_ERROR             = EF
   } error_codes_e;
 

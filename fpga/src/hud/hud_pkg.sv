@@ -1,6 +1,5 @@
 package hud_pkg;
 
-    // 
     localparam int SpriteMemDepth = 64; // Number of sprites we can keep on memory.
 
     typedef struct packed {

@@ -19,7 +19,28 @@ module spi #(
     output wire out_almost_empty,
     output wire out_empty,
     output wire in_almost_full,
-    output wire in_full
+    output wire in_full,
+
+    output wire sim_running,
+
+    // Memory
+    input logic [7:0] mem_out,
+    output logic [7:0] mem_in,
+    mem_len,
+    input logic mem_busy,
+    mem_data_on_wire,
+    output logic [31:0] mem_addr,
+    output memory_pkg::transaction_e mem_transaction,
+
+    // Sprite LUT
+    input logic sprite_id_found,
+    input logic [7:0]
+    sprite_available_id,
+    output hud_pkg::sprite_inst_entry_t sprite_req_body,
+    output hud_pkg::sprite_op_e sprite_req_op,
+    output logic write_sprite_valid,
+    mem_toggle,
+    sprite_req_valid
 );
 
   import spi_pck::*;
@@ -32,11 +53,6 @@ module spi #(
   spi_pck::state_e state;
   spi_pck::opcode_e opcode;
   reg proc_done;
-
-  // RESET
-  reg rst_en = 1'b0;  // programatic reset
-  wire reset = ~ck_rst || rst_en;
-  wire reset_s = ~ck_rst_s || rst_en;
 
   // READY
   assign ready = (state == ST_READY) || (state == ST_TX_IDLE);
@@ -72,6 +88,12 @@ module spi #(
   wire ck_ss_s = ck_ss_sync[2];
   wire ck_rst_s = ck_rst_sync[2];
   wire out_empty_s = out_empty_sync[2];
+
+  // RESET
+  reg rst_en = 1'b0;  // programatic reset
+  wire reset = ~ck_rst || rst_en;
+  wire reset_s = ~ck_rst_s || rst_en;
+
 
   always_ff @(posedge clk) begin
     if (reset) begin
@@ -151,7 +173,22 @@ module spi #(
       .proc_r_en(proc_r_en),
       .out_fifo(out_fifo),
       .opcode(opcode),
-      .proc_done(proc_done)
+      .proc_done(proc_done),
+      .mem_in(mem_in),
+      .mem_out(mem_out),
+      .mem_len(mem_len),
+      .mem_addr(mem_addr),
+      .mem_transaction(mem_transaction),
+      .mem_busy(mem_busy),
+      .mem_data_on_wire(mem_data_on_wire),
+      .mem_toggle(mem_toggle),
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_found(sprite_id_found),
+      .sprite_req_valid(sprite_req_valid),
+      .sprite_req_body(sprite_req_body),
+      .sprite_req_op(sprite_req_op),
+      .write_sprite_valid(write_sprite_valid)
+
   );
 
   // DEBUG

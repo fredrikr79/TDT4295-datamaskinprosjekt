@@ -23,7 +23,9 @@ module read_cons #(
   import mem_driver_pkg::*;
   import memory_pkg::*;
 
-  logic [7:0] rx_index = 8'd0;
+  logic [7:0] written_bytes = 8'd0;
+  logic [15:0] total_bytes = 15'b0;
+  logic [15:0] rx_index = 8'd0;
   logic [15:0] gridX, gridY;
 
   mem_states_e state = START;
@@ -72,7 +74,10 @@ module read_cons #(
             state <= GET_MSG_LENGTH;
           end
           GET_MSG_LENGTH: begin
-            mem_len <= in_fifo;
+            totalBytes <= in_fifo;
+            mem_len <= in_fifo > memory_pkg::MaxMessageLength
+            ? memory_pkg::MaxMessageLength
+            : in_fifo;
             state   <= GET_MEM_ADDR;
 
             if(in_empty) begin
@@ -81,7 +86,7 @@ module read_cons #(
             end
           end
           GET_MEM_ADDR: begin
-            mem_addr <= GridPosToMemAddr(gridX, gridY);
+            mem_addr <= GridPosToMemAddr(gridX + rx_index, gridY);
             state   <= INIT_REQ;
           end
           INIT_REQ: begin
@@ -92,16 +97,29 @@ module read_cons #(
             end
           end
           DATA: begin
-            if(!mem_busy) begin
-              if (rx_index >= mem_len) begin
-                  read_cons_done <= 1'b1;
-                  rx_index <= 8'd0;
-                  state <= DONE;
-              end else if(mem_data_on_wire) begin
-                  read_cons_w_en <= 1'b1;
-                  read_cons_fifo <= mem_out;
-                  rx_index <= rx_index + 8'd1;
+            if (read_cons_w_en) begin
+              // Capture data once write_cons is visible to fifo.
+              read_cons_fifo <= mem_out;
+              read_bytes <= read_bytes + 8'd1;
+              rx_index <= rx_index + 8'd1;
+
+              if (rx_index >= total_bytes) begin
+                // Command end
+                read_cons_w_en <= 1'b0;
+                read_cons_done <= 1'b1;
+                rx_index <= 8'd0;
+                read_bytes <= 8'd0;
+                state <= DONE;
+              end else if (read_bytes >= memory_pkg::MaxMessageLength - 1) begin
+                // Transaction timeout, issue new where we finished.
+                read_cons_w_en <= 1'b0;
+                state <= GET_MEM_ADDR;
+              end else begin
+                read_cons_w_en <= mem_data_on_wire;
               end
+            end else if (!mem_busy && mem_data_on_wire) begin
+              // write byte next cycle.
+              read_cons_w_en <= 1'b1;
             end
           end
           DONE: begin

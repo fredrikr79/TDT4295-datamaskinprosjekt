@@ -21,7 +21,9 @@ module write_cons #(
   import mem_driver_pkg::*;
   import memory_pkg::*;
 
-  logic [7:0] tx_index = 8'd0;
+  logic [15:0] total_bytes = 15'b0;
+  logic [7:0] written_bytes = 8'd0;
+  logic [15:0] tx_index = 8'd0;
   logic [15:0] gridX, gridY;
 
   mem_states_e state = START;
@@ -66,7 +68,10 @@ module write_cons #(
             state <= GET_MSG_LENGTH;
           end
           GET_MSG_LENGTH: begin
-            mem_len <= in_fifo;
+            total_bytes <= in_fifo;
+            mem_len <= in_fifo > memory_pkg::MaxMessageLength
+              ? memory_pkg::MaxMessageLength
+              : in_fifo;
             state   <= GET_MEM_ADDR;
 
             if(in_empty) begin
@@ -75,7 +80,7 @@ module write_cons #(
             end
           end
           GET_MEM_ADDR: begin
-            mem_addr <= GridPosToMemAddr(gridX, gridY);
+            mem_addr <= GridPosToMemAddr(gridX + tx_index, gridY);
             state <= INIT_REQ;
           end
           INIT_REQ: begin
@@ -86,23 +91,29 @@ module write_cons #(
             end
           end
           DATA: begin
-            if(mem_data_on_wire) begin
-              write_cons_r_en <= 1'b1;
-            end
-            // Read N bytes from in_queue to mem_in
             if (write_cons_r_en) begin
               // Capture data once write_cons is visible to fifo.
               mem_in <= in_fifo;
+              written_bytes <= written_bytes + 8'd1;
               tx_index <= tx_index + 8'd1;
-              if(mem_data_on_wire) begin
-                write_cons_r_en <= 1'b1;
-              end
-            end else if (!mem_busy) begin
-              if (tx_index >= mem_len) begin
+
+              if (tx_index >= total_bytes) begin
+                // Command end
+                write_cons_r_en <= 1'b0;
                 write_cons_done <= 1'b1;
                 tx_index <= 8'd0;
+                written_bytes <= 8'd0;
                 state <= DONE;
+              end else if (written_bytes >= memory_pkg::MaxMessageLength - 1) begin
+                // Transaction timeout, issue new where we finished.
+                write_cons_r_en <= 1'b0;
+                state <= GET_MEM_ADDR;
+              end else begin
+                write_cons_r_en <= mem_data_on_wire;
               end
+            end else if (!mem_busy && mem_data_on_wire) begin
+              // write byte next cycle.
+              write_cons_r_en <= 1'b1;
             end
           end
           DONE: begin

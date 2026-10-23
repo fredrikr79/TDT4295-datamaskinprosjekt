@@ -27,6 +27,8 @@ module write_sprite #(
   import mem_driver_pkg::*;
   import memory_pkg::*;
 
+  logic [15:0] total_bytes = 16'd0;
+  logic [7:0] written_bytes = 8'd0;
   logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
@@ -61,9 +63,6 @@ module write_sprite #(
           end
           GET_MSG_LENGTH: begin
             mem_len <=16'(in_fifo);
-            state   <= GET_MEM_ADDR;
-          end
-          GET_MEM_ADDR: begin
             state <= INIT_REQ;
           end
           INIT_REQ: begin
@@ -74,23 +73,33 @@ module write_sprite #(
             end
           end
           DATA: begin
-            if (mem_data_on_wire) begin
-              write_sprite_r_en <= 1'b1;
-            end
             // Read N bytes from in_queue to mem_in
-            if (write_sprite_r_en) begin
-              mem_in   <= in_fifo;
-              tx_index <= tx_index + 16'd1;
-            end else if (!mem_busy) begin
-              if (tx_index >= mem_len) begin
+            if(write_sprite_r_en) begin
+              mem_in <= in_fifo;
+              written_bytes <= written_bytes + 8'd1;
+              tx_index <= tx_index + 8'd1;
+
+              if (tx_index >= total_bytes) begin
+                // Clean up transaction state
+                write_sprite_r_en <= 1'b0;
+                mem_addr <= mem_addr + mem_len;
                 write_sprite_done <= 1'b1;
+                written_bytes <= 8'd0;
+                tx_index <= 8'd0;
+                state <= DONE;
+
+                // Write sprite_mem_id to MCU
                 write_sprite_w_en <= 1'b1;
-                mem_addr <= mem_addr + 32'(mem_len);
                 write_sprite_fifo <= next_id;
                 next_id <= next_id + 1'b1;
-                tx_index <= 16'd0;
-                state <= DONE;
+
+              end else if (written_bytes >= memory_pkg::MaxMessageLength - 1) begin
+                mem_addr <= mem_addr + memory_pkg::MaxMessageLength;
+                write_sprite_r_en <= 1'b0;
+                state <= INIT_REQ;
               end
+            end else if (!mem_busy && mem_data_on_wire) begin
+              write_sprite_r_en <= 1'b1;
             end
           end
           DONE: begin

@@ -34,6 +34,7 @@ module write_box #(
     GET_HEIGHT_TOP,
     GET_HEIGHT_BOTTOM,
     GET_MEM_ADDR,
+    INIT_REQ,
     DATA,
     DONE
   } w_box_states_e;
@@ -109,12 +110,25 @@ module write_box #(
             end
           end
           GET_MEM_ADDR: begin
-            mem_req <= 1'b1;
-            mem_len <= cols;
-            mem_addr <= GridPosToMemAddr(gridX, gridY + row_index);
-            state <= DATA;
+            mem_len <= cols > memory_pkg::MaxMessageLength
+              ? memory_pkg::MaxMessageLength
+              : cols;
+            mem_addr <= GridPosToMemAddr(gridX + col_index, gridY + row_index);
+            state <= INIT_REQ;
+          end
+          INIT_REQ: begin
+            if (!mem_busy) begin
+              mem_req <= 1'b1;
+              state <= DATA;
+            end
           end
           DATA: begin
+
+            // The memory may start a read transaction if the memory isnt busy.
+
+            // If a transaction is started, the unit may read if there is data on the wire, we havent reached the maximum transaction size, and we're within limits of our transaction.
+
+            // Once finished with a row, start a new row in a new transaction.
             if (!mem_busy) begin
               // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
@@ -125,8 +139,8 @@ module write_box #(
               if (write_box_r_en) begin
                 mem_in <= in_fifo;
 
-                // Read N bytes from in_queue to mem_in
-                if (col_index >= cols - 1) begin  // include final boundary
+                // Read N bytes from in_fifo to mem_in
+                if (col_index >= cols - 1) begin // include final boundary
                   col_index <= 16'd0;
                   write_box_r_en <= 1'b0;
 
@@ -138,8 +152,14 @@ module write_box #(
                     write_box_done <= 1'b1;
                     state <= DONE;
                   end
+                end else if (written_bytes >= memory_pkg::MaxMessageLength) begin
+                  // Memory needs to end transaction
+                  col_index <= col_index + 16'd1;
+                  written_bytes <= 8'b0;
+                  state <= GET_MEM_ADDR;
                 end else begin
                   col_index <= col_index + 16'd1;
+                  written_bytes <= col_index + 16'd1;
                   write_box_r_en <= mem_data_on_wire;
                 end
               end

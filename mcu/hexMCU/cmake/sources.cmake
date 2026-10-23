@@ -10,12 +10,14 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/frame_sync.c
     ${APP_ROOT}/src/app/game.c
     ${APP_ROOT}/src/app/usb_input.c
-    ${APP_ROOT}/src/app/hud.c
-    ${APP_ROOT}/src/app/font.c
-    ${APP_ROOT}/src/app/text.c
+    ${APP_ROOT}/src/app/render/hud.c
+    ${APP_ROOT}/src/app/render/font.c
+    ${APP_ROOT}/src/app/render/text.c
+    ${APP_ROOT}/src/app/render/funny_man.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include
+    ${APP_ROOT}/src/include/render
 )
 
 # TinyUSB host stack core. Portable, but only the firmware uses it.

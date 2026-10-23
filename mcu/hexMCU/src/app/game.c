@@ -177,6 +177,7 @@ static void hud_setup(void)
     hud_image_init(&cursor_img, cursor_px, CURSOR_SIZE, CURSOR_SIZE);
     hud_sprite_init(&cursor, &cursor_img, (int16_t)run.cx, (int16_t)run.cy, true);
 
+
     /* test: a sentence centred near the top */
     int32_t w = font_text_width(&TEST_FONT, TEST_TEXT) * TEST_SCALE;
     int32_t x = w < scr->width ? (scr->width - w) / 2 : 0;

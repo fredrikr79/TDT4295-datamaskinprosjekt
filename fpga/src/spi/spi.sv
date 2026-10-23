@@ -5,6 +5,7 @@ module spi #(
     input wire ck_ss,
     input wire ck_sck,
     input wire ck_rst,
+    input wire error_critical,
 
     // Octal SPI data bus
     inout wire [7:0] octo_spi,
@@ -101,7 +102,8 @@ module spi #(
     tx_error_valid,
     processor_error_valid;
 
-  assign error_event.valid = fsm_error_valid |
+  assign error_event.valid = error_critical  |
+                             fsm_error_valid |
                              rx_error_valid  |
                              tx_error_valid  |
                              processor_error_valid;
@@ -112,6 +114,8 @@ module spi #(
     processor_error_valid;
 
   always_ff @(posedge clk) begin
+    if (error_critical)
+      error_event.code <= CRITICAL_ERROR;
     if (fsm_error_valid)
       error_event.code <= fsm_error_code;
     else if (rx_error_valid)

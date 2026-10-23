@@ -52,6 +52,9 @@ module main (
 
   layer_pkg::layer_px_t layers[NumLayers];
 
+  // Critical error detection (unrecoverable errors arising outside the SPI module)
+  wire error_critical;
+
   vga vga_controller (
       .clk(clk),
       .reset(sw[3]),
@@ -158,7 +161,10 @@ module main (
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
-      .write_sprite_valid(write_sprite_valid)
+      .write_sprite_valid(write_sprite_valid),
+
+      // Critical error line
+      .error_critical(error_critical)
   );
 */
 endmodule

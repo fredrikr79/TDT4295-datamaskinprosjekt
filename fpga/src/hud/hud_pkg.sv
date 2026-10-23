@@ -45,7 +45,7 @@ package hud_pkg;
     );
         sprite_id_bitmap[id]  = 1'b0;
         lut[id].active        = 0;
-        lut[id].id        = 0;
+        lut[id].id            = 0;
         lut[id].mem_id        = 0;
         lut[id].x             = 0;
         lut[id].y             = 0;

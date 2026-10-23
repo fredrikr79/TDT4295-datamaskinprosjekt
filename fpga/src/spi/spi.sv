@@ -5,6 +5,7 @@ module spi #(
     input wire ck_ss,
     input wire ck_sck,
     input wire ck_rst,
+    input wire error_critical,
 
     // Octal SPI data bus
     inout wire [7:0] octo_spi,
@@ -94,6 +95,36 @@ module spi #(
   wire reset = ~ck_rst || rst_en;
   wire reset_s = ~ck_rst_s || rst_en;
 
+  // Error detection
+  logic error_valid,
+    fsm_error_valid,
+    rx_error_valid,
+    tx_error_valid,
+    processor_error_valid;
+
+  assign error_event.valid = error_critical  |
+                             fsm_error_valid |
+                             rx_error_valid  |
+                             tx_error_valid  |
+                             processor_error_valid;
+
+  logic [7:0] fsm_error_valid,
+    rx_error_valid,
+    tx_error_valid,
+    processor_error_valid;
+
+  always_ff @(posedge clk) begin
+    if (error_critical)
+      error_event.code <= CRITICAL_ERROR;
+    if (fsm_error_valid)
+      error_event.code <= fsm_error_code;
+    else if (rx_error_valid)
+      error_event.code <= rx_error_code;
+    else if (tx_error_valid)
+      error_event.code <= rx_error_code;
+    else if (processor_error_valid)
+      error_event.code <= processor_error_code;
+  end
 
   always_ff @(posedge clk) begin
     if (reset) begin
@@ -119,7 +150,9 @@ module spi #(
       .in_empty(in_empty),
       .out_full(out_full),
       .state(state),
-      .proc_done(proc_done)
+      .proc_done(proc_done),
+      .error_valid(fsm_error_valid),
+      .error_code(fsm_error_code)
   );
 
   // Data recieve module
@@ -138,7 +171,9 @@ module spi #(
       .in_empty(in_empty),
       .in_ready(in_ready),
       .in_full(in_full),
-      .in_fifo(in_fifo)
+      .in_fifo(in_fifo),
+      .error_valid(rx_error_valid),
+      .error_code(rx_error_code)
   );
 
   // Data send module
@@ -158,7 +193,9 @@ module spi #(
       .out_empty(out_empty),
       .out_full(out_full),
       .out_ready(out_ready),
-      .out_empty_s(out_empty_s)
+      .out_empty_s(out_empty_s),
+      .error_valid(tx_error_valid),
+      .error_code(tx_error_code)
   );
 
   // Command processing module
@@ -187,7 +224,9 @@ module spi #(
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
-      .write_sprite_valid(write_sprite_valid)
+      .write_sprite_valid(write_sprite_valid),
+      .error_valid(processor_error_valid),
+      .error_code(processor_error_code)
 
   );
 

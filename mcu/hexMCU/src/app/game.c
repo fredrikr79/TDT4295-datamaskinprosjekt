@@ -5,6 +5,7 @@
 
 #include "fpga.h"
 #include "rooms.h"
+#include "player.h"
 #include "platform.h"
 #include "log.h"
 #include "frame_sync.h"
@@ -60,7 +61,12 @@ static int next_room_y;             /* the y-coordinate of the next room */
 static bool receiving_room_from_fpga = false;
 static bool sending_room_from_fpga = false;
 
+static player_t player;
+
+static portal_t portals[MAX_PORTALS] = {0};
+
 static uint8_t room_tiles[ROOM_X*ROOM_Y] = {0};
+static uint8_t *box;
 
 static void run_enter(void);
 static void room_enter(void);
@@ -211,7 +217,23 @@ static void room_enter(void)
 static void run_frame(uint32_t n)
 {
     (void)n;
-    /* TODO: update + draw. Walking through a door: game_change_room(to). */
+
+    update_player_position(0, 0, player, box);
+    fpga_cmd_read_sim_box(  // TODO: Use the new command
+        next_velocity_box(player), box, 25*25
+    );
+    
+    int overlap = pos_in_portal(player.x, player.y, portals);
+    if (overlap != -1)
+    {
+        player.promised_exit = (uint8_t) overlap;
+        game_change_room(
+            portals[overlap].dest_x,
+            portals[overlap].dest_y
+        );
+    }
+    
+    /* TODO: update + draw */
 
     /* busy: the last cursor frame isn't back yet, try again next frame */
     render_cube(&cursor, (int16_t)run.cx, (int16_t)run.cy);

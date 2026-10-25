@@ -383,11 +383,11 @@ void read_room_from_fpga(uint8_t *tile_buffer)
   fpga_submit(&cmd);
 }
 
-void init_empty_portals(struct portal *portals, uint8_t n_portals)
+void init_empty_portals(portal_t *portals, uint8_t n_portals)
 {
   for (uint8_t i = 0; i < n_portals; i++)
   {
-    struct portal prt = {
+    portal_t prt = {
       false,
       0, 0,
       0, 0,
@@ -408,7 +408,7 @@ void init_empty_portals(struct portal *portals, uint8_t n_portals)
 @return Returns -1 if position doesn't overlap with a portal.
         Otherwise, the index of the portal will be returned.
 */
-int pos_in_portal(uint8_t x, uint8_t y, struct portal *portals)
+int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals)
 {
   for (uint8_t i = 0; i < MAX_PORTALS; i++)
   {

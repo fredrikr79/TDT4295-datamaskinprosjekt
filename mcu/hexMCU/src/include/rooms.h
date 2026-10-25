@@ -35,7 +35,7 @@ void delete_save(int x, int y);
 void send_room_to_fpga(uint8_t *tileIDs);
 void read_room_from_fpga(uint8_t *tile_buffer);
 
-struct portal
+typedef struct
 {
     bool active;
 
@@ -47,7 +47,7 @@ struct portal
     int dest_x;
     int dest_y;
     uint8_t dest_exit;
-};
+} portal_t;
 struct portal_exit
 {
     bool active;
@@ -57,5 +57,5 @@ struct portal_exit
     uint8_t dx;
     uint8_t dy;
 };
-void init_empty_portals(struct portal *portals, uint8_t n_portals);
-int pos_in_portal(uint8_t x, uint8_t y, struct portal *portals);
+void init_empty_portals(portal_t *portals, uint8_t n_portals);
+int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals);

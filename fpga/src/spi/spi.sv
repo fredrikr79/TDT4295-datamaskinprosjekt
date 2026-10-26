@@ -27,7 +27,7 @@ module spi #(
     // Memory
     input logic [7:0] mem_out,
     output logic [7:0] mem_in,
-    mem_len,
+    output logic [15:0] mem_len,
     input logic mem_busy,
     mem_data_on_wire,
     output logic [31:0] mem_addr,
@@ -35,10 +35,11 @@ module spi #(
 
     // Sprite LUT
     input logic sprite_id_found,
-    input logic [7:0]
-    sprite_available_id,
+    input hud_pkg::sprite_lut_id sprite_available_id,
+    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_op_e sprite_req_op,
+    output hud_pkg::sprite_mem_id write_sprite_mem_id,
     output logic write_sprite_valid,
     mem_toggle,
     sprite_req_valid
@@ -152,6 +153,7 @@ module spi #(
       .out_full(out_full),
       .state(state),
       .proc_done(proc_done),
+      .error_event(error_event),
       .error_valid(fsm_error_valid),
       .error_code(fsm_error_code)
   );
@@ -225,7 +227,11 @@ module spi #(
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
+      .sprite_id_bitmap(sprite_id_bitmap),
       .write_sprite_valid(write_sprite_valid),
+      .write_sprite_mem_id(write_sprite_mem_id),
+      .sim_running(sim_running),
+      .error_event(error_event),
       .error_valid(processor_error_valid),
       .error_code(processor_error_code)
 

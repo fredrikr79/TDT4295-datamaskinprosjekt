@@ -42,8 +42,8 @@ module read_box #(
     DONE
   } r_box_states_e;
 
-  logic [15:0] row_index, col_index = 16'd0;
   logic [7:0] read_bytes = 8'd0;
+  logic [15:0] row_index, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
 
@@ -121,8 +121,8 @@ module read_box #(
             end
           end
           GET_MEM_ADDR: begin
-            mem_len <= cols > memory_pkg::MaxMessageLength
-              ? memory_pkg::MaxMessageLength
+            mem_len <= cols > 16'(memory_pkg::MaxMessageLength)
+              ? 16'(memory_pkg::MaxMessageLength)
               : cols;
             mem_addr <= GridPosToMemAddr(gridX + col_index, gridY + row_index);
             state   <= INIT_REQ;
@@ -151,7 +151,7 @@ module read_box #(
                   read_box_done <= 1'b1;
                   state <= DONE;
                 end
-              end else if (read_bytes >= memory_pkg::MaxMessageLength) begin
+              end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength)) begin
                 col_index <= col_index + 16'd1;
                 read_bytes <= 8'b0;
                 state <= GET_MEM_ADDR;

@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_info;
   import config_pkg::*;

@@ -2,13 +2,13 @@ module sprite_update #(
 
 )(
     input wire clk, ck_rst, send_sprite_update,
+    input logic in_empty,
     input logic [7:0] in_fifo,
     input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output logic sprite_update_done,
     sprite_update_r_en,
     sprite_req_valid,
     error_valid,
-    in_empty,
     output logic [7:0] error_code,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
@@ -18,8 +18,10 @@ import spi_pck::*;
 
 typedef enum bit [3:0] {
     START,
-    GET_ID,
-    GET_MEM_ID,
+    GET_ID_TOP,
+    GET_ID_BOTTOM,
+    GET_MEM_ID_TOP,
+    GET_MEM_ID_BOTTOM,
     GET_ACTIVE,
     GET_X_TOP,
     GET_X_BOTTOM,
@@ -32,7 +34,8 @@ typedef enum bit [3:0] {
 sprite_update_states_e state = START;
 
 logic param_active;
-logic [7:0] param_id, param_mem_id;
+hud_pkg::sprite_lut_id param_id;
+hud_pkg::sprite_mem_id param_mem_id;
 logic [15:0] param_x, param_y;
 
 always_ff @(posedge clk) begin
@@ -49,16 +52,30 @@ always_ff @(posedge clk) begin
             case (state)
                 START: begin
                     sprite_update_r_en <= 1'b1;
-                    state <= GET_ID;
+                    state <= GET_ID_TOP;
                 end
-                GET_ID: begin
-                    sprite_update_r_en <= 1'b1;
-                    param_id <= in_fifo;
-                    state <= GET_MEM_ID;
+                GET_ID_TOP: begin
+                    if($bits(hud_pkg::sprite_lut_id) > 8) begin
+                        sprite_update_r_en <= 1'b1;
+                        param_id[$bits(hud_pkg::sprite_lut_id)-1:8] <= in_fifo[$bits(hud_pkg::sprite_lut_id)-9:0];
+                    end
+                    state <= GET_ID_BOTTOM;
                 end
-                GET_MEM_ID: begin
+                GET_ID_BOTTOM: begin
                     sprite_update_r_en <= 1'b1;
-                    param_mem_id <= in_fifo;
+                    param_id[7:0] <= in_fifo;
+                    state <= GET_MEM_ID_TOP;
+                end
+                GET_MEM_ID_TOP: begin
+                    if($bits(hud_pkg::sprite_mem_id) > 8) begin
+                        sprite_update_r_en <= 1'b1;
+                        param_mem_id[$bits(hud_pkg::sprite_mem_id)-1:8] <= in_fifo[$bits(hud_pkg::sprite_mem_id)-9:0];
+                    end
+                    state <= GET_MEM_ID_BOTTOM;
+                end
+                GET_MEM_ID_BOTTOM: begin
+                    sprite_update_r_en <= 1'b1;
+                    param_mem_id[7:0] <= in_fifo;
                     state <= GET_ACTIVE;
                 end
                 GET_ACTIVE: begin

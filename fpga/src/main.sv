@@ -42,7 +42,8 @@ module main (
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
   logic [31:0] mem_addr;
-  logic [7:0] mem_len, mem_in, mem_out;
+  logic [15:0]  mem_len;
+  logic [7:0] mem_in, mem_out;
   memory_pkg::transaction_e mem_transaction;
 
   localparam int unsigned NumLayers  = 3;
@@ -105,10 +106,10 @@ module main (
 
   hud_pkg::sprite_op_e sprite_req_op;
   wire sprite_req_valid, sprite_id_found, write_sprite_valid;
-  wire [7:0] sprite_mem_id;
+  hud_pkg::sprite_mem_id sprite_mem_id;
   hud_pkg::sprite_inst_entry_t sprite_req_body;
   wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
-  wire [$clog2(hud_pkg::SpriteLutDepth)-1:0] sprite_available_id;
+  hud_pkg::sprite_lut_id sprite_available_id;
 
   hud hud_controller (
       .clk(clk),
@@ -158,10 +159,12 @@ module main (
       // Sprite LUT transaction signals
       .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),
+      .sprite_id_bitmap(sprite_id_bitmap),
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
       .write_sprite_valid(write_sprite_valid),
+      .write_sprite_mem_id(sprite_mem_id),
 
       // Critical error line
       .error_critical(error_critical)

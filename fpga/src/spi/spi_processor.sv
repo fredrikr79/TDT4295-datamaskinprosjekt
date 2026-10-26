@@ -10,7 +10,8 @@ module spi_processor #(
     mem_busy,
     mem_data_on_wire,
     sprite_id_found,
-    input logic [$clog2(hud_pkg::SpriteLutDepth)-1:0] sprite_available_id,
+    input hud_pkg::sprite_lut_id sprite_available_id,
+    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     input spi_pck::error_event_t error_event, // Incoming global error decision
     output logic proc_w_en,
     proc_r_en,
@@ -28,6 +29,7 @@ module spi_processor #(
     output spi_pck::opcode_e opcode,
     output memory_pkg::transaction_e mem_transaction,
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
+    output hud_pkg::sprite_mem_id write_sprite_mem_id,
     output hud_pkg::sprite_op_e sprite_req_op
 );
 
@@ -489,6 +491,8 @@ module spi_processor #(
     .ck_rst(reset_s),
     .in_empty(in_empty),
     .in_fifo(in_fifo),
+    .in_empty(in_empty),
+    .send_read_box(send_read_box),
     .read_box_fifo(read_box_fifo),
     .read_box_done(read_box_done),
     .read_box_w_en(read_box_w_en),
@@ -508,6 +512,7 @@ module spi_processor #(
     .ck_rst(reset_s),
     .in_empty(in_empty),
     .in_fifo(in_fifo),
+    .send_write_box(send_write_box),
     .write_box_done(write_box_done),
     .write_box_r_en(write_box_r_en),
     .mem_len(write_box_mem_len),
@@ -521,24 +526,25 @@ module spi_processor #(
   );
 
   write_sprite write_sprite_cmd_processor (
-    .clk(clk),
-    .ck_rst(reset_s),
-    .in_empty(in_empty),
-    .mem_data_on_wire(mem_data_on_wire),
-    .send_write_sprite(send_write_sprite),
-    .mem_busy(mem_busy),
-    .in_fifo(in_fifo),
-    .write_sprite_fifo(write_sprite_fifo),
-    .mem_len(write_sprite_mem_len),
-    .mem_in(mem_in),
-    .write_sprite_done(write_sprite_done),
-    .write_sprite_r_en(write_sprite_r_en),
-    .write_sprite_w_en(write_sprite_w_en),
-    .mem_req(write_sprite_mem_req),
-    .mem_addr(write_sprite_mem_addr),
-    .write_sprite_valid(write_sprite_valid),
-    .error_valid(write_sprite_error_valid),
-    .error_code(write_sprite_error_code)
+      .clk(clk),
+      .ck_rst(reset_s),
+      .in_empty(in_empty),
+      .mem_data_on_wire(mem_data_on_wire),
+      .send_write_sprite(send_write_sprite),
+      .mem_busy(mem_busy),
+      .in_fifo(in_fifo),
+      .write_sprite_fifo(write_sprite_fifo),
+      .mem_len(write_sprite_mem_len),
+      .mem_in(mem_in),
+      .write_sprite_done(write_sprite_done),
+      .write_sprite_r_en(write_sprite_r_en),
+      .write_sprite_w_en(write_sprite_w_en),
+      .mem_req(write_sprite_mem_req),
+      .mem_addr(write_sprite_mem_addr),
+      .write_sprite_valid(write_sprite_valid),
+      .write_sprite_mem_id(write_sprite_mem_id),
+      .error_valid(write_sprite_error_valid),
+      .error_code(write_sprite_error_code)
   );
 
   sprite_write sprite_write_cmd_processor (
@@ -560,31 +566,33 @@ module spi_processor #(
   );
 
   sprite_update sprite_update_cmd_processor (
-    .clk(clk),
-    .ck_rst(reset_s),
-    .in_empty(in_empty),
-    .send_sprite_update(send_sprite_update),
-    .sprite_update_done(sprite_update_done),
-    .sprite_update_r_en(sprite_update_r_en),
-    .in_fifo(in_fifo),
-    .sprite_req_valid(sprite_u_valid),
-    .sprite_req_body(sprite_u_body),
-    .error_valid(sprite_update_error_valid),
-    .error_code(sprite_update_error_code)
+      .clk(clk),
+      .ck_rst(reset_s),
+      .in_empty(in_empty),
+      .send_sprite_update(send_sprite_update),
+      .sprite_update_done(sprite_update_done),
+      .sprite_update_r_en(sprite_update_r_en),
+      .in_fifo(in_fifo),
+      .sprite_req_valid(sprite_u_valid),
+      .sprite_req_body(sprite_u_body),
+      .sprite_id_bitmap(sprite_id_bitmap),
+      .error_valid(sprite_update_error_valid),
+      .error_code(sprite_update_error_code)
   );
 
   sprite_delete sprite_delete_cmd_processor (
-    .clk(clk),
-    .ck_rst(reset_s),
-    .in_empty(in_empty),
-    .send_sprite_delete(send_sprite_delete),
-    .sprite_delete_done(sprite_delete_done),
-    .sprite_delete_r_en(sprite_delete_r_en),
-    .in_fifo(in_fifo),
-    .sprite_req_valid(sprite_d_valid),
-    .sprite_req_body(sprite_d_body),
-    .error_valid(sprite_delete_error_valid),
-    .error_code(sprite_delete_error_code)
+      .clk(clk),
+      .ck_rst(reset_s),
+      .in_empty(in_empty),
+      .send_sprite_delete(send_sprite_delete),
+      .sprite_delete_done(sprite_delete_done),
+      .sprite_delete_r_en(sprite_delete_r_en),
+      .in_fifo(in_fifo),
+      .sprite_req_valid(sprite_d_valid),
+      .sprite_req_body(sprite_d_body),
+      .sprite_id_bitmap(sprite_id_bitmap),
+      .error_valid(sprite_delete_error_valid),
+      .error_code(sprite_delete_error_code)
   );
 
 

@@ -27,11 +27,11 @@ module read_cons #(
   import memory_pkg::*;
 
   logic [7:0] read_bytes = 8'd0;
-  logic [15:0] total_bytes = 15'b0;
-  logic [15:0] rx_index = 8'd0;
+  logic [15:0] total_bytes = 16'b0;
+  logic [15:0] rx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
-  mem_driver_pkg::mem_states_e state = START;
+  mem_driver_pkg::mem_states_e state = MEM_START;
 
   always_ff @(posedge clk) begin
 
@@ -41,7 +41,7 @@ module read_cons #(
       read_cons_w_en <= 1'b0;
       read_cons_r_en <= 1'b0;
       read_cons_fifo <= 8'd0;
-      state <= START;
+      state <= MEM_START;
 
     end else begin
       read_cons_w_en <= 1'b0;
@@ -52,71 +52,75 @@ module read_cons #(
       if (send_read_cons) begin
         // Fetch target memory address
         case (state)
-          START: begin
+          MEM_START: begin
             read_cons_r_en <= 1'b1;
-            state <= GET_X_TOP;
+            state <= MEM_GET_X_TOP;
           end
-          GET_X_TOP: begin
+          MEM_GET_X_TOP: begin
             read_cons_r_en <= 1'b1;
             gridX[15:8] <= in_fifo;
-            state <= GET_X_BOTTOM;
+            state <= MEM_GET_X_BOTTOM;
           end
-          GET_X_BOTTOM: begin
+          MEM_GET_X_BOTTOM: begin
             read_cons_r_en <= 1'b1;
             gridX[7:0] <= in_fifo;
-            state <= GET_Y_TOP;
+            state <= MEM_GET_Y_TOP;
           end
-          GET_Y_TOP: begin
+          MEM_GET_Y_TOP: begin
             read_cons_r_en <= 1'b1;
             gridY[15:8] <= in_fifo;
-            state <= GET_Y_BOTTOM;
+            state <= MEM_GET_Y_BOTTOM;
           end
-          GET_Y_BOTTOM: begin
+          MEM_GET_Y_BOTTOM: begin
             read_cons_r_en <= 1'b1;
             gridY[7:0] <= in_fifo;
-            state <= GET_MSG_LENGTH;
+            state <= MEM_GET_MSG_LENGTH_TOP;
           end
-          GET_MSG_LENGTH: begin
-            total_bytes <= in_fifo;
-            mem_len <= in_fifo > memory_pkg::MaxMessageLength
-            ? memory_pkg::MaxMessageLength
-            : in_fifo;
-            state   <= GET_MEM_ADDR;
-
-            if(in_empty) begin
-              error_valid <= 1'b1;
-              error_code <= MISSING_PARAMETER_ERROR;
+          MEM_GET_MSG_LENGTH_TOP: begin
+              read_cons_r_en <= 1'b1;
+              total_bytes[15:8] <= in_fifo;
+              state <= MEM_GET_MSG_LENGTH_BOTTOM;
             end
+          MEM_GET_MSG_LENGTH_BOTTOM: begin
+              total_bytes[7:0] <= in_fifo;
+              state <= MEM_GET_MEM_ADDR;
+              if(in_empty) begin
+                error_valid <= 1'b1;
+                error_code <= MISSING_PARAMETER_ERROR;
+              end
           end
-          GET_MEM_ADDR: begin
+          MEM_GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX + rx_index, gridY);
-            state <= INIT_REQ;
+            mem_len <= 32'(total_bytes) > memory_pkg::MaxMessageLength
+              ? 16'(memory_pkg::MaxMessageLength)
+              : total_bytes;
+            state <= MEM_INIT_REQ;
           end
-          INIT_REQ: begin
+          MEM_INIT_REQ: begin
             // The signal is delayed one cycle in the SPI controller.
             if (!mem_busy) begin
               mem_req <= 1'b1;
-              state   <= DATA;
+              state <= MEM_DATA;
             end
           end
-          DATA: begin
+          MEM_DATA: begin
             if (read_cons_w_en) begin
               // Capture data once write_cons is visible to fifo.
               read_cons_fifo <= mem_out;
               read_bytes <= read_bytes + 8'd1;
-              rx_index <= rx_index + 8'd1;
+              rx_index <= rx_index + 16'd1;
 
               if (rx_index >= total_bytes) begin
                 // Command end
                 read_cons_w_en <= 1'b0;
                 read_cons_done <= 1'b1;
-                rx_index <= 8'd0;
+                rx_index <= 16'd0;
                 read_bytes <= 8'd0;
-                state <= DONE;
-              end else if (read_bytes >= memory_pkg::MaxMessageLength - 1) begin
+                state <= MEM_DONE;
+              end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
                 // Transaction timeout, issue new where we finished.
                 read_cons_w_en <= 1'b0;
-                state <= GET_MEM_ADDR;
+                state <= MEM_GET_MEM_ADDR;
               end else begin
                 read_cons_w_en <= mem_data_on_wire;
               end
@@ -125,9 +129,9 @@ module read_cons #(
               read_cons_w_en <= 1'b1;
             end
           end
-          DONE: begin
+          MEM_DONE: begin
             // Simply wait one cycle for done signal to be processed.
-            state <= START;
+            state <= MEM_START;
           end
           default: ;
         endcase

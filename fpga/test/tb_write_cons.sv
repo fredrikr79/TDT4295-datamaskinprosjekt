@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_write_cons;
   import config_pkg::*;

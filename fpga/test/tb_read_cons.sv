@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_read_cons;
   import config_pkg::*;
@@ -15,10 +16,10 @@ module tb_read_cons;
   logic mem_data_on_wire = 1'b0;
   logic send_read_cons = 1'b0;
   logic mem_busy = 1'b1;
-  logic [7:0] in_fifo, mem_out;
+  logic [7:0] in_fifo, mem_out, error_code;
   logic [7:0] read_cons_fifo;
   logic [15:0] mem_len;
-  logic read_cons_done, read_cons_w_en, read_cons_r_en, mem_req;
+  logic read_cons_done, read_cons_w_en, read_cons_r_en, mem_req, in_empty, error_valid;
   logic [31:0] mem_addr;
 
   logic [7:0] stream [0:STREAM_LEN-1];
@@ -43,7 +44,8 @@ module tb_read_cons;
     .send_read_cons(send_read_cons), .mem_busy(mem_busy), .mem_out(mem_out),
     .in_fifo(in_fifo), .read_cons_fifo(read_cons_fifo), .mem_len(mem_len),
     .read_cons_done(read_cons_done), .read_cons_w_en(read_cons_w_en),
-    .read_cons_r_en(read_cons_r_en), .mem_req(mem_req), .mem_addr(mem_addr)
+    .read_cons_r_en(read_cons_r_en), .mem_req(mem_req), .mem_addr(mem_addr), .in_empty(in_empty),
+    .error_code(error_code), .error_valid(error_valid)
   );
 
   always @(posedge clk) begin

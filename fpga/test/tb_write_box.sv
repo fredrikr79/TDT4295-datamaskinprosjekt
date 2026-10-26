@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_write_box;
   import config_pkg::*;
@@ -21,9 +22,9 @@ module tb_write_box;
   logic mem_data_on_wire = 1'b0;
   logic send_write_box = 1'b0;
   logic mem_busy = 1'b0;
-  logic [7:0] in_fifo, mem_in;
+  logic [7:0] in_fifo, mem_in, error_code;
   logic [15:0] mem_len;
-  logic write_box_done, write_box_r_en, mem_req;
+  logic write_box_done, write_box_r_en, mem_req, in_empty, error_valid;
   logic [31:0] mem_addr;
 
   logic [7:0] stream [0:STREAM_LEN-1];
@@ -51,7 +52,8 @@ module tb_write_box;
     .clk(clk), .ck_rst(ck_rst), .mem_data_on_wire(mem_data_on_wire),
     .send_write_box(send_write_box), .mem_busy(mem_busy), .in_fifo(in_fifo),
     .mem_in(mem_in), .mem_len(mem_len), .write_box_done(write_box_done),
-    .write_box_r_en(write_box_r_en), .mem_req(mem_req), .mem_addr(mem_addr)
+    .write_box_r_en(write_box_r_en), .mem_req(mem_req), .mem_addr(mem_addr),
+    .in_empty(in_empty), .error_code(error_code), .error_valid(error_valid)
   );
 
   // Record row requests after registered outputs have settled.

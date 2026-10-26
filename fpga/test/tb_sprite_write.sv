@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_sprite_write;
   import hud_pkg::*;
@@ -11,11 +12,12 @@ module tb_sprite_write;
   always #5 clk = ~clk;
   logic ck_rst = 1'b1;
   logic send_sprite_write = 1'b0;
+  logic in_empty = 0, error_valid = 0;
   logic [7:0] in_fifo;
   logic [ID_WIDTH-1:0] sprite_available_id = '0;
   logic sprite_id_found = 1'b0;
   logic sprite_write_r_en, sprite_write_w_en, sprite_write_done, sprite_req_valid;
-  logic [7:0] sprite_write_fifo;
+  logic [7:0] sprite_write_fifo, error_code;
   sprite_inst_entry_t sprite_req_body;
 
   logic [7:0] stream [0:STREAM_LEN-1];
@@ -39,7 +41,8 @@ module tb_sprite_write;
     .sprite_id_found(sprite_id_found), .sprite_write_r_en(sprite_write_r_en),
     .sprite_write_w_en(sprite_write_w_en), .sprite_write_done(sprite_write_done),
     .sprite_req_valid(sprite_req_valid), .sprite_write_fifo(sprite_write_fifo),
-    .sprite_req_body(sprite_req_body)
+    .sprite_req_body(sprite_req_body), .error_code(error_code), .in_empty(in_empty),
+    .error_valid(error_valid)
   );
 
   always @(posedge clk) begin
@@ -66,7 +69,7 @@ module tb_sprite_write;
     stream[6]=8'h00; stream[7]=8'h20; // width
     stream[8]=8'h00; stream[9]=8'h10; // height
 
-    expected_body = {1'b1, 8'd5, 8'h2A, 16'h1234, 16'h5678, 16'h0020, 16'h0010};
+    expected_body = {1'b1, 10'd5, 10'h2A, 16'h1234, 16'h5678, 16'h0020, 16'h0010};
 
     repeat (3) @(negedge clk);
     ck_rst = 1'b0;

@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 // This is the memory-upload handler named write_sprite. It is distinct from
 // sprite_write, which parses a sprite record for the sprite LUT manager.

@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_sprite_delete;
   import hud_pkg::*;
@@ -10,6 +11,7 @@ module tb_sprite_delete;
   logic [7:0] in_fifo;
   logic sprite_delete_done, sprite_delete_r_en, sprite_req_valid;
   sprite_inst_entry_t sprite_req_body;
+  logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
 
   logic [7:0] stream [0:0];
   integer fifo_ptr = 0;
@@ -34,7 +36,7 @@ module tb_sprite_delete;
     #1;
     if (!ck_rst && sprite_req_valid) begin
       request_count = request_count + 1;
-      if (sprite_req_body.id !== 8'd7)
+      if (sprite_req_body.id !== 10'd7)
         $fatal(1, "DELETE ID mismatch: got %0d expected 7", sprite_req_body.id);
     end
   end

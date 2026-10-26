@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_sprite_update;
   import hud_pkg::*;
@@ -35,7 +36,7 @@ module tb_sprite_update;
     #1;
     if (!ck_rst && sprite_req_valid) begin
       request_count = request_count + 1;
-      if (sprite_req_body.id !== 8'd5) $fatal(1, "UPDATE ID mismatch: %0d", sprite_req_body.id);
+      if (sprite_req_body.id !== hud_pkg::sprite_lut_id'(5)) $fatal(1, "UPDATE ID mismatch: %0d", sprite_req_body.id);
       if (sprite_req_body.active !== 1'b1) $fatal(1, "UPDATE active mismatch");
       if (sprite_req_body.x !== 16'h1234) $fatal(1, "UPDATE X mismatch: %h", sprite_req_body.x);
       if (sprite_req_body.y !== 16'hABCD) $fatal(1, "UPDATE Y mismatch: %h", sprite_req_body.y);

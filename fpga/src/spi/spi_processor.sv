@@ -443,9 +443,7 @@ module spi_processor #(
       .out_full(out_full),
       .info_done(info_done),
       .info_w_en(info_w_en),
-      .send_info(send_info),
-      .error_valid(info_error_valid),
-      .error_code(info_error_code)
+      .send_info(send_info)
   );
 
   write_cons write_cons_cmd_processor (

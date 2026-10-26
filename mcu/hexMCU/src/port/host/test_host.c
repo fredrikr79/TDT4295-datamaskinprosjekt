@@ -20,7 +20,7 @@
  *   PROBE   echo 100 bytes until they come back intact (FPGA is there)
  *   INFO    ask for W, H, N, session id
  *   LOAD    stream the picture into the SIM layer, a few chunks in flight
- *   RUN     bounce a cube around the HUD layer, one frame per FPGA SYNC
+ *   RUN     bounce a cube sprite around the HUD, one move per FPGA SYNC
  *           pulse; counts the frames it was too slow for
  *
  * Any failed command -> abort everything, back to PROBE. If INFO then
@@ -47,11 +47,7 @@
 #include "host_hooks.h"
 #include "frame_sync.h"
 #include "display_host.h"       /* only for display_init() in main() */
-
-/* ---- things the MCU side has to agree with the FPGA on ---------------- */
-#define PX_BYTES        2u          /* RGB565, MSB first on the wire     */
-#define HUD_CLEAR       0xF81Fu     /* HUD colour key: see-through       */
-#define RGB565(r, g, b) ((uint16_t)((((r) & 0xF8u) << 8) | (((g) & 0xFCu) << 3) | ((b) >> 3)))
+#include "hud.h"                /* the cube is a sprite; PX_BYTES, RGB565 */
 
 /* ---- tuning ------------------------------------------------------------ */
 #define PROBE_LEN       100u
@@ -62,11 +58,6 @@
 #define CUBE_SPEED      3           /* pixels per frame, each axis       */
 #define CUBE_COLOUR     RGB565(255, 200, 0)
 #define STATS_FRAMES    150u        /* report on-time/behind this often  */
-
-/* The HUD area one frame rewrites: the new cube plus where it was
- * confirmed and where a failed frame may have put it -- up to two moves. */
-#define REGION_MAX      (CUBE + 2 * CUBE_SPEED)
-#define MAX_FRAME_CMDS  REGION_MAX  /* worst case: one command per row   */
 
 static void put_px(uint8_t *dst, uint16_t v)     /* MSB first */
 {
@@ -152,7 +143,7 @@ static state_t  state = S_PROBE;
 static uint32_t retry_at;           /* S_PROBE: don't probe before this */
 static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
-static uint16_t session;            /* the FPGA session we drew into    */
+static uint32_t session;            /* the FPGA session we drew into    */
 static bool     bg_loaded;          /* LOAD finished in that session    */
 
 static void run_enter(void);
@@ -244,7 +235,7 @@ static void load_resume(void)
 
 static void load_poll(void)
 {
-    const uint16_t max_px = min16(fpga_max_payload(SEND_SIM_BOX_OPCODE),
+    const uint16_t max_px = min16(fpga_max_payload(WRITE_BOX_OPCODE),
                                   LOAD_BUF_BYTES) / PX_BYTES;
 
     while (load.y < pic.h) {
@@ -270,7 +261,7 @@ static void load_poll(void)
         }
 
         fpga_box_t box = fpga_box(load.x, load.y, w, h);
-        fpga_cmd_t c = fpga_cmd_send_sim_box(box, b->data, (uint16_t)(w * h * PX_BYTES));
+        fpga_cmd_t c = fpga_cmd_write_box(box, b->data, (uint16_t)(w * h * PX_BYTES));
         c.done = load_done;
         c.ctx  = b;
         if (fpga_submit(&c) != FPGA_OK) { failed = true; return; }  /* can't be EFULL: checked */
@@ -290,46 +281,34 @@ static void load_poll(void)
 }
 
 /* ---- RUN: a cube bouncing around the HUD --------------------------------
- * One frame rewrites the smallest rectangle covering the old and the new
- * cube: cube colour where the cube is now, HUD_CLEAR elsewhere. That both
- * erases and draws in one go, so there's no frame where the cube is gone.
- * If the rectangle is bigger than one command allows, it is split into
- * row bands; the frame buffer is busy until every band's callback ran.
- *
- * Only a frame whose every band came back OK counts as drawn. If a frame
- * failed, nobody knows whether it reached the FPGA -- so it is "stale",
- * and the next frame's rectangle covers that spot too. */
+ * The cube is a sprite: its image is uploaded once, then each frame only
+ * moves it. hud_poll() sends the moves (and after an error or a new FPGA
+ * session, the upload and the sprite again). */
+static uint8_t      cube_px[CUBE * CUBE * PX_BYTES];
+static hud_image_t  cube_img;
+static hud_sprite_t cube_spr;
+
 static struct {
     int16_t    x, y, dx, dy;    /* where the cube is going           */
-    int16_t    ox, oy;          /* confirmed drawn here on the FPGA  */
-    bool       drawn;
-    int16_t    fx, fy;          /* the frame in flight draws it here */
-    bool       frame_active;    /* a frame is submitted / in flight  */
-    bool       stale;           /* a frame to fx,fy failed: unknown  */
     uint32_t   sync_seen;       /* SYNC count we last started a frame at */
     uint32_t   frames, behind;  /* since the last report              */
-
-    uint8_t    buf[REGION_MAX * REGION_MAX * PX_BYTES];
-    fpga_cmd_t cmds[MAX_FRAME_CMDS];
-    uint8_t    n_cmds, next_cmd;  /* built / submitted so far        */
-    uint8_t    pending;           /* submitted, done not called yet  */
 } cube = { .x = 40, .y = 40, .dx = CUBE_SPEED, .dy = CUBE_SPEED - 1 };
 
 /* Frames that went by while probing or loading don't count as missed. */
 static void run_enter(void)
 {
+    static bool made;
+    if (!made) {
+        made = true;
+        hud_fill(cube_px, CUBE, CUBE, CUBE_COLOUR);
+        hud_image_init(&cube_img, cube_px, CUBE, CUBE);
+        hud_sprite_init(&cube_spr, &cube_img, cube.x, cube.y, true);
+    }
     cube.sync_seen = frame_sync_count();
     cube.frames = cube.behind = 0;
 }
 
-static void cube_done(const fpga_cmd_t *cmd, fpga_err_t err)
-{
-    (void)cmd;
-    cube.pending--;
-    if (err != FPGA_ERR_NONE) failed = true;
-}
-
-static void cube_build_frame(void)
+static void cube_move(void)
 {
     const fpga_info_t *in = fpga_link_info();
 
@@ -338,73 +317,15 @@ static void cube_build_frame(void)
     cube.y = (int16_t)(cube.y + cube.dy);
     if (cube.x < 0 || cube.x + CUBE > in->width)  { cube.dx = (int16_t)-cube.dx; cube.x = (int16_t)(cube.x + 2 * cube.dx); }
     if (cube.y < 0 || cube.y + CUBE > in->height) { cube.dy = (int16_t)-cube.dy; cube.y = (int16_t)(cube.y + 2 * cube.dy); }
-
-    /* region = new cube, grown to cover wherever an old one may be */
-    int16_t x0 = cube.x, y0 = cube.y, x1 = (int16_t)(cube.x + CUBE), y1 = (int16_t)(cube.y + CUBE);
-    const struct { bool on; int16_t x, y; } old[2] = {
-        { cube.drawn, cube.ox, cube.oy },       /* confirmed           */
-        { cube.stale, cube.fx, cube.fy },       /* failed, maybe there */
-    };
-    for (unsigned i = 0; i < 2; i++) {
-        if (!old[i].on) continue;
-        if (old[i].x < x0) x0 = old[i].x;
-        if (old[i].y < y0) y0 = old[i].y;
-        if (old[i].x + CUBE > x1) x1 = (int16_t)(old[i].x + CUBE);
-        if (old[i].y + CUBE > y1) y1 = (int16_t)(old[i].y + CUBE);
-    }
-    uint16_t w = (uint16_t)(x1 - x0), h = (uint16_t)(y1 - y0);
-
-    for (uint16_t r = 0; r < h; r++)
-        for (uint16_t c = 0; c < w; c++) {
-            int16_t px = (int16_t)(x0 + c), py = (int16_t)(y0 + r);
-            bool in_cube = px >= cube.x && px < cube.x + CUBE &&
-                           py >= cube.y && py < cube.y + CUBE;
-            put_px(&cube.buf[(r * w + c) * PX_BYTES], in_cube ? CUBE_COLOUR : HUD_CLEAR);
-        }
-
-    /* split into bands of whole rows that fit one command */
-    uint16_t rows = min16(fpga_max_payload(SEND_HUD_BOX_OPCODE) / (w * PX_BYTES), h);
-    if (rows == 0) rows = 1;     /* N smaller than one row: submit says ETOOBIG */
-    cube.n_cmds = cube.next_cmd = 0;
-    for (uint16_t r = 0; r < h; r = (uint16_t)(r + rows)) {
-        uint16_t bh = min16(rows, h - r);
-        fpga_box_t box = fpga_box((uint16_t)x0, (uint16_t)(y0 + r), w, bh);
-        fpga_cmd_t c = fpga_cmd_send_hud_box(box, &cube.buf[r * w * PX_BYTES],
-                                             (uint16_t)(w * bh * PX_BYTES));
-        c.done = cube_done;
-        cube.cmds[cube.n_cmds++] = c;
-    }
-
-    cube.fx = cube.x;            /* drawn only once every band is back */
-    cube.fy = cube.y;
-    cube.frame_active = true;
+    hud_sprite_move(&cube_spr, cube.x, cube.y);
 }
 
 static void run_poll(void)
 {
-    /* 1. finish submitting this frame. EFULL: same command next poll. */
-    while (cube.next_cmd < cube.n_cmds) {
-        fpga_status_t st = fpga_submit(&cube.cmds[cube.next_cmd]);
-        if (st == FPGA_EFULL) return;
-        if (st != FPGA_OK) { failed = true; return; }
-        cube.pending++;
-        cube.next_cmd++;
-    }
+    if (!hud_poll()) { failed = true; return; }
 
-    /* 2. the frame buffer is busy until every band is done */
-    if (cube.pending) return;
-    if (cube.frame_active) {     /* all bands came back OK (errors resync) */
-        cube.ox = cube.fx;
-        cube.oy = cube.fy;
-        cube.drawn = true;
-        cube.stale = false;      /* this frame covered the stale spot too */
-        cube.frame_active = false;
-    }
-
-    /* 3. next frame when the FPGA starts one. More than one SYNC since
-     *    last time means we were still busy when a frame went by: behind.
-     *    This demo just skips the missed frames; a game could instead move
-     *    things n steps so the speed stays the same. */
+    /* Next frame when the FPGA starts one. More than one SYNC since last
+     * time means we were still busy when a frame went by: behind. */
     uint32_t n = frame_sync_take(&cube.sync_seen);
     if (n == 0) return;
     cube.frames++;
@@ -414,7 +335,7 @@ static void run_poll(void)
                  (unsigned long)cube.frames, (unsigned long)cube.behind);
         cube.frames = cube.behind = 0;
     }
-    cube_build_frame();
+    cube_move();
 }
 
 /* ---- INFO callback: decides between LOAD and RUN ----------------------- */
@@ -424,8 +345,8 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
     if (err != FPGA_ERR_NONE) { failed = true; return; }
 
     const fpga_info_t *in = fpga_link_info();
-    LOG_INFO("fpga: %ux%u, N=%u, session 0x%04X",
-             in->width, in->height, in->max_cmd, in->session);
+    LOG_INFO("fpga: %ux%u, N=%u, session 0x%08lX",
+             in->width, in->height, in->max_cmd, (unsigned long)in->session);
     if (pic.w > in->width || pic.h > in->height) {
         LOG_ERR("picture %ux%u is bigger than the FPGA screen", pic.w, pic.h);
         exit(1);
@@ -438,8 +359,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
     } else {
         have_session = true;
         session      = in->session;
-        cube.drawn   = false;    /* new FPGA memory: nothing is drawn */
-        cube.stale   = false;
+        hud_forget();            /* new FPGA memory: sprites are gone */
         load_start();
     }
 }
@@ -449,12 +369,8 @@ static void resync(void)
 {
     LOG_WARN("command failed in '%s' -> resync", state_names[state]);
     fpga_abort_all();            /* callbacks run now and free the buffers */
+    hud_lost();                  /* ...so this comes after them           */
     failed        = false;
-    if (cube.frame_active) {     /* may or may not have reached the FPGA */
-        cube.stale        = true;
-        cube.frame_active = false;
-    }
-    cube.n_cmds   = cube.next_cmd = 0;
     retry_at      = plat_millis();
     go(S_PROBE);
 }

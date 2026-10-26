@@ -114,8 +114,12 @@ static void print_hex(const uint8_t *b, uint16_t n)
  * ====================================================================== */
 #define CLI_SUBMIT_TIMEOUT_MS  1000u
 
-typedef enum { PEND_NONE, PEND_SEND, PEND_READ, PEND_FECHO, PEND_INFO } pend_t;
-static const char *const pend_names[] = { "-", "send", "read", "fecho", "info" };
+typedef enum { PEND_NONE, PEND_SEND, PEND_READ, PEND_FECHO, PEND_INFO,
+               PEND_SPR_UPLOAD, PEND_SPR_NEW, PEND_SPR_MOVE, PEND_SPR_DEL,
+               PEND_SIM } pend_t;
+static const char *const pend_names[] = { "-", "send", "read", "fecho", "info",
+               "sprite upload", "sprite new", "sprite move", "sprite del",
+               "sim" };
 
 static struct {
     pend_t      what;
@@ -256,29 +260,32 @@ static void print_info(void)
     if (!in->valid)
         log_raw("fpga info: unknown (no INFO yet), size check off\r\n");
     else
-        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%08X\r\n",
-                in->width, in->height, in->max_cmd, in->session);
+        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%08lX\r\n",
+                in->width, in->height, in->max_cmd, (unsigned long)in->session);
     cli_async_end();
 }
 
 /* Done callback for every console command, called from fpga_poll(). */
 static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
-    (void)cmd;
     if (pend.what == PEND_FECHO) { fecho_round_done(err); return; }
 
     pend_t what = pend.what;
     pend_end(err == FPGA_ERR_ABORTED || err == FPGA_ERR_CANCELLED);
 
     if (err == FPGA_ERR_STATUS)
-        LOG_ERR("%s failed: FPGA status %u", pend_names[what],
-                fpga_ready_status());
+        LOG_ERR("%s failed: FPGA answered NACK, %s (0x%02X)", pend_names[what],
+                fpga_fail_str(fpga_fail_code()), fpga_fail_code());
     else if (err != FPGA_ERR_NONE)
         LOG_ERR("%s failed: %s", pend_names[what], fpga_err_str(err));
     else if (what == PEND_INFO)
         print_info();
     else if (what == PEND_READ)
         print_hex(rd_buf, pend.len);
+    else if (what == PEND_SPR_UPLOAD)
+        LOG_INFO("sprite upload: memID %u", fpga_answer_id(cmd));
+    else if (what == PEND_SPR_NEW)
+        LOG_INFO("sprite new: spriteID %u", fpga_answer_id(cmd));
     else
         LOG_INFO("%s: ok", pend_names[what]);
 }
@@ -355,8 +362,8 @@ static bool parse_arg(const char *what, const char *s, unsigned long max,
 
 /* send <op>                       opcode only
  * send <op> <x> <y>               + address phase (x, y)
- * send <op> <x> <y> <n>           + 16-bit alt bytes (e.g. a line's N)
- * send <op> <x1> <y1> <x2> <y2>   + 32-bit alt bytes (a box's x2:y2)
+ * send <op> <x> <y> <n>           + 16-bit alt bytes (e.g. CONS's N)
+ * send <op> <x> <y> <w> <h>       + 32-bit alt bytes (a box's W:H)
  * Header only in all cases: no payload follows. */
 static void cmd_send(int argc, char **argv)
 {
@@ -364,7 +371,7 @@ static void cmd_send(int argc, char **argv)
     transport_hdr_t hdr = {0};
 
     if (argc != 2 && argc != 4 && argc != 5 && argc != 6) {
-        log_raw("usage: send <op> [<x> <y> [<n> | <x2> <y2>]]\r\n");
+        log_raw("usage: send <op> [<x> <y> [<n> | <w> <h>]]\r\n");
         return;
     }
     if (!parse_arg("opcode", argv[1], 0xFF, &op)) return;
@@ -383,8 +390,8 @@ static void cmd_send(int argc, char **argv)
         hdr.alt     = (uint32_t)a1;
     }
     if (argc == 6) {
-        if (!parse_arg("x2", argv[4], 0xFFFF, &a1)) return;
-        if (!parse_arg("y2", argv[5], 0xFFFF, &a2)) return;
+        if (!parse_arg("w", argv[4], 0xFFFF, &a1)) return;
+        if (!parse_arg("h", argv[5], 0xFFFF, &a2)) return;
         hdr.fields |= TRANSPORT_F_ALT32;
         hdr.alt     = ((uint32_t)a1 << 16) | (uint32_t)a2;
     }
@@ -497,16 +504,88 @@ static void cmd_info(int argc, char **argv)
         if (!parse_arg("width",  argv[2], 0xFFFF, &w)) return;
         if (!parse_arg("height", argv[3], 0xFFFF, &h)) return;
         if (!parse_arg("n",      argv[4], 0xFFFF, &n)) return;
-        if (argc == 6 && !parse_arg("session", argv[5], 0xFFFF, &sid)) return;
+        if (argc == 6 && !parse_arg("session", argv[5], 0xFFFFFFFFul, &sid)) return;
         fpga_info_t in = { .valid = true, .width = (uint16_t)w,
                            .height = (uint16_t)h, .max_cmd = (uint16_t)n,
-                           .session = (uint16_t)sid };
+                           .session = (uint32_t)sid };
         fpga_set_link_info(&in);
         print_info();
         return;
     }
 
     log_raw("usage: info [query | clear | set <w> <h> <n> [<session>]]\r\n");
+}
+
+/* sprite upload <w> <h> <colour>               WRITE_SPRITE, a filled image -> memID
+ * sprite new <memID> <x> <y> <w> <h> [hide]    SPRITE_WRITE -> spriteID
+ * sprite move <id> <x> <y> [hide]              SPRITE_UPDATE
+ * sprite del <id>                              SPRITE_DELETE
+ * For bringing up the FPGA's sprites by hand. These IDs are the same ones
+ * the game's HUD uses, so mixing the two confuses both. */
+static void cmd_sprite(int argc, char **argv)
+{
+    unsigned long a[5];
+    const char *sub = argc >= 2 ? argv[1] : "";
+
+    if (strcmp(sub, "upload") == 0 && argc == 5) {
+        if (!parse_arg("w", argv[2], 0xFFFF, &a[0]) ||
+            !parse_arg("h", argv[3], 0xFFFF, &a[1]) ||
+            !parse_arg("colour", argv[4], 0xFFFF, &a[2])) return;
+        unsigned long bytes = a[0] * a[1] * 2u;
+        if (bytes == 0 || bytes > RD_BUF_SIZE) {
+            log_raw("image of %lu bytes, the console takes 2..%u\r\n", bytes, RD_BUF_SIZE);
+            return;
+        }
+        if (console_busy()) return;             /* tx_buf may still be in use */
+        for (unsigned long i = 0; i < bytes; i += 2) {
+            tx_buf[i]     = (uint8_t)(a[2] >> 8);
+            tx_buf[i + 1] = (uint8_t)a[2];
+        }
+        pend_start(PEND_SPR_UPLOAD, fpga_cmd_write_sprite(tx_buf, (uint16_t)bytes));
+        return;
+    }
+    if (strcmp(sub, "new") == 0 && (argc == 7 || argc == 8)) {
+        if (!parse_arg("memID", argv[2], 0xFF, &a[0]) ||
+            !parse_arg("x", argv[3], 0xFFFF, &a[1]) || !parse_arg("y", argv[4], 0xFFFF, &a[2]) ||
+            !parse_arg("w", argv[5], 0xFFFF, &a[3]) || !parse_arg("h", argv[6], 0xFFFF, &a[4]))
+            return;
+        bool show = !(argc == 8 && strcmp(argv[7], "hide") == 0);
+        if (console_busy()) return;
+        pend_start(PEND_SPR_NEW, fpga_cmd_sprite_write((uint8_t)a[0], show, (uint16_t)a[1],
+                   (uint16_t)a[2], (uint16_t)a[3], (uint16_t)a[4]));
+        return;
+    }
+    if (strcmp(sub, "move") == 0 && (argc == 5 || argc == 6)) {
+        if (!parse_arg("id", argv[2], 0xFF, &a[0]) ||
+            !parse_arg("x", argv[3], 0xFFFF, &a[1]) || !parse_arg("y", argv[4], 0xFFFF, &a[2]))
+            return;
+        bool show = !(argc == 6 && strcmp(argv[5], "hide") == 0);
+        if (console_busy()) return;
+        pend_start(PEND_SPR_MOVE, fpga_cmd_sprite_update((uint8_t)a[0], show,
+                   (uint16_t)a[1], (uint16_t)a[2]));
+        return;
+    }
+    if (strcmp(sub, "del") == 0 && argc == 3) {
+        if (!parse_arg("id", argv[2], 0xFF, &a[0])) return;
+        if (console_busy()) return;
+        pend_start(PEND_SPR_DEL, fpga_cmd_sprite_delete((uint8_t)a[0]));
+        return;
+    }
+    log_raw("usage: sprite upload <w> <h> <colour>\r\n"
+            "       sprite new <memID> <x> <y> <w> <h> [hide]\r\n"
+            "       sprite move <id> <x> <y> [hide]\r\n"
+            "       sprite del <id>\r\n");
+}
+
+/* sim start | stop */
+static void cmd_sim(int argc, char **argv)
+{
+    if (argc != 2 || (strcmp(argv[1], "start") && strcmp(argv[1], "stop"))) {
+        log_raw("usage: sim start | stop\r\n");
+        return;
+    }
+    if (console_busy()) return;
+    pend_start(PEND_SIM, fpga_cmd_sim_run(strcmp(argv[1], "start") == 0));
 }
 
 static void cmd_readrdy(int argc, char **argv)
@@ -516,7 +595,10 @@ static void cmd_readrdy(int argc, char **argv)
     log_raw("ready irqs: %lu\r\n", (unsigned long)transport_ready_count());
     log_raw("backend   : done=%u error=%u\r\n",
             (unsigned)BACKEND->done, (unsigned)BACKEND->error);
-    log_raw("status    : %u at last READY\r\n", fpga_ready_status());
+    log_raw("ack       : %s at last READY", fpga_ready_status() == FPGA_STATUS_OK ? "ACK" : "NACK");
+    if (fpga_ready_status() != FPGA_STATUS_OK)
+        log_raw(", %s (0x%02X)", fpga_fail_str(fpga_fail_code()), fpga_fail_code());
+    log_raw("\r\n");
     log_raw("queue     : %u/%u\r\n", fpga_queued(), (unsigned)FPGA_QUEUE_LEN);
     const fpga_cmd_t *cur = fpga_current();
     if (cur)
@@ -603,10 +685,12 @@ static void cmd_exit(int argc, char **argv)
 static const cli_cmd_t cmds[] = {
     { "help",    cmd_help,     "list commands" },
     { "toggle",  cmd_toggle,   "toggle user LED" },
-    { "send",    cmd_send,     "send <op> [<x> <y> [<n> | <x2> <y2>]]  e.g. send 0x66 0xfada 0x2345 0" },
+    { "send",    cmd_send,     "send <op> [<x> <y> [<n> | <w> <h>]]  header only, e.g. send 0xB0" },
     { "read",    cmd_read,     "read <len>          e.g. read 4" },
     { "fecho",   cmd_fecho,    "fecho [-r N] <n> | <b0> <b1> ...  echo random / given bytes, N rounds" },
-    { "readrdy", cmd_readrdy,  "show ready pin, backend and fpga queue" },
+    { "sprite",  cmd_sprite,   "sprite upload|new|move|del ...  sprite commands by hand" },
+    { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
+    { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },

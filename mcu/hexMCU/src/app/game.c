@@ -11,10 +11,10 @@
 #include "frame_sync.h"
 #include "game.h"
 #include "usb_input.h"
-#include "render.h"                 /* also PX_BYTES, HUD_CLEAR, RGB565 */
+#include "hud.h"                    /* sprites; PX_BYTES, HUD_CLEAR, RGB565 */
 #include "font.h"
 #include "text.h"
-#include "font.h"       /* test font; or font_kiwisoda.h */
+#include "funny_man.h"
 
 /* tuning */
 #define PROBE_LEN       100u
@@ -24,8 +24,8 @@
 #define CURSOR_SIZE     8
 #define CURSOR_COLOUR   RGB565(255, 255, 255)
 #define TEST_FONT       font_kiwisoda
-#define TEST_SCALE      2           /* 8 px font -> 16 px letters */
-#define TEST_TEXT       "Gaming"
+#define TEST_SCALE      1           /* 8 px font -> 16 px letters */
+#define TEST_TEXT       "Hei verden! Lagre spill? æøå ÆØÅ"
 
 /* ======================================================================
  * The state machine
@@ -51,7 +51,7 @@ static state_t  resume_to = S_LOAD; /* where a resync goes back to (same session
 static uint32_t retry_at;           /* S_PROBE: don't probe before this */
 static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
-static uint16_t session;            /* the FPGA session we drew into    */
+static uint32_t session;            /* the FPGA session we drew into    */
 
 static int room_x = FIRST_ROOM_X;   /* the x-coordinate of the current room */
 static int room_y = FIRST_ROOM_Y;   /* the y-coordinate of the current room */
@@ -70,7 +70,6 @@ static uint8_t *box;
 
 static void run_enter(void);
 static void room_enter(void);
-static void test_text_draw(void);
 
 static void go(state_t s)
 {
@@ -163,6 +162,7 @@ static bool load_poll(void)
 static struct {
     uint32_t sync_seen;         /* SYNC count we last started a frame at */
     int32_t  cx, cy;            /* cursor position, follows the mouse    */
+    input_t  keys;              /* latest input, for held keys in run_frame */
 } run;
 
 /* State machine for run, handels if we are showing menu or doing other actions. */
@@ -177,8 +177,11 @@ static void r_go(run_state_t s)
     if (s != run_state) LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
     run_state = s;
 }
-static render_cube_t cursor = RENDER_CUBE_INIT(CURSOR_SIZE, CURSOR_COLOUR);
-static text_t        test_text;
+/* HUD: the cursor sprite and a test sentence (sprites, see hud.h) */
+static uint8_t      cursor_px[CURSOR_SIZE * CURSOR_SIZE * PX_BYTES];
+static hud_image_t  cursor_img;
+static hud_sprite_t cursor;
+static text_t       test_text;
 
 static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
 {
@@ -191,18 +194,27 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
 static void run_enter(void)
 {
     run.sync_seen = frame_sync_count();
-    test_text_draw();
 }
 
-/* Test: a sentence centred near the top of the screen. Drawn on every way
- * into RUN, so it comes back after a resync that may have cut it short. */
-static void test_text_draw(void)
+/* The HUD's sprites, made once. hud_poll() sends them, and sends them
+ * again after a resync or a new FPGA session. */
+static void hud_setup(void)
 {
+    static bool done;
+    if (done) return;
+    done = true;
+
     const fpga_info_t *scr = fpga_link_info();
+    hud_fill(cursor_px, CURSOR_SIZE, CURSOR_SIZE, CURSOR_COLOUR);
+    hud_image_init(&cursor_img, cursor_px, CURSOR_SIZE, CURSOR_SIZE);
+    hud_sprite_init(&cursor, &cursor_img, (int16_t)run.cx, (int16_t)run.cy, true);
+
+
+    /* test: a sentence centred near the top */
     int32_t w = font_text_width(&TEST_FONT, TEST_TEXT) * TEST_SCALE;
     int32_t x = w < scr->width ? (scr->width - w) / 2 : 0;
     text_draw(&test_text, (int16_t)x, 16, &TEST_FONT, TEST_TEXT,
-              RGB565(255, 220, 0), HUD_CLEAR, TEST_SCALE);
+              RGB565(255, 220, 0), TEST_SCALE);
 }
 
 /* Per-room game state: from load_start(), once per room. */
@@ -211,6 +223,8 @@ static void room_enter(void)
     const fpga_info_t *scr = fpga_link_info();
     run.cx = (scr->width  - CURSOR_SIZE) / 2;
     run.cy = (scr->height - CURSOR_SIZE) / 2;
+    hud_setup();
+    player_init(100, 100);      /* start position for the room */
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -235,11 +249,10 @@ static void run_frame(uint32_t n)
     
     /* TODO: update + draw */
 
-    /* busy: the last cursor frame isn't back yet, try again next frame */
-    render_cube(&cursor, (int16_t)run.cx, (int16_t)run.cy);
+    hud_sprite_move(&cursor, (int16_t)run.cx, (int16_t)run.cy);   /* hud_poll sends it */
 
     switch (run_state) {
-    case RS_SIM:  /* do sim */  break;
+    case RS_SIM:  player_frame(&run.keys, n); break;
     case RS_MENU: /* do menu */ break;
     }
 }
@@ -251,6 +264,7 @@ static void run_poll(void)
     input_t in;
     input_take(&in);
     /* input_log(&in); */
+    run.keys = in;              /* held keys are "down right now", so the latest copy is enough */
     run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - CURSOR_SIZE);
     run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - CURSOR_SIZE);
 
@@ -258,8 +272,7 @@ static void run_poll(void)
         r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
         
 
-    if (!render_cube_poll(&cursor)) { failed = true; return; }
-    if (!text_poll(&test_text))     { failed = true; return; }
+    if (!hud_poll()) { failed = true; return; }
     uint32_t n = frame_sync_take(&run.sync_seen);
     if (n) run_frame(n);
 }
@@ -296,7 +309,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
          * here drops the room change; the player is still in `room`. */
         have_session = true;
         session      = in->session;
-        render_cube_forget(&cursor);    /* unknown what of ours it has */
+        hud_forget();                   /* its sprites are gone: send them again */
         load_start();
     }
 }
@@ -308,8 +321,7 @@ static void resync(void)
     if (state == S_SAVE || state == S_LOAD || state == S_RUN)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */
-    render_cube_lost(&cursor);   /* ...so these come after them      */
-    text_lost(&test_text);
+    hud_lost();                  /* ...so this comes after them      */
     failed   = false;
     retry_at = plat_millis();
     go(S_PROBE);

@@ -12,6 +12,10 @@
  *   - hospi1.Init.DeviceSize = 32. The x/y pair is sent in the address
  *     phase, and in indirect mode an address beyond DeviceSize raises a
  *     transfer error. 32 (= 4 GiB) means no x/y value is ever out of range.
+ *   - The FPGA's ACK line on a GPIO input labelled FPGA_ACK, so main.h
+ *     has FPGA_ACK_Pin / FPGA_ACK_GPIO_Port. High at READY = the command
+ *     worked, low = it failed. Pull-up or pull-down: whatever makes an
+ *     unprogrammed FPGA read as "failed" (pull-down).
  * ======================================================================= */
 #define LOG_TAG "ospi"
 
@@ -225,13 +229,17 @@ static transport_status_t ospi_backend_read(const transport_hdr_t *hdr,
     return TRANSPORT_OK;
 }
 
-/* Called from the READY EXTI ISR, while READY is high.
- * TODO: read the 3 FPGA status GPIOs here, e.g.
- *       return (uint8_t)((STATUS_GPIO_Port->IDR >> STATUS0_Pin_Pos) & 0x7u);
- * Until the pins and codes are agreed, every command reports OK (0). */
+/* Called from the READY EXTI ISR, while READY is high: the ACK line.
+ * 0 = ACK (worked), 1 = NACK (failed). Register read, no HAL call: this
+ * runs in the interrupt. */
 static uint8_t ospi_read_status(void)
 {
+#if defined(FPGA_ACK_Pin) && defined(FPGA_ACK_GPIO_Port)
+    return (FPGA_ACK_GPIO_Port->IDR & FPGA_ACK_Pin) ? 0u : 1u;
+#else
+#warning "no FPGA_ACK pin label in CubeMX: every command counts as ACKed"
     return 0u;
+#endif
 }
 
 static void ospi_backend_abort(void)

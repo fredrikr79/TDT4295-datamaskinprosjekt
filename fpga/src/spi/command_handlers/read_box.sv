@@ -43,6 +43,7 @@ module read_box #(
   } r_box_states_e;
 
   logic [15:0] row_index, col_index = 16'd0;
+  logic [7:0] read_bytes = 8'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
 
@@ -150,9 +151,9 @@ module read_box #(
                   read_box_done <= 1'b1;
                   state <= DONE;
                 end
-              end else if (written_bytes >= memory_pkg::MaxMessageLength) begin
+              end else if (read_bytes >= memory_pkg::MaxMessageLength) begin
                 col_index <= col_index + 16'd1;
-                written_bytes <= 8'b0;
+                read_bytes <= 8'b0;
                 state <= GET_MEM_ADDR;
               end else if(mem_data_on_wire) begin
                 col_index <= col_index + 16'd1;

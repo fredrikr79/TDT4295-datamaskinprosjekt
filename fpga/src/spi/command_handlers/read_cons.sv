@@ -26,7 +26,7 @@ module read_cons #(
   import mem_driver_pkg::*;
   import memory_pkg::*;
 
-  logic [7:0] written_bytes = 8'd0;
+  logic [7:0] read_bytes = 8'd0;
   logic [15:0] total_bytes = 15'b0;
   logic [15:0] rx_index = 8'd0;
   logic [15:0] gridX, gridY;

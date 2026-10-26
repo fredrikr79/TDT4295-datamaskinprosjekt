@@ -233,9 +233,9 @@ static void run_frame(uint32_t n)
     (void)n;
 
     update_player_position(0, 0, player, box);
-    fpga_cmd_read_sim_box(  // TODO: Use the new command
-        next_velocity_box(player), box, 25*25
-    );
+    // fpga_cmd_read_sim_box(  // TODO: Use the new command
+    //     next_velocity_box(player), box, 25*25
+    // );
     
     int overlap = pos_in_portal(player.x, player.y, portals);
     if (overlap != -1)

@@ -351,8 +351,8 @@ void delete_save(int x, int y)
 
 void send_next_line(const fpga_cmd_t *prev_cmd, fpga_err_t err)
 {
-  fpga_cmd_t cmd = fpga_cmd_send_line(
-    0, prev_cmd->hdr.y + 1, ROOM_X, prev_cmd->tx+ROOM_X, ROOM_X
+  fpga_cmd_t cmd = fpga_cmd_write_cons(
+    0, prev_cmd->hdr.y + 1, prev_cmd->tx+ROOM_X, ROOM_X
   );
   if (cmd.hdr.y + 1 < ROOM_Y) cmd.done = send_next_line;
   else load_finish();
@@ -361,15 +361,15 @@ void send_next_line(const fpga_cmd_t *prev_cmd, fpga_err_t err)
 
 void send_room_to_fpga(uint8_t *tileIDs)
 {
-  fpga_cmd_t cmd = fpga_cmd_send_line(0, 0, ROOM_X, tileIDs, ROOM_X);
+  fpga_cmd_t cmd = fpga_cmd_write_cons(0, 0, tileIDs, ROOM_X);
   cmd.done = send_next_line;
   fpga_submit(&cmd);
 }
 
 void read_next_line(const fpga_cmd_t *prev_cmd, fpga_err_t err)
 {
-  fpga_cmd_t cmd = fpga_cmd_read_line(
-    0, prev_cmd->hdr.y + 1, ROOM_X, prev_cmd->rx+ROOM_X, ROOM_X
+  fpga_cmd_t cmd = fpga_cmd_read_cons(
+    0, prev_cmd->hdr.y + 1, prev_cmd->rx+ROOM_X, ROOM_X
   );
   if (cmd.hdr.y + 1 < ROOM_Y) cmd.done = read_next_line;
   else save_finish();
@@ -378,7 +378,7 @@ void read_next_line(const fpga_cmd_t *prev_cmd, fpga_err_t err)
 
 void read_room_from_fpga(uint8_t *tile_buffer)
 {
-  fpga_cmd_t cmd = fpga_cmd_read_line(0, 0, ROOM_X, tile_buffer, ROOM_X);
+  fpga_cmd_t cmd = fpga_cmd_read_cons(0, 0, tile_buffer, ROOM_X);
   cmd.done = read_next_line;
   fpga_submit(&cmd);
 }

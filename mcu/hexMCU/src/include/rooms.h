@@ -44,18 +44,11 @@ typedef struct
     uint8_t dx;
     uint8_t dy;
 
-    int dest_x;
-    int dest_y;
+    int dest_room_x;
+    int dest_room_y;
+    int dest_pos_x;
+    int dest_pos_y;
     uint8_t dest_exit;
 } portal_t;
-struct portal_exit
-{
-    bool active;
-
-    uint16_t x;
-    uint16_t y;
-    uint8_t dx;
-    uint8_t dy;
-};
 void init_empty_portals(portal_t *portals, uint8_t n_portals);
 int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals);

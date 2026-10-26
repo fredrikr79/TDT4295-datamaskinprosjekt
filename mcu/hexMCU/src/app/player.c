@@ -8,7 +8,8 @@ void update_player_position(
     float force_x,
     float force_y,
     player_t player,
-    uint8_t *box
+    uint8_t *box,
+    velocity_box_t velocity_box
 )
 {
     player.velocity_x += force_x / 2;
@@ -44,7 +45,7 @@ void update_player_position(
     player.velocity_y += (force_y + GRAVITY) / 2;
 }
 
-fpga_box_t next_velocity_box(player_t player)
+velocity_box_t next_velocity_box(player_t player)
 {
     // TODO: Change function to choose a 25x25 box that aims in the direction of the velocity
 
@@ -60,5 +61,5 @@ fpga_box_t next_velocity_box(player_t player)
         floorf(x), floorf(y),
         ceilf(dx), ceilf(dy)
     };
-    return box;
+    return (velocity_box_t) {box, 12, 8, box.x2*box.y2};
 }

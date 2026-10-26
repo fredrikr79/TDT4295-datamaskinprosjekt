@@ -67,6 +67,7 @@ static portal_t portals[MAX_PORTALS] = {0};
 
 static uint8_t room_tiles[ROOM_X*ROOM_Y] = {0};
 static uint8_t *box;
+static velocity_box_t velocity_box;
 
 static void run_enter(void);
 static void room_enter(void);
@@ -232,18 +233,21 @@ static void run_frame(uint32_t n)
 {
     (void)n;
 
-    update_player_position(0, 0, player, box);
-    // fpga_cmd_read_sim_box(  // TODO: Use the new command
-    //     next_velocity_box(player), box, 25*25
-    // );
+    update_player_position(0, 0, player, box, velocity_box);  // TODO: Change force
+    velocity_box = next_velocity_box(player);
+    fpga_cmd_read_box(
+        velocity_box.box, box, velocity_box.length
+    );
     
     int overlap = pos_in_portal(player.x, player.y, portals);
     if (overlap != -1)
     {
-        player.promised_exit = (uint8_t) overlap;
+        portal_t portal = portals[overlap];
+        player.x = portal.dest_pos_x;
+        player.y = portal.dest_pos_y;
         game_change_room(
-            portals[overlap].dest_x,
-            portals[overlap].dest_y
+            portal.dest_pos_x,
+            portal.dest_pos_y
         );
     }
     

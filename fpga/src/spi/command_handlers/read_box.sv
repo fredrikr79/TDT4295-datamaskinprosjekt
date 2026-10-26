@@ -123,15 +123,13 @@ module read_box #(
           GET_MEM_ADDR: begin
             mem_len <= cols > 16'(memory_pkg::MaxMessageLength)
               ? 16'(memory_pkg::MaxMessageLength)
-              : cols;
+              : cols - col_index;
             mem_addr <= GridPosToMemAddr(gridX + col_index, gridY + row_index);
             state   <= INIT_REQ;
           end
           INIT_REQ: begin
             if (!mem_busy) begin
               mem_req <= 1'b1;
-              mem_len <= cols;
-              mem_addr <= GridPosToMemAddr(gridX, gridY + row_index);
               state <= DATA;
             end
           end
@@ -151,12 +149,13 @@ module read_box #(
                   read_box_done <= 1'b1;
                   state <= DONE;
                 end
-              end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength)) begin
+              end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength) - 1) begin
                 col_index <= col_index + 16'd1;
                 read_bytes <= 8'b0;
                 state <= GET_MEM_ADDR;
               end else if(mem_data_on_wire) begin
                 col_index <= col_index + 16'd1;
+                read_bytes <= read_bytes + 8'd1;
               end
             end
           end

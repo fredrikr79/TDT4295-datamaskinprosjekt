@@ -82,6 +82,7 @@ module read_cons #(
               state <= MEM_GET_MSG_LENGTH_BOTTOM;
             end
           MEM_GET_MSG_LENGTH_BOTTOM: begin
+              read_cons_r_en <= 1'b1;
               total_bytes[7:0] <= in_fifo;
               state <= MEM_GET_MEM_ADDR;
               if(in_empty) begin
@@ -91,9 +92,9 @@ module read_cons #(
           end
           MEM_GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX + rx_index, gridY);
-            mem_len <= 32'(total_bytes) > memory_pkg::MaxMessageLength
+            mem_len <= 32'(total_bytes - rx_index) > memory_pkg::MaxMessageLength
               ? 16'(memory_pkg::MaxMessageLength)
-              : total_bytes;
+              : (total_bytes - rx_index);
             state <= MEM_INIT_REQ;
           end
           MEM_INIT_REQ: begin
@@ -110,7 +111,7 @@ module read_cons #(
               read_bytes <= read_bytes + 8'd1;
               rx_index <= rx_index + 16'd1;
 
-              if (rx_index >= total_bytes) begin
+              if (rx_index >= total_bytes - 1) begin
                 // Command end
                 read_cons_w_en <= 1'b0;
                 read_cons_done <= 1'b1;
@@ -120,6 +121,7 @@ module read_cons #(
               end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
                 // Transaction timeout, issue new where we finished.
                 read_cons_w_en <= 1'b0;
+                read_bytes <= 8'd0;
                 state <= MEM_GET_MEM_ADDR;
               end else begin
                 read_cons_w_en <= mem_data_on_wire;

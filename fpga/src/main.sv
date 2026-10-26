@@ -124,7 +124,7 @@ module main (
       .sprite_id_found(sprite_id_found),
       .write_sprite_valid(write_sprite_valid)
   );
-/*
+
   spi spi_controller (
       .clk(clk),
       .ck_ss(ck_ss),
@@ -169,6 +169,6 @@ module main (
       // Critical error line
       .error_critical(error_critical)
   );
-*/
+
 endmodule
 

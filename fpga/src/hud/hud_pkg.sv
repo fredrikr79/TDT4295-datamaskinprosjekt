@@ -25,7 +25,7 @@ package hud_pkg;
 
     function automatic void addSprite (
         ref   sprite_inst_entry_t   lut [SpriteLutDepth],
-        logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+        ref   logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
         input sprite_inst_entry_t body
     );
         sprite_id_bitmap[body.id] = 1'b1;
@@ -43,7 +43,7 @@ package hud_pkg;
 
     function automatic void deleteSprite (
         ref   sprite_inst_entry_t   lut [SpriteLutDepth],
-        logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+        ref   logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
         input sprite_lut_id id
     );
         sprite_id_bitmap[id]  = 1'b0;

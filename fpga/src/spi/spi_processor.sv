@@ -489,7 +489,6 @@ module spi_processor #(
   read_box read_box_handler (
     .clk(clk),
     .ck_rst(reset_s),
-    .in_empty(in_empty),
     .in_fifo(in_fifo),
     .in_empty(in_empty),
     .send_read_box(send_read_box),

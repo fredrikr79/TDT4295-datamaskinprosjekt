@@ -6,7 +6,7 @@ module tb_sprite_write;
 
   localparam int ID_WIDTH = ($clog2(hud_pkg::SpriteLutDepth) > 0)
                           ? $clog2(hud_pkg::SpriteLutDepth) : 1;
-  localparam int STREAM_LEN = 10;
+  localparam int STREAM_LEN = 11;
 
   logic clk = 1'b0;
   always #5 clk = ~clk;
@@ -25,6 +25,7 @@ module tb_sprite_write;
   integer request_count = 0;
   integer response_count = 0;
   integer cycles = 0;
+  logic [7:0] response_bytes [2];
   sprite_inst_entry_t expected_body;
 
   always_comb in_fifo = (fifo_ptr < STREAM_LEN) ? stream[fifo_ptr] : 8'hEE;
@@ -54,26 +55,26 @@ module tb_sprite_write;
           $fatal(1, "SPRITE_WRITE body mismatch: got %h expected %h", sprite_req_body, expected_body);
       end
       if (sprite_write_w_en) begin
+        if (response_count > 1) $fatal(1, "SPRITE_WRITE returned too many ID bytes");
+        response_bytes[response_count] = sprite_write_fifo;
         response_count = response_count + 1;
-        if (sprite_write_fifo !== 8'd5)
-          $fatal(1, "SPRITE_WRITE returned ID %0d expected 5", sprite_write_fifo);
       end
     end
   end
 
   initial begin
-    stream[0]=8'h2A;       // memory ID
-    stream[1]=8'h01;       // active
-    stream[2]=8'h12; stream[3]=8'h34; // X
-    stream[4]=8'h56; stream[5]=8'h78; // Y
-    stream[6]=8'h00; stream[7]=8'h20; // width
-    stream[8]=8'h00; stream[9]=8'h10; // height
+    stream[0]=8'h01; stream[1]=8'h2A; // 10-bit memory ID
+    stream[2]=8'h01;                   // active
+    stream[3]=8'h12; stream[4]=8'h34; // X
+    stream[5]=8'h56; stream[6]=8'h78; // Y
+    stream[7]=8'h00; stream[8]=8'h20; // width
+    stream[9]=8'h00; stream[10]=8'h10; // height
 
-    expected_body = {1'b1, 10'd5, 10'h2A, 16'h1234, 16'h5678, 16'h0020, 16'h0010};
+    expected_body = {1'b1, 10'h205, 10'h12A, 16'h1234, 16'h5678, 16'h0020, 16'h0010};
 
     repeat (3) @(negedge clk);
     ck_rst = 1'b0;
-    sprite_available_id = 5;
+    sprite_available_id = 10'h205;
     sprite_id_found = 1'b1;
     send_sprite_write = 1'b1;
 
@@ -86,7 +87,11 @@ module tb_sprite_write;
     repeat (1) @(negedge clk);
 
     if (request_count != 1) $fatal(1, "SPRITE_WRITE request count %0d expected 1", request_count);
-    if (response_count != 1) $fatal(1, "SPRITE_WRITE ID response count %0d expected 1", response_count);
+    if (response_count != 2)
+      $fatal(1, "SPRITE_WRITE ID response count %0d expected 2", response_count);
+    if (response_bytes[0] !== 8'h02 || response_bytes[1] !== 8'h05)
+      $fatal(1, "SPRITE_WRITE ID response %02h%02h expected 0205",
+             response_bytes[0], response_bytes[1]);
 
     $display("PASS tb_sprite_write");
     $finish;

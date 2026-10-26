@@ -86,9 +86,9 @@ module write_cons #(
           end
           MEM_GET_MEM_ADDR: begin
             mem_addr <= GridPosToMemAddr(gridX + tx_index, gridY);
-            mem_len <= 32'(total_bytes) > memory_pkg::MaxMessageLength
+            mem_len <= 32'(total_bytes - tx_index) > memory_pkg::MaxMessageLength
               ? 16'(memory_pkg::MaxMessageLength)
-              : total_bytes;
+              : (total_bytes - tx_index);
             state <= MEM_INIT_REQ;
           end
           MEM_INIT_REQ: begin
@@ -105,7 +105,7 @@ module write_cons #(
               written_bytes <= written_bytes + 8'd1;
               tx_index <= tx_index + 16'd1;
 
-              if (tx_index >= total_bytes) begin
+              if (tx_index >= total_bytes - 1) begin
                 // Command end
                 write_cons_r_en <= 1'b0;
                 write_cons_done <= 1'b1;
@@ -115,6 +115,7 @@ module write_cons #(
               end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
                 // Transaction timeout, issue new where we finished.
                 write_cons_r_en <= 1'b0;
+                written_bytes <= 8'd0;
                 state <= MEM_GET_MEM_ADDR;
               end else begin
                 write_cons_r_en <= mem_data_on_wire;

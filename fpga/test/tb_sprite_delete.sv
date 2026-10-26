@@ -11,38 +11,40 @@ module tb_sprite_delete;
   logic [7:0] in_fifo;
   logic sprite_delete_done, sprite_delete_r_en, sprite_req_valid;
   sprite_inst_entry_t sprite_req_body;
-  logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
+  logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap = '0;
 
-  logic [7:0] stream [0:0];
+  logic [7:0] stream [2];
   integer fifo_ptr = 0;
   integer request_count = 0;
   integer cycles = 0;
 
-  always_comb in_fifo = (fifo_ptr == 0) ? stream[0] : 8'hEE;
+  always_comb in_fifo = (fifo_ptr < 2) ? stream[fifo_ptr] : 8'hEE;
   always @(posedge clk) begin
     if (ck_rst) fifo_ptr <= 0;
-    else if (sprite_delete_r_en && fifo_ptr == 0)
-      fifo_ptr <= 1;
+    else if (sprite_delete_r_en && fifo_ptr < 2)
+      fifo_ptr <= fifo_ptr + 1;
   end
 
   sprite_delete dut (
     .clk(clk), .ck_rst(ck_rst), .send_sprite_delete(send_sprite_delete),
     .in_fifo(in_fifo), .sprite_delete_done(sprite_delete_done),
     .sprite_delete_r_en(sprite_delete_r_en), .sprite_req_valid(sprite_req_valid),
-    .sprite_req_body(sprite_req_body)
+    .sprite_req_body(sprite_req_body), .sprite_id_bitmap(sprite_id_bitmap)
   );
 
   always @(posedge clk) begin
     #1;
     if (!ck_rst && sprite_req_valid) begin
       request_count = request_count + 1;
-      if (sprite_req_body.id !== 10'd7)
-        $fatal(1, "DELETE ID mismatch: got %0d expected 7", sprite_req_body.id);
+      if (sprite_req_body.id !== hud_pkg::sprite_lut_id'(10'h107))
+        $fatal(1, "DELETE ID mismatch: got %0d expected 263", sprite_req_body.id);
     end
   end
 
   initial begin
-    stream[0] = 8'd7;
+    stream[0] = 8'h01;
+    stream[1] = 8'h07;
+    sprite_id_bitmap[10'h107] = 1'b1;
     repeat (3) @(negedge clk);
     ck_rst = 1'b0;
     send_sprite_delete = 1'b1;

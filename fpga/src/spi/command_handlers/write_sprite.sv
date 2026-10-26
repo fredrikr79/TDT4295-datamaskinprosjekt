@@ -54,7 +54,7 @@ module write_sprite #(
         // Fetch target memory address
         case (state)
           MEM_START: begin
-            if (32'(next_id) >= hud_pkg::SpriteMemDepth) begin
+            if (32'(next_id) > hud_pkg::SpriteMemDepth-1) begin
               error_valid <= 1'b1;
               error_code <= RESOURCE_EXHAUSTED_ERROR;
             end else begin
@@ -80,9 +80,9 @@ module write_sprite #(
             // The signal is delayed one cycle in the SPI controller.
             if (!mem_busy) begin
               mem_req <= 1'b1;
-              mem_len <= 32'(total_bytes) > memory_pkg::MaxMessageLength
+              mem_len <= 32'(total_bytes - tx_index) > memory_pkg::MaxMessageLength
                 ? 16'(memory_pkg::MaxMessageLength)
-                : total_bytes;
+                : total_bytes - tx_index;
               state   <= MEM_DATA;
             end
           end
@@ -93,10 +93,9 @@ module write_sprite #(
               written_bytes <= written_bytes + 8'd1;
               tx_index <= tx_index + 16'd1;
 
-              if (tx_index >= total_bytes) begin
+              if (tx_index >= total_bytes - 1) begin
                 // Clean up transaction state
                 write_sprite_r_en <= 1'b0;
-                mem_addr <= mem_addr + 32'(mem_len);
                 written_bytes <= 8'd0;
                 tx_index <= 16'd0;
                 write_sprite_valid <= 1'b1;
@@ -104,8 +103,9 @@ module write_sprite #(
                 state <= MEM_RETURN_TOP;
 
               end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
-                mem_addr <= mem_addr + memory_pkg::MaxMessageLength;
+                mem_addr <= mem_addr + 32'(memory_pkg::MaxMessageLength);
                 write_sprite_r_en <= 1'b0;
+                written_bytes <= 8'd0;
                 state <= MEM_INIT_REQ;
               end
             end else if (!mem_busy && mem_data_on_wire) begin
@@ -128,6 +128,7 @@ module write_sprite #(
           end
           MEM_DONE: begin
             // Simply wait one cycle for done signal to be processed.
+            mem_addr <= mem_addr + 32'(mem_len);
             state <= MEM_START;
           end
           default: ;

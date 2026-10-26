@@ -149,6 +149,7 @@ module tb_read_box;
     if (req_count != BOX_HEIGHT)
       $fatal(1, "READ_BOX expected %0d row requests, got %0d", BOX_HEIGHT, req_count);
 
+    expected_addr = GridPosToMemAddr(16'h0001, 16'h0002);
     if (req_addr[0] !== expected_addr)
       $fatal(1, "READ_BOX row 0 address %08h expected %08h", req_addr[0], expected_addr);
     expected_addr = GridPosToMemAddr(16'h0001, 16'h0003);

@@ -39,6 +39,7 @@ module write_box #(
     DONE
   } w_box_states_e;
 
+  logic [7:0] written_bytes = 8'b0;
   logic [15:0] row_index, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
@@ -112,7 +113,7 @@ module write_box #(
           GET_MEM_ADDR: begin
             mem_len <= 32'(cols) > memory_pkg::MaxMessageLength
               ? 16'(memory_pkg::MaxMessageLength)
-              : cols;
+              : cols - col_index;
             mem_addr <= GridPosToMemAddr(gridX + col_index, gridY + row_index);
             state <= INIT_REQ;
           end
@@ -152,7 +153,7 @@ module write_box #(
                     write_box_done <= 1'b1;
                     state <= DONE;
                   end
-                end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength)) begin
+                end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength) - 1) begin
                   // Memory needs to end transaction
                   col_index <= col_index + 16'd1;
                   written_bytes <= 8'b0;

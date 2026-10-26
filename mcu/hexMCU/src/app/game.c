@@ -12,6 +12,7 @@
 #include "hud.h"                    /* sprites; PX_BYTES, HUD_CLEAR, RGB565 */
 #include "font.h"
 #include "text.h"
+#include "funny_man.h"
 
 /* tuning */
 #define PROBE_LEN       100u
@@ -131,6 +132,7 @@ static bool load_poll(void)
 static struct {
     uint32_t sync_seen;         /* SYNC count we last started a frame at */
     int32_t  cx, cy;            /* cursor position, follows the mouse    */
+    input_t  keys;              /* latest input, for held keys in run_frame */
 } run;
 
 /* State machine for run, handels if we are showing menu or doing other actions. */
@@ -192,6 +194,7 @@ static void room_enter(void)
     run.cx = (scr->width  - CURSOR_SIZE) / 2;
     run.cy = (scr->height - CURSOR_SIZE) / 2;
     hud_setup();
+    player_init(100, 100);      /* start position for the room */
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -203,7 +206,7 @@ static void run_frame(uint32_t n)
     hud_sprite_move(&cursor, (int16_t)run.cx, (int16_t)run.cy);   /* hud_poll sends it */
 
     switch (run_state) {
-    case RS_SIM:  /* do sim */  break;
+    case RS_SIM:  player_frame(&run.keys, n); break;
     case RS_MENU: /* do menu */ break;
     }
 }
@@ -215,6 +218,7 @@ static void run_poll(void)
     input_t in;
     input_take(&in);
     /* input_log(&in); */
+    run.keys = in;              /* held keys are "down right now", so the latest copy is enough */
     run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - CURSOR_SIZE);
     run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - CURSOR_SIZE);
 

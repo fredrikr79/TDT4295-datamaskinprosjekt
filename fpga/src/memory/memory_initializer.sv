@@ -12,7 +12,7 @@ module memory_initializer (
     output logic [7:0] write
 );
 
-  localparam int NInitTransactions = 10;
+  localparam int NInitTransactions = 1;
   localparam int TransactionCount  = NInitTransactions > 1 ? $clog2(NInitTransactions) : 0;
   typedef struct {
     memory_pkg::transaction_e transaction;
@@ -22,13 +22,12 @@ module memory_initializer (
   } memory_meta_data_t;
 
   localparam memory_meta_data_t InitTransactions[NInitTransactions] = '{
-      default: '{
-          transaction: memory_pkg::NONE,
+      '{
+          transaction: memory_pkg::WRITE_ENABLE,
           address: 31'b0,
           length: 0,
           write_data: '{default: 'h00}
       }
-  // TODO: make init transactions
   };
   logic [TransactionCount-1:0] i_current_transactions;
   memory_pkg::message_length_t current_byte_written;

@@ -15,10 +15,16 @@ package spi_pck;
 
   // KNOWN COMMANDS
   typedef enum bit [3:0] {
-    UNSET = 0000,
-    ECHO = 0001,
-    INFO = 0002,
-    FAILED = 0003
+    UNSET       = 0000,
+    ECHO        = 0001,
+    INFO        = 0002,
+    WRITE_CONS  = 0003,
+    READ_CONS   = 0004,
+    WRITE_BOX   = 0005,
+    READ_BOX    = 0006,
+    START_SIM   = 0007,
+    STOP_SIM    = 0008,
+    FAILED      = 0015
   } opcode_e;
 
 endpackage

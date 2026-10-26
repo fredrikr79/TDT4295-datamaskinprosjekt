@@ -9,6 +9,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/fpga.c
     ${APP_ROOT}/src/app/frame_sync.c
     ${APP_ROOT}/src/app/game.c
+    ${APP_ROOT}/src/app/player.c
     ${APP_ROOT}/src/app/usb_input.c
     ${APP_ROOT}/src/app/render/hud.c
     ${APP_ROOT}/src/app/render/font.c

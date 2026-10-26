@@ -4,6 +4,8 @@
 #include <stdbool.h>
 
 #include "fpga.h"
+#include "rooms.h"
+#include "player.h"
 #include "platform.h"
 #include "log.h"
 #include "frame_sync.h"
@@ -17,7 +19,8 @@
 /* tuning */
 #define PROBE_LEN       100u
 #define PROBE_RETRY_MS  200u
-#define FIRST_ROOM      0u
+#define FIRST_ROOM_X    0u
+#define FIRST_ROOM_Y    0u
 #define CURSOR_SIZE     8
 #define CURSOR_COLOUR   RGB565(255, 255, 255)
 #define TEST_FONT       font_kiwisoda
@@ -50,8 +53,20 @@ static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
 static uint32_t session;            /* the FPGA session we drew into    */
 
-static uint16_t room = FIRST_ROOM;  /* the room on the FPGA / being loaded */
-static uint16_t next_room;          /* where the door leads: loaded after SAVE */
+static int room_x = FIRST_ROOM_X;   /* the x-coordinate of the current room */
+static int room_y = FIRST_ROOM_Y;   /* the y-coordinate of the current room */
+static int next_room_x;             /* the x-coordinate of the next room */
+static int next_room_y;             /* the y-coordinate of the next room */
+
+static bool receiving_room_from_fpga = false;
+static bool sending_room_from_fpga = false;
+
+static player_t player;
+
+static portal_t portals[MAX_PORTALS] = {0};
+
+static uint8_t room_tiles[ROOM_X*ROOM_Y] = {0};
+static uint8_t *box;
 
 static void run_enter(void);
 static void room_enter(void);
@@ -85,8 +100,10 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err);
  * Done callbacks set `failed` on any error; that triggers a resync. */
 static void save_start(void)
 {
-    LOG_INFO("saving room %u", room);
+    LOG_INFO("saving room %d, %d", room_x, room_y);
+    receiving_room_from_fpga = true;
     /* TODO: reset save progress */
+    read_room_from_fpga(room_tiles);
     go(S_SAVE);
 }
 
@@ -97,20 +114,28 @@ static void save_resume(void)
     go(S_SAVE);
 }
 
+/* Change variable to indicate that all the data from the FPGA has be received */
+void save_finish(void)
+{
+    receiving_room_from_fpga = false;
+}
+
 /* Returns true once everything is saved and no commands are in flight. */
 static bool save_poll(void)
 {
-    /* TODO */
-    return true;
+    return !receiving_room_from_fpga;
 }
 
 /* LOAD: scene for `room` -> FPGA
  * Done callbacks set `failed` on any error; that triggers a resync. */
 static void load_start(void)
 {
-    LOG_INFO("loading room %u", room);
+    LOG_INFO("loading room %d, %d", room_x, room_y);
+    sending_room_from_fpga = true;
     /* TODO: reset load progress */
     room_enter();
+    read_room(room_x, room_y, room_tiles);
+    send_room_to_fpga(room_tiles);
     go(S_LOAD);
 }
 
@@ -121,11 +146,16 @@ static void load_resume(void)
     go(S_LOAD);
 }
 
+/* Change variable to indicate that all the data has been sendt to the FPGA */
+void load_finish(void)
+{
+    sending_room_from_fpga = false;
+}
+
 /* Returns true once the scene is loaded and no commands are in flight. */
 static bool load_poll(void)
 {
-    /* TODO */
-    return true;
+    return !sending_room_from_fpga;
 }
 
 /* RUN: the game itself  */
@@ -201,7 +231,23 @@ static void room_enter(void)
 static void run_frame(uint32_t n)
 {
     (void)n;
-    /* TODO: update + draw. Walking through a door: game_change_room(to). */
+
+    update_player_position(0, 0, player, box);
+    fpga_cmd_read_sim_box(  // TODO: Use the new command
+        next_velocity_box(player), box, 25*25
+    );
+    
+    int overlap = pos_in_portal(player.x, player.y, portals);
+    if (overlap != -1)
+    {
+        player.promised_exit = (uint8_t) overlap;
+        game_change_room(
+            portals[overlap].dest_x,
+            portals[overlap].dest_y
+        );
+    }
+    
+    /* TODO: update + draw */
 
     hud_sprite_move(&cursor, (int16_t)run.cx, (int16_t)run.cy);   /* hud_poll sends it */
 
@@ -233,10 +279,11 @@ static void run_poll(void)
 
 /* Leave the current room: save it, then load `to`.
  * TODO: let RUN's in-flight commands finish before saving. */
-void game_change_room(uint16_t to)
+void game_change_room(int to_x, int to_y)
 {
     if (state != S_RUN) return;
-    next_room = to;
+    next_room_x = to_x;
+    next_room_y = to_y;
     save_start();
 }
 
@@ -304,7 +351,13 @@ void game_poll(void)
     case S_INFO_WAIT:
         break;                   /* the done callback moves us on */
     case S_SAVE:
-        if (save_poll()) { room = next_room; load_start(); }
+        if (save_poll())
+        {
+            save_room(room_x, room_y, room_tiles);
+            room_x = next_room_x;
+            room_y = next_room_y;
+            load_start();
+        }
         break;
     case S_LOAD:
         if (load_poll()) go(S_RUN);

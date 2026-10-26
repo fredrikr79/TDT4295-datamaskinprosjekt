@@ -36,6 +36,15 @@ module main (
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
 
+  // Sim running
+  logic sim_running = 1'b0;
+
+  // Memory signals
+  logic mem_busy, mem_data_on_wire, mem_toggle;
+  logic [31:0] mem_addr;
+  logic [7:0] mem_len, mem_in, mem_out;
+  memory_pkg::transaction_e mem_transaction;
+
   localparam int unsigned NumLayers = 3;
   localparam int unsigned LayerCells = 0;
   localparam int unsigned LayerGol = 1;
@@ -104,7 +113,20 @@ module main (
       .out_almost_empty(out_almost_empty),
       .out_empty(out_empty),
       .in_almost_full(in_almost_full),
-      .in_full(in_full)
+      .in_full(in_full),
+
+      // Sim running
+      .sim_running(sim_running),
+
+      // Memory module fall-through signals
+      .mem_busy(mem_busy),
+      .mem_data_on_wire(mem_data_on_wire),
+      .mem_toggle(mem_toggle),
+      .mem_addr(mem_addr),
+      .mem_len(mem_len),
+      .mem_in(mem_in),
+      .mem_out(mem_out),
+      .mem_transaction(mem_transaction)
   );
 
 endmodule

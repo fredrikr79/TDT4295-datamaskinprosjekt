@@ -16,7 +16,8 @@ module tb_read_cons;
   logic send_read_cons = 1'b0;
   logic mem_busy = 1'b1;
   logic [7:0] in_fifo, mem_out;
-  logic [7:0] read_cons_fifo, mem_len;
+  logic [7:0] read_cons_fifo;
+  logic [15:0] mem_len;
   logic read_cons_done, read_cons_w_en, read_cons_r_en, mem_req;
   logic [31:0] mem_addr;
 
@@ -68,7 +69,7 @@ module tb_read_cons;
   initial begin
     stream[0] = 8'h00; stream[1] = 8'h0A;
     stream[2] = 8'h00; stream[3] = 8'h14;
-    stream[4] = READ_LEN[7:0];
+    stream[4] = 8'(READ_LEN);
     response_bytes[0] = 8'hA1; response_bytes[1] = 8'hB2;
     mem_out = 8'h00;
 
@@ -115,7 +116,7 @@ module tb_read_cons;
     expected_addr = GridPosToMemAddr(16'h000A, 16'h0014);
     if (mem_addr !== expected_addr)
       $fatal(1, "READ_CONS address %08h, expected %08h", mem_addr, expected_addr);
-    if (mem_len !== READ_LEN[7:0]) $fatal(1, "READ_CONS length mismatch");
+    if (mem_len !== 16'(READ_LEN)) $fatal(1, "READ_CONS length mismatch");
     if (received_count != READ_LEN)
       $fatal(1, "READ_CONS received %0d bytes, expected %0d", received_count, READ_LEN);
     if (received[0] !== 8'hA1 || received[1] !== 8'hB2)

@@ -1,10 +1,10 @@
 module sprite_write #(
 
 )(
-    input wire clk, ck_rst, send_sprite_write,
+    input wire clk, ck_rst, send_sprite_write, sprite_id_found,
     input logic [7:0] in_fifo,
     input logic [$clog2(hud_pkg::SpriteLutDepth)-1:0] sprite_available_id,
-    output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done, sprite_req_valid, sprite_id_found,
+    output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done, sprite_req_valid,
     output logic [7:0] sprite_write_fifo,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );

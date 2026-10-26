@@ -21,7 +21,8 @@ module tb_read_box;
   logic mem_data_on_wire = 1'b0;
   logic send_read_box = 1'b0;
   logic mem_busy = 1'b1;
-  logic [7:0] in_fifo, mem_out = 8'h00, read_box_fifo, mem_len;
+  logic [7:0] in_fifo, mem_out = 8'h00, read_box_fifo;
+  logic [15:0] mem_len;
   logic read_box_done, read_box_w_en, read_box_r_en, mem_req;
   logic [31:0] mem_addr;
 
@@ -29,7 +30,7 @@ module tb_read_box;
   logic [7:0] response_bytes [0:TOTAL_BYTES-1];
   logic [7:0] received [0:TOTAL_BYTES-1];
   logic [31:0] req_addr [0:BOX_HEIGHT-1];
-  logic [7:0] req_len [0:BOX_HEIGHT-1];
+  logic [15:0] req_len [0:BOX_HEIGHT-1];
   integer fifo_ptr = 0;
   integer received_count = 0;
   integer req_count = 0;
@@ -153,7 +154,7 @@ module tb_read_box;
     if (req_addr[1] !== expected_addr)
       $fatal(1, "READ_BOX row 1 address %08h expected %08h", req_addr[1], expected_addr);
 
-    if (req_len[0] !== ROW_BYTES[7:0] || req_len[1] !== ROW_BYTES[7:0])
+    if (req_len[0] !== 16'(ROW_BYTES) || req_len[1] !== 16'(ROW_BYTES[7:0]))
       $fatal(1, "READ_BOX row length should be %0d for inclusive cols=%0d; saw %0d and %0d",
              ROW_BYTES, BOX_WIDTH, req_len[0], req_len[1]);
 

@@ -17,7 +17,8 @@ module tb_write_sprite_upload;
   logic send_write_sprite = 1'b0;
   logic mem_busy = 1'b1;
   logic [7:0] in_fifo;
-  logic [7:0] write_sprite_fifo, mem_len, mem_in;
+  logic [7:0] write_sprite_fifo, mem_in;
+  logic [15:0] mem_len;
   logic write_sprite_done, write_sprite_r_en, write_sprite_w_en;
   logic mem_req, write_sprite_valid;
   logic [31:0] mem_addr;
@@ -112,7 +113,7 @@ module tb_write_sprite_upload;
     repeat (1) @(negedge clk);
 
 
-    if (mem_len !== PAYLOAD_LEN[7:0]) $fatal(1, "WRITE_SPRITE length mismatch");
+    if (mem_len !== 16'(PAYLOAD_LEN)) $fatal(1, "WRITE_SPRITE length mismatch");
     if (payload_count != PAYLOAD_LEN)
       $fatal(1, "WRITE_SPRITE payload count %0d expected %0d", payload_count, PAYLOAD_LEN);
     if (payload_seen[0] !== 8'hCA || payload_seen[1] !== 8'hFE)

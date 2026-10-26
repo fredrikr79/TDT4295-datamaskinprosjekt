@@ -16,7 +16,8 @@ module tb_write_cons;
   logic send_write_cons = 1'b0;
   logic mem_busy = 1'b1;
   logic [7:0] in_fifo;
-  logic [7:0] mem_len, mem_in;
+  logic [7:0] mem_in;
+  logic [15:0] mem_len;
   logic write_cons_done, write_cons_r_en, mem_req;
   logic [31:0] mem_addr;
 
@@ -107,7 +108,7 @@ module tb_write_cons;
     expected_addr = GridPosToMemAddr(16'h000A, 16'h0014);
     if (mem_addr !== expected_addr)
       $fatal(1, "WRITE_CONS address %08h, expected %08h", mem_addr, expected_addr);
-    if (mem_len !== PAYLOAD_LEN[7:0])
+    if (mem_len !== 16'(PAYLOAD_LEN))
       $fatal(1, "WRITE_CONS length %0d, expected %0d", mem_len, PAYLOAD_LEN);
     if (payload_count != PAYLOAD_LEN)
       $fatal(1, "WRITE_CONS payload samples %0d, expected %0d", payload_count, PAYLOAD_LEN);

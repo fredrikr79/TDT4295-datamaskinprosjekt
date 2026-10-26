@@ -45,10 +45,10 @@ module main (
   logic [7:0] mem_len, mem_in, mem_out;
   memory_pkg::transaction_e mem_transaction;
 
-  localparam int unsigned NumLayers = 3;
+  localparam int unsigned NumLayers  = 3;
   localparam int unsigned LayerCells = 0;
-  localparam int unsigned LayerGol = 1;
-  localparam int unsigned LayerHud = 2;
+  localparam int unsigned LayerGol   = 1;
+  localparam int unsigned LayerHud   = 2;
 
   layer_pkg::layer_px_t layers[NumLayers];
 
@@ -98,7 +98,15 @@ module main (
   );
 
   // HUD sprites LUT declaration
-  hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth];
+  hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth];
+
+  hud_pkg::sprite_op_e sprite_req_op;
+  wire sprite_req_valid, sprite_id_found, write_sprite_valid;
+  wire [7:0] sprite_mem_id;
+  hud_pkg::sprite_inst_entry_t sprite_req_body;
+  wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
+  wire [$clog2(hud_pkg::SpriteLutDepth)-1:0] sprite_available_id;
+
   hud hud_controller (
       .clk(clk),
       .req_valid(sprite_req_valid),

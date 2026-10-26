@@ -7,8 +7,8 @@ module write_cons #(
     send_write_cons,
     mem_busy,
     input logic [7:0] in_fifo,
-    output logic [7:0] mem_len,
-    mem_in,
+    output logic [15:0] mem_len,
+    output logic [7:0] mem_in,
     output logic write_cons_done,
     write_cons_r_en,
     mem_req,
@@ -21,7 +21,7 @@ module write_cons #(
   import mem_driver_pkg::*;
   import memory_pkg::*;
 
-  logic [7:0] tx_index = 8'd0;
+  logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
   mem_states_e state = START;
@@ -29,16 +29,16 @@ module write_cons #(
   always_ff @(posedge clk) begin
 
     if (ck_rst) begin
-      tx_index <= 8'd0;
+      tx_index <= 16'd0;
       write_cons_done <= 1'b0;
       write_cons_r_en <= 1'b0;
       state <= START;
     end else begin
       write_cons_r_en <= 1'b0;
       write_cons_done <= 1'b0;
-      mem_req      <= 1'b0;
+      mem_req         <= 1'b0;
 
-      if(send_write_cons) begin
+      if (send_write_cons) begin
         // Fetch target memory address
         case (state)
           START: begin
@@ -66,7 +66,7 @@ module write_cons #(
             state <= GET_MSG_LENGTH;
           end
           GET_MSG_LENGTH: begin
-            mem_len <= in_fifo;
+            mem_len <= 16'(in_fifo);
             state   <= GET_MEM_ADDR;
           end
           GET_MEM_ADDR: begin
@@ -77,25 +77,25 @@ module write_cons #(
             // The signal is delayed one cycle in the SPI controller.
             if (!mem_busy) begin
               mem_req <= 1'b1;
-              state <= DATA;
+              state   <= DATA;
             end
           end
           DATA: begin
-            if(mem_data_on_wire) begin
+            if (mem_data_on_wire) begin
               write_cons_r_en <= 1'b1;
             end
             // Read N bytes from in_queue to mem_in
             if (write_cons_r_en) begin
               // Capture data once write_cons is visible to fifo.
-              mem_in <= in_fifo;
-              tx_index <= tx_index + 8'd1;
-              if(mem_data_on_wire) begin
+              mem_in   <= in_fifo;
+              tx_index <= tx_index + 16'd1;
+              if (mem_data_on_wire) begin
                 write_cons_r_en <= 1'b1;
               end
             end else if (!mem_busy) begin
               if (tx_index >= mem_len) begin
                 write_cons_done <= 1'b1;
-                tx_index <= 8'd0;
+                tx_index <= 16'd0;
                 state <= DONE;
               end
             end
@@ -104,7 +104,7 @@ module write_cons #(
             // Simply wait one cycle for done signal to be processed.
             state <= START;
           end
-          default:;
+          default: ;
         endcase
       end
     end

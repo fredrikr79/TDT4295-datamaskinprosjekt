@@ -9,7 +9,7 @@ module read_box #(
     input logic [7:0] mem_out,
     in_fifo,
     output logic [7:0] read_box_fifo,
-    mem_len,
+    output logic [15:0] mem_len,
     output logic read_box_done,
     read_box_w_en,
     read_box_r_en,
@@ -38,7 +38,7 @@ module read_box #(
     DONE
   } r_box_states_e;
 
-  logic [15:0] row_index, col_index = 8'd0;
+  logic [15:0] row_index, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
 
@@ -47,22 +47,22 @@ module read_box #(
   always_ff @(posedge clk) begin
 
     if (ck_rst) begin
-      col_index <= 8'd0;
-      row_index <= 8'd0;
+      col_index     <= 16'd0;
+      row_index     <= 16'd0;
       read_box_done <= 1'b0;
       read_box_w_en <= 1'b0;
       read_box_r_en <= 1'b0;
       read_box_fifo <= 8'd0;
       mem_req       <= 1'b0;
-      state <= START;
+      state         <= START;
 
     end else begin
       read_box_w_en <= 1'b0;
       read_box_r_en <= 1'b0;
       read_box_done <= 1'b0;
-      mem_req        <= 1'b0;
+      mem_req       <= 1'b0;
 
-      if(send_read_box) begin
+      if (send_read_box) begin
         case (state)
           START: begin
             read_box_r_en <= 1'b1;
@@ -113,26 +113,26 @@ module read_box #(
               mem_req <= 1'b1;
               mem_len <= cols;
               mem_addr <= GridPosToMemAddr(gridX, gridY + row_index);
-              state   <= DATA;
+              state <= DATA;
             end
           end
           DATA: begin
-            if(!mem_busy && mem_data_on_wire) begin
+            if (!mem_busy && mem_data_on_wire) begin
               read_box_fifo <= mem_out;
               read_box_w_en <= 1'b1;
 
-              if (col_index >= cols-1) begin
+              if (col_index >= cols - 1) begin
                 col_index <= 16'b0;
 
                 if (row_index < rows - 1) begin
-                    row_index <= row_index + 8'd1;
-                    state <= GET_MEM_ADDR;
+                  row_index <= row_index + 16'd1;
+                  state <= GET_MEM_ADDR;
                 end else begin
-                    row_index <= 16'd0;
-                    read_box_done <= 1'b1;
-                    state <= DONE;
+                  row_index <= 16'd0;
+                  read_box_done <= 1'b1;
+                  state <= DONE;
                 end
-              end else if(mem_data_on_wire) begin
+              end else if (mem_data_on_wire) begin
                 col_index <= col_index + 16'd1;
               end
             end
@@ -141,7 +141,7 @@ module read_box #(
             // Simply wait one cycle for done signal to be processed.
             state <= START;
           end
-          default:;
+          default: ;
         endcase
       end
     end

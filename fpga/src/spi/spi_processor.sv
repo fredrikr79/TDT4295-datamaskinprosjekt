@@ -20,7 +20,7 @@ module spi_processor #(
     write_sprite_valid,
     output logic [7:0] out_fifo,
     mem_in,
-    mem_len,
+    output logic [15:0] mem_len,
     output logic [31:0] mem_addr,
     output spi_pck::opcode_e opcode,
     output memory_pkg::transaction_e mem_transaction,
@@ -151,7 +151,7 @@ module spi_processor #(
 
 
   // Mem transaction len mux
-  logic [7:0] read_cons_mem_len,
+  logic [15:0] read_cons_mem_len,
     write_cons_mem_len,
     read_box_mem_len,
     write_box_mem_len,

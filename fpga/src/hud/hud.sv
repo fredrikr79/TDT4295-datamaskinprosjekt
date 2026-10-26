@@ -22,7 +22,7 @@ always_comb begin
 
     for (int i = 0; i < SpriteLutDepth; i++) begin
         if(!sprite_id_bitmap[i] && !found) begin
-            sprite_available_id = i;
+            sprite_available_id = 8'(i);
             found = 1'b1;
         end
     end

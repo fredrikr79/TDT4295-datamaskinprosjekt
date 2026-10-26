@@ -8,7 +8,7 @@ module write_box #(
     mem_busy,
     input logic [7:0] in_fifo,
     output logic [7:0] mem_in,
-    mem_len,
+    output logic [15:0] mem_len,
     output logic write_box_done,
     write_box_r_en,
     mem_req,
@@ -35,7 +35,7 @@ module write_box #(
     DONE
   } w_box_states_e;
 
-  logic [15:0] row_index, col_index = 8'd0;
+  logic [15:0] row_index, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
 
@@ -44,18 +44,18 @@ module write_box #(
   always_ff @(posedge clk) begin
 
     if (ck_rst) begin
-      col_index <= 8'd0;
-      row_index <= 8'd0;
+      col_index      <= 16'd0;
+      row_index      <= 16'd0;
       write_box_done <= 1'b0;
       write_box_r_en <= 1'b0;
       mem_req        <= 1'b0;
-      state <= START;
+      state          <= START;
     end else begin
       write_box_r_en <= 1'b0;
       write_box_done <= 1'b0;
       mem_req        <= 1'b0;
 
-      if(send_write_box) begin
+      if (send_write_box) begin
         case (state)
           START: begin
             write_box_r_en <= 1'b1;
@@ -114,15 +114,15 @@ module write_box #(
               if (mem_data_on_wire) begin
                 write_box_r_en <= 1'b1;
               end
-              if(write_box_r_en) begin
+              if (write_box_r_en) begin
                 mem_in <= in_fifo;
 
                 // Read N bytes from in_queue to mem_in
-                if (col_index >= cols - 1) begin // include final boundary
+                if (col_index >= cols - 1) begin  // include final boundary
                   col_index <= 16'd0;
                   write_box_r_en <= 1'b0;
 
-                  if(row_index < rows - 1) begin
+                  if (row_index < rows - 1) begin
                     row_index <= row_index + 16'd1;
                     state <= GET_MEM_ADDR;
                   end else begin
@@ -141,7 +141,7 @@ module write_box #(
             // Simply wait one cycle for done signal to be processed.
             state <= START;
           end
-          default:;
+          default: ;
         endcase
       end
     end

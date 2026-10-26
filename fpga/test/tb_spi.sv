@@ -336,7 +336,7 @@ module tb_spi;
     mcu_write_byte(8'hAA);
 
     // Let the FPGA's TX handshake develop.
-    repeat (4) @(posedge sck_src);
+    repeat (3) @(posedge sck_src);
 
     $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS", $time);
 
@@ -434,7 +434,7 @@ module tb_spi;
     mcu_write_byte(8'hAA);
 
     // Let the FPGA's TX handshake develop.
-    repeat (4) @(posedge sck_src);
+    repeat (3) @(posedge sck_src);
 
     $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS", $time);
 
@@ -523,7 +523,7 @@ module tb_spi;
     mcu_write_byte(8'hAA);
 
     // Let the FPGA's TX handshake develop.
-    repeat (4) @(posedge sck_src);
+    repeat (3) @(posedge sck_src);
 
     $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS", $time);
 

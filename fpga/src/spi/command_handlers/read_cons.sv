@@ -77,7 +77,7 @@ module read_cons #(
             state <= GET_MSG_LENGTH;
           end
           GET_MSG_LENGTH: begin
-            totalBytes <= in_fifo;
+            total_bytes <= in_fifo;
             mem_len <= in_fifo > memory_pkg::MaxMessageLength
             ? memory_pkg::MaxMessageLength
             : in_fifo;

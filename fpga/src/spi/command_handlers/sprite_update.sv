@@ -8,11 +8,13 @@ module sprite_update #(
     sprite_update_r_en,
     sprite_req_valid,
     error_valid,
+    in_empty,
     output logic [7:0] error_code,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
 
 import hud_pkg::*;
+import spi_pck::*;
 
 typedef enum bit [3:0] {
     START,
@@ -88,7 +90,7 @@ always_ff @(posedge clk) begin
                     end
                 end
                 EXECUTE: begin
-                    if(!sprite_id_bitmap[id]) begin
+                    if(!sprite_id_bitmap[param_id]) begin
                         error_valid <= 1'b1;
                         error_code <= UNKNOWN_IDENTIFIER_ERROR;
                     end else begin

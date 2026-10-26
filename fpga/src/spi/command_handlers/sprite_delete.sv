@@ -2,6 +2,7 @@ module sprite_delete #(
 
 )(
     input wire clk, ck_rst, send_sprite_delete,
+    input logic in_empty,
     input logic [7:0] in_fifo,
     input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output logic sprite_delete_done,
@@ -13,6 +14,7 @@ module sprite_delete #(
 );
 
 import hud_pkg::*;
+import spi_pck::*;
 
 
 typedef enum bit [1:0] {
@@ -48,7 +50,7 @@ always_ff @(posedge clk) begin
                 end
             end
             EXECUTE: begin
-                if(!sprite_id_bitmap[id]) begin
+                if(!sprite_id_bitmap[param_id]) begin
                     error_valid <= 1'b1;
                     error_code <= UNKNOWN_IDENTIFIER_ERROR;
                 end else begin

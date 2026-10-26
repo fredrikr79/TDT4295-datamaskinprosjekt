@@ -14,6 +14,7 @@ module write_sprite #(
     mem_req,
     write_sprite_valid,
     error_valid,
+    in_empty,
     output logic [7:0] write_sprite_fifo,
     mem_in,
     error_code,
@@ -29,7 +30,7 @@ module write_sprite #(
   logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
-  mem_states_e state = START;
+  mem_driver_pkg::mem_states_e state = START;
 
   logic [$clog2(SpriteMemDepth)-1:0] next_id = 0;
 

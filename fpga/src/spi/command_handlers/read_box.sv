@@ -6,14 +6,17 @@ module read_box #(
     mem_data_on_wire,
     send_read_box,
     mem_busy,
+    input logic in_empty,
     input logic [7:0] mem_out,
     in_fifo,
     output logic [7:0] read_box_fifo,
+    error_code,
     output logic [15:0] mem_len,
     output logic read_box_done,
     read_box_w_en,
     read_box_r_en,
     mem_req,
+    error_valid,
     output logic [31:0] mem_addr
 );
 
@@ -34,6 +37,7 @@ module read_box #(
     GET_HEIGHT_TOP,
     GET_HEIGHT_BOTTOM,
     GET_MEM_ADDR,
+    INIT_REQ,
     DATA,
     DONE
   } r_box_states_e;

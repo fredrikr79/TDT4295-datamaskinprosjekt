@@ -172,20 +172,36 @@ module spi_processor #(
   end
 
   // Sprite LUT & Bitmap write request mux
-  sprite_inst_entry_t sprite_w_body, sprite_u_body, sprite_d_body;
+  hud_pkg::sprite_inst_entry_t sprite_w_body, sprite_u_body, sprite_d_body;
   logic sprite_w_valid, sprite_u_valid, sprite_d_valid;
   assign sprite_req_valid = sprite_w_valid | sprite_u_valid | sprite_d_valid;
 
   // ERROR detection
+  logic write_cons_error_valid,
+    read_cons_error_valid,
+    write_box_error_valid,
+    read_box_error_valid,
+    write_sprite_error_valid,
+    sprite_write_error_valid,
+    sprite_update_error_valid,
+    sprite_delete_error_valid;
+
+  logic [7:0] write_cons_error_code,
+    read_cons_error_code,
+    write_box_error_code,
+    read_box_error_code,
+    write_sprite_error_code,
+    sprite_write_error_code,
+    sprite_update_error_code,
+    sprite_delete_error_code;
+
   always_ff @(posedge clk) begin
     case (opcode)
       ECHO: begin
-        error_code <= echo_error_code;
-        error_valid <= echo_error_valid;
+        // No implemented error detection for echo
       end
       INFO: begin
-        error_code <= info_error_code;
-        error_valid <= info_error_valid;
+        // No implemented error detection for info
       end
       WRITE_CONS: begin
         error_code <= write_cons_error_code;
@@ -220,12 +236,10 @@ module spi_processor #(
         error_valid <= sprite_delete_error_valid;
       end
       START_SIM: begin
-        error_code <= start_sim_error_code;
-        error_valid <= start_sim_error_valid;
+        // No error detection for START_SIM
       end
       STOP_SIM: begin
-        error_code <= stop_sim_error_code;
-        error_valid <= stop_sim_error_valid;
+        // No error detection for STOP_SIM
       end
       default: begin
         if (state == ST_BUSY) begin
@@ -429,14 +443,13 @@ module spi_processor #(
       .out_full(out_full),
       .info_done(info_done),
       .info_w_en(info_w_en),
-      .send_info(send_info),
-      .error_valid(info_error_valid),
-      .error_code(info_error_code)
+      .send_info(send_info)
   );
 
   write_cons write_cons_cmd_processor (
       .clk(clk),
       .ck_rst(reset_s),
+      .in_empty(in_empty),
       .send_write_cons(send_write_cons),
       .mem_data_on_wire(mem_data_on_wire),
       .mem_busy(mem_busy),
@@ -454,6 +467,7 @@ module spi_processor #(
   read_cons read_cons_cmd_processor (
       .clk(clk),
       .ck_rst(reset_s),
+      .in_empty(in_empty),
       .send_read_cons(send_read_cons),
       .mem_data_on_wire(mem_data_on_wire),
       .in_fifo(in_fifo),
@@ -473,6 +487,7 @@ module spi_processor #(
   read_box read_box_handler (
     .clk(clk),
     .ck_rst(reset_s),
+    .in_empty(in_empty),
     .in_fifo(in_fifo),
     .read_box_fifo(read_box_fifo),
     .read_box_done(read_box_done),
@@ -491,6 +506,7 @@ module spi_processor #(
   write_box write_box_handler (
     .clk(clk),
     .ck_rst(reset_s),
+    .in_empty(in_empty),
     .in_fifo(in_fifo),
     .write_box_done(write_box_done),
     .write_box_r_en(write_box_r_en),
@@ -507,6 +523,7 @@ module spi_processor #(
   write_sprite write_sprite_cmd_processor (
       .clk(clk),
       .ck_rst(reset_s),
+      .in_empty(in_empty),
       .mem_data_on_wire(mem_data_on_wire),
       .send_write_sprite(send_write_sprite),
       .mem_busy(mem_busy),
@@ -527,6 +544,7 @@ module spi_processor #(
   sprite_write sprite_write_cmd_processor (
       .clk(clk),
       .ck_rst(reset_s),
+      .in_empty(in_empty),
       .send_sprite_write(send_sprite_write),
       .sprite_write_done(sprite_write_done),
       .in_fifo(in_fifo),
@@ -544,6 +562,7 @@ module spi_processor #(
   sprite_update sprite_update_cmd_processor (
       .clk(clk),
       .ck_rst(reset_s),
+      .in_empty(in_empty),
       .send_sprite_update(send_sprite_update),
       .sprite_update_done(sprite_update_done),
       .sprite_update_r_en(sprite_update_r_en),
@@ -557,6 +576,7 @@ module spi_processor #(
   sprite_delete sprite_delete_cmd_processor (
       .clk(clk),
       .ck_rst(reset_s),
+      .in_empty(in_empty),
       .send_sprite_delete(send_sprite_delete),
       .sprite_delete_done(sprite_delete_done),
       .sprite_delete_r_en(sprite_delete_r_en),

@@ -102,16 +102,17 @@ module spi #(
     tx_error_valid,
     processor_error_valid;
 
+  spi_pck::error_event_t error_event;
   assign error_event.valid = error_critical  |
                              fsm_error_valid |
                              rx_error_valid  |
                              tx_error_valid  |
                              processor_error_valid;
 
-  logic [7:0] fsm_error_valid,
-    rx_error_valid,
-    tx_error_valid,
-    processor_error_valid;
+  logic [7:0] fsm_error_code,
+    rx_error_code,
+    tx_error_code,
+    processor_error_code;
 
   always_ff @(posedge clk) begin
     if (error_critical)

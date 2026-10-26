@@ -32,18 +32,18 @@ package spi_pck;
   } opcode_e;
 
   typedef enum bit [7:0] {
-    NO_ERROR                  = E0,
-    MISSING_PARAMETER_ERROR   = E1,
-    TOO_MANY_PARAMETERS_ERROR = E2,
-    ILLEGAL_VALUE_ERROR       = E3,
-    RUNTIME_ERROR             = E4,
-    MEMORY_ERROR              = E5,
-    UNKNOWN_IDENTIFIER_ERROR  = E6,
-    RESOURCE_EXHAUSTED_ERROR  = E7,
-    ILLEGAL_STATE_ERROR       = E8,
-    UNKNOWN_COMMAND_ERROR     = E9,
-    CRITICAL_ERROR            = EA,
-    UNKNOWN_ERROR             = EF
+    NO_ERROR                  = 8'hE0,
+    MISSING_PARAMETER_ERROR   = 8'hE1,
+    TOO_MANY_PARAMETERS_ERROR = 8'hE2,
+    ILLEGAL_VALUE_ERROR       = 8'hE3,
+    RUNTIME_ERROR             = 8'hE4,
+    MEMORY_ERROR              = 8'hE5,
+    UNKNOWN_IDENTIFIER_ERROR  = 8'hE6,
+    RESOURCE_EXHAUSTED_ERROR  = 8'hE7,
+    ILLEGAL_STATE_ERROR       = 8'hE8,
+    UNKNOWN_COMMAND_ERROR     = 8'hE9,
+    CRITICAL_ERROR            = 8'hEA,
+    UNKNOWN_ERROR             = 8'hEF
   } error_codes_e;
 
   typedef struct packed {

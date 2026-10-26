@@ -139,16 +139,16 @@ A table of all error codes and their corresponding error codes are listed below:
 |         ERROR NAME         | ERROR CODE |  Action / Severity      |
 |----------------------------|------------|-------------------------|
 | NO_ERROR                   |     E0     | None                    |
-| CRITICAL_ERROR             |     EA     | Requires reset          |
 | MISSING_PARAMETER_ERROR    |     E1     | Reissue command         |
-| RESOURCE_EXHAUSTED_ERROR   |     E2     | Free unused resources   |
-| TOO_MANY_PARAMETERS_ERROR  |     E3     | Review request setup    |
-| ILLEGAL_VALUE_ERROR        |     E4     | Change request params   |
-| RUNTIME_ERROR              |     E5     | Review FPGA logic       |
-| MEMORY_ERROR               |     E6     | Requires reset          |
-| ILLEGAL_STATE_ERROR        |     E7     | Reissue command         |
-| UNKNOWN_IDENTIFIER_ERROR   |     E8     | Allocate resource       |
+| TOO_MANY_PARAMETERS_ERROR  |     E2     | Review request setup    |
+| ILLEGAL_VALUE_ERROR        |     E3     | Change request params   |
+| RUNTIME_ERROR              |     E4     | Review FPGA logic       |
+| MEMORY_ERROR               |     E5     | Requires reset          |
+| UNKNOWN_IDENTIFIER_ERROR   |     E6     | Allocate resource       |
+| RESOURCE_EXHAUSTED_ERROR   |     E7     | Free unused resources   |
+| ILLEGAL_STATE_ERROR        |     E8     | Reissue command         |
 | UNKNOWN_COMMAND_ERROR      |     E9     | Review request opcode   |
+| CRITICAL_ERROR             |     EA     | Requires reset          |
 | UNKNOWN_ERROR              |     EF     | Review FPGA logic       |
 
 ### Undetected faults

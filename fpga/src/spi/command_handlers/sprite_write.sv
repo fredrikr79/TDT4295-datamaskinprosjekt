@@ -9,13 +9,15 @@ module sprite_write #(
         sprite_write_done,
         sprite_req_valid,
         sprite_id_found,
-        error_code,
+        error_valid,
+        in_empty,
     output logic [7:0] sprite_write_fifo,
         error_code,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
 
 import hud_pkg::*;
+import spi_pck::*;
 
 typedef enum bit [3:0] {
     START,

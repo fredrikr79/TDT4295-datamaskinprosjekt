@@ -6,12 +6,15 @@ module write_cons #(
     mem_data_on_wire,
     send_write_cons,
     mem_busy,
+    input logic in_empty,
     input logic [7:0] in_fifo,
+    mem_in,
+    error_code,
     output logic [15:0] mem_len,
-    output logic [7:0] mem_in,
     output logic write_cons_done,
     write_cons_r_en,
     mem_req,
+    error_valid,
     output logic [31:0] mem_addr
 );
 
@@ -24,7 +27,7 @@ module write_cons #(
   logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
-  mem_states_e state = START;
+  mem_driver_pkg::mem_states_e state = START;
 
   always_ff @(posedge clk) begin
 

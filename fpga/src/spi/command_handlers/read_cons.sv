@@ -6,14 +6,17 @@ module read_cons #(
     mem_data_on_wire,
     send_read_cons,
     mem_busy,
+    in_empty,
     input logic [7:0] mem_out,
     in_fifo,
     output logic [7:0] read_cons_fifo,
-    output logic [15:0]    mem_len,
+    error_code,
+    output logic [15:0] mem_len,
     output logic read_cons_done,
     read_cons_w_en,
     read_cons_r_en,
     mem_req,
+    error_valid,
     output logic [31:0] mem_addr
 );
 
@@ -26,7 +29,7 @@ module read_cons #(
   logic [15:0] rx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
-  mem_states_e state = START;
+  mem_driver_pkg::mem_states_e state = START;
 
   always_ff @(posedge clk) begin
 

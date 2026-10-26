@@ -6,12 +6,15 @@ module write_box #(
     mem_data_on_wire,
     send_write_box,
     mem_busy,
+    input logic in_empty,
     input logic [7:0] in_fifo,
     output logic [7:0] mem_in,
+    error_code,
     output logic [15:0] mem_len,
     output logic write_box_done,
     write_box_r_en,
     mem_req,
+    error_valid,
     output logic [31:0] mem_addr
 );
 

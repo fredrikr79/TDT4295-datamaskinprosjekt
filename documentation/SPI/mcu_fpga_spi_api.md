@@ -17,22 +17,22 @@ Issue first CMD
 ```
 
 ## Commands
-|      NAME        |      PAYLOAD                            |           RETURNS                                    |  OPCODE  |  OPCODE HEX  | IMPLEMENTED |
-|------------------|-----------------------------------------|------------------------------------------------------|----------|--------------|-------------|
-|0.  UNSET         | Issued by FPGA                          |                                                      |  0000    |      0       |             |
-|1.  ECHO          | [B1][B2] .. [BN]                        |  [B1][B2]...[BN]                                     |  0001    |      1       |yes          |
-|2.  INFO          | VOID                                    |  [screenW 2B][screenH 2B][buffSize 2B][sessionID 4B] |  0010    |      2       |yes          |
-|3.  WRITE_CONS    | [X][Y][N]                               |  VOID                                                |  0011    |      3       |yes          |
-|4.  READ_CONS     | [X][Y][N]                               |  [B1][B2]...[BN]                                     |  0100    |      4       |yes          |
-|5.  WRITE_BOX     | [X1][Y1][w][h]                          |  VOID                                                |  0101    |      5       |yes          |
-|6.  READ_BOX      | [X1][Y1][w][h]                          |  [B1][B2]...[BN]                                     |  0110    |      6       |yes          |
-|7.  WRITE_SPRITE  | [B1][B2] .. [BN]                        |  [memID]                                             |  0111    |      7       |yes          |
-|8.  SPRITE_WRITE  | [memID][active][X 2B][Y 2B][W 2B][H 2B] |  [spriteID]                                          |  1000    |      8       |yes          |
-|9.  SPRITE_UPDATE | [spriteID][active][X 2B][Y 2B]          |  VOID                                                |  1001    |      9       |yes          |
-|10. SPRITE_DELETE | [spriteID]                              |  VOID                                                |  1010    |      A       |yes          |
-|11. START_SIM     | VOID                                    |  VOID                                                |  1011    |      B       |yes          |
-|12. STOP_SIM      | VOID                                    |  VOID                                                |  1100    |      C       |yes          |
-|13. FAILED        | Issued by FPGA                          |  [errorCode]                                         |  1111    |      F       |yes          |
+|      NAME        |      PAYLOAD                               |           RETURNS                                    |  OPCODE  |  OPCODE HEX  | IMPLEMENTED |
+|------------------|--------------------------------------------|------------------------------------------------------|----------|--------------|-------------|
+|0.  UNSET         | Issued by FPGA                             |                                                      |  0000    |      0       |             |
+|1.  ECHO          | [B1][B2] .. [BN]                           |  [B1][B2]...[BN]                                     |  0001    |      1       |yes          |
+|2.  INFO          | VOID                                       |  [screenW 2B][screenH 2B][buffSize 2B][sessionID 4B] |  0010    |      2       |yes          |
+|3.  WRITE_CONS    | [X][Y][N 2B]                               |  VOID                                                |  0011    |      3       |yes          |
+|4.  READ_CONS     | [X][Y][N 2B]                               |  [B1][B2]...[BN]                                     |  0100    |      4       |yes          |
+|5.  WRITE_BOX     | [X1][Y1][w][h]                             |  VOID                                                |  0101    |      5       |yes          |
+|6.  READ_BOX      | [X1][Y1][w][h]                             |  [B1][B2]...[BN]                                     |  0110    |      6       |yes          |
+|7.  WRITE_SPRITE  | [B1][B2] .. [BN]                           |  [memID 2B]                                          |  0111    |      7       |yes          |
+|8.  SPRITE_WRITE  | [memID 2B][active][X 2B][Y 2B][W 2B][H 2B] |  [spriteID 2B]                                       |  1000    |      8       |yes          |
+|9.  SPRITE_UPDATE | [spriteID 2B][active][X 2B][Y 2B]          |  VOID                                                |  1001    |      9       |yes          |
+|10. SPRITE_DELETE | [spriteID 2B]                              |  VOID                                                |  1010    |      A       |yes          |
+|11. START_SIM     | VOID                                       |  VOID                                                |  1011    |      B       |yes          |
+|12. STOP_SIM      | VOID                                       |  VOID                                                |  1100    |      C       |yes          |
+|13. FAILED        | Issued by FPGA                             |  [errorCode]                                         |  1111    |      F       |yes          |
 
 !NB Bytes labeled with the suffix XB signals a multi-byte parameter. E.g X 2B in sprite_write are two bytes constituting a 16-bit X-coordinate.
 

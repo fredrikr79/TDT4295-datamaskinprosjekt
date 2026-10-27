@@ -13,7 +13,9 @@ module info #(
 
   logic [31:0] sessionID = 32'h0F0F0F0F;  // SEED
   logic [3:0] cycle_counter = 4'b0000;
-  wire [79:0] data = {config_pkg::ActiveWidth, config_pkg::ActiveHeight, 16'd1024, sessionID};
+  wire [79:0] data = {
+    16'(config_pkg::ActiveWidth), 16'(config_pkg::ActiveHeight), 16'd1024, sessionID
+  };
 
   // First time issuing INFO command?
   reg locked = 1'b0;

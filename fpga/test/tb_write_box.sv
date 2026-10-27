@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_write_box;
   import config_pkg::*;
@@ -21,14 +22,15 @@ module tb_write_box;
   logic mem_data_on_wire = 1'b0;
   logic send_write_box = 1'b0;
   logic mem_busy = 1'b0;
-  logic [7:0] in_fifo, mem_in, mem_len;
-  logic write_box_done, write_box_r_en, mem_req;
+  logic [7:0] in_fifo, mem_in, error_code;
+  logic [15:0] mem_len;
+  logic write_box_done, write_box_r_en, mem_req, in_empty, error_valid;
   logic [31:0] mem_addr;
 
   logic [7:0] stream [0:STREAM_LEN-1];
   logic [7:0] payload_seen [0:TOTAL_BYTES-1];
   logic [31:0] req_addr [0:BOX_HEIGHT-1];
-  logic [7:0] req_len [0:BOX_HEIGHT-1];
+  logic [15:0] req_len [0:BOX_HEIGHT-1];
   integer fifo_ptr = 0;
   integer payload_count = 0;
   integer req_count = 0;
@@ -50,7 +52,8 @@ module tb_write_box;
     .clk(clk), .ck_rst(ck_rst), .mem_data_on_wire(mem_data_on_wire),
     .send_write_box(send_write_box), .mem_busy(mem_busy), .in_fifo(in_fifo),
     .mem_in(mem_in), .mem_len(mem_len), .write_box_done(write_box_done),
-    .write_box_r_en(write_box_r_en), .mem_req(mem_req), .mem_addr(mem_addr)
+    .write_box_r_en(write_box_r_en), .mem_req(mem_req), .mem_addr(mem_addr),
+    .in_empty(in_empty), .error_code(error_code), .error_valid(error_valid)
   );
 
   // Record row requests after registered outputs have settled.
@@ -95,8 +98,8 @@ module tb_write_box;
     stream[0] = 8'h00; stream[1] = 8'h01; // X = 1
     stream[2] = 8'h00; stream[3] = 8'h02; // Y = 2
 
-    stream[4] = 8'h00; stream[5] = BOX_WIDTH;
-    stream[6] = 8'h00; stream[7] = BOX_HEIGHT;
+    stream[4] = 8'h00; stream[5] = 8'(BOX_WIDTH);
+    stream[6] = 8'h00; stream[7] = 8'(BOX_HEIGHT);
 
     stream[8]  = 8'h10; stream[9]  = 8'h11;
     stream[10] = 8'h20; stream[11] = 8'h21;
@@ -143,12 +146,12 @@ module tb_write_box;
             BOX_HEIGHT, req_count);
 
     for (int r = 0; r < BOX_HEIGHT; r++) begin
-      expected_addr = GridPosToMemAddr(16'h0001, 16'h0002 + r);
+      expected_addr = GridPosToMemAddr(16'h0001, 16'h0002 + 16'(r));
 
       if (req_addr[r] !== expected_addr)
         $fatal(1, "Row %0d address mismatch", r);
 
-      if (req_len[r] !== BOX_WIDTH)
+      if (req_len[r] !== 16'(BOX_WIDTH))
         $fatal(1, "Row %0d length %0d, expected %0d",
               r, req_len[r], BOX_WIDTH);
     end

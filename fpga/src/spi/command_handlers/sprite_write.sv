@@ -1,19 +1,27 @@
 module sprite_write #(
 
 )(
-    input wire clk, ck_rst, send_sprite_write,
+    input wire clk, ck_rst, send_sprite_write, sprite_id_found,
+    input logic in_empty,
     input logic [7:0] in_fifo,
-    input logic [$clog2(hud_pkg::SpriteLutDepth)-1:0] sprite_available_id,
-    output logic sprite_write_r_en, sprite_write_w_en, sprite_write_done, sprite_req_valid, sprite_id_found,
+    input hud_pkg::sprite_lut_id sprite_available_id,
+    output logic sprite_write_r_en,
+        sprite_write_w_en,
+        sprite_write_done,
+        sprite_req_valid,
+        error_valid,
     output logic [7:0] sprite_write_fifo,
+        error_code,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
 
 import hud_pkg::*;
+import spi_pck::*;
 
 typedef enum bit [3:0] {
     START,
-    GET_MEM_ID,
+    GET_MEM_ID_TOP,
+    GET_MEM_ID_BOTTOM,
     GET_ACTIVE,
     GET_X_TOP,
     GET_X_BOTTOM,
@@ -24,13 +32,16 @@ typedef enum bit [3:0] {
     GET_HEIGTH_TOP,
     GET_HEIGTH_BOTTOM,
     EXECUTE,
+    ID_TOP,
+    ID_BOTTOM,
     DONE
 } sprite_write_states_e;
 
 sprite_write_states_e state = START;
 
 logic param_active;
-logic [7:0]  param_id, param_mem_id;
+hud_pkg::sprite_mem_id param_id;
+hud_pkg::sprite_lut_id param_mem_id;
 logic [15:0] param_x, param_y, param_w, param_h;
 logic [31:0] param_mem_addr;
 
@@ -38,7 +49,8 @@ always_ff @(posedge clk) begin
     sprite_write_r_en <= 1'b0;
     sprite_write_w_en <= 1'b0;
     sprite_write_done <= 1'b0;
-    sprite_req_valid    <= 1'b0;
+    sprite_req_valid  <= 1'b0;
+    error_valid       <= 1'b0;
 
     if (ck_rst) begin
         sprite_write_fifo <= 8'd0;
@@ -51,12 +63,22 @@ always_ff @(posedge clk) begin
                 if(sprite_id_found) begin
                     sprite_write_r_en <= 1'b1;
                     param_id <= sprite_available_id;
-                    state <= GET_MEM_ID;
+                    state <= GET_MEM_ID_TOP;
+                end else begin
+                    error_valid <= 1'b1;
+                    error_code <= RESOURCE_EXHAUSTED_ERROR;
                 end
             end
-            GET_MEM_ID: begin
+            GET_MEM_ID_TOP: begin
+                if($bits(hud_pkg::sprite_mem_id) > 8) begin
+                    sprite_write_r_en <= 1'b1;
+                    param_mem_id[$bits(hud_pkg::sprite_mem_id)-1:8] <= in_fifo[$bits(hud_pkg::sprite_mem_id)-9:0];
+                end
+                state <= GET_MEM_ID_BOTTOM;
+            end
+            GET_MEM_ID_BOTTOM: begin
                 sprite_write_r_en <= 1'b1;
-                param_mem_id <= in_fifo;
+                param_mem_id[7:0] <= in_fifo;
                 state <= GET_ACTIVE;
             end
             GET_ACTIVE: begin
@@ -102,6 +124,10 @@ always_ff @(posedge clk) begin
             GET_HEIGTH_BOTTOM: begin
                 param_h[7:0] <= in_fifo;
                 state <= EXECUTE;
+                if(in_empty) begin
+                    error_valid <= 1'b1;
+                    error_code <= MISSING_PARAMETER_ERROR;
+                end
             end
             EXECUTE: begin
                 sprite_req_body <= {
@@ -114,8 +140,18 @@ always_ff @(posedge clk) begin
                     param_h
                 };
                 sprite_req_valid <= 1'b1;
+                state <= ID_TOP;
+            end
+            ID_TOP: begin
+                if($bits(hud_pkg::sprite_lut_id) > 8) begin
+                    sprite_write_w_en <= 1'b1;
+                    sprite_write_fifo <= 8'(param_id[$bits(hud_pkg::sprite_lut_id)-1:8]);
+                end
+                state <= ID_BOTTOM;
+            end
+            ID_BOTTOM: begin
                 sprite_write_w_en <= 1'b1;
-                sprite_write_fifo <= param_id;
+                sprite_write_fifo <= param_id[7:0];
                 sprite_write_done <= 1'b1;
                 state <= DONE;
             end

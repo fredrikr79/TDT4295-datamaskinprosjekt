@@ -28,7 +28,7 @@ Issue first CMD
 |6.  READ_BOX      | [X1][Y1][w][h]                          |  [B1][B2]...[BN]                                     |  0110    |      6       |yes          |
 |7.  WRITE_SPRITE  | [B1][B2] .. [BN]                        |  [memID]                                             |  0111    |      7       |yes          |
 |8.  SPRITE_WRITE  | [memID][active][X 2B][Y 2B][W 2B][H 2B] |  [spriteID]                                          |  1000    |      8       |yes          |
-|9.  SPRITE_UPDATE | [spriteID][memID][active][X 2B][Y 2B]   |  VOID                                                |  1001    |      9       |yes          |
+|9.  SPRITE_UPDATE | [spriteID][active][X 2B][Y 2B]          |  VOID                                                |  1001    |      9       |yes          |
 |10. SPRITE_DELETE | [spriteID]                              |  VOID                                                |  1010    |      A       |yes          |
 |11. START_SIM     | VOID                                    |  VOID                                                |  1011    |      B       |yes          |
 |12. STOP_SIM      | VOID                                    |  VOID                                                |  1100    |      C       |yes          |
@@ -124,8 +124,37 @@ Deleting a sprite instance releases its spriteID for aquisition during a later `
 
 Drives the active high `sim_running` signal to determine if the simulation should be running or freezed. Initially `sim_running` is set to low.
 
-## Failing commands
 
-Failing commands will drive the ACK line low. When the MCU recieves a READY signal from the FPGA, it may consult the ACK line regarding weather the command failed or not. The FPGA will automatically flush the I/O FIFO's and recover to a READY state with no command in the pipeline. If a memory transaction command fails the FPGA makes no guarantee of the state of the memory. However any corrupted memory writes may simply be corrected by a subsequent write to the same memory region. Likewise, START/STOP SIM may simply be reissued, and SPRITE_X commands can be corrected by deleting the attempted entry to ensure its cleared, then attempting a new write. 
+## Error handling
 
+The FPGA may encounter illegal inputs or states when running its core SPI loop or during execution of one of its command handlers. These faults may be detected or go unnoticed. 
 
+### Detected faults
+On some occasions the FPGA can recognize a fault and report the issue to the MCU. The FPGA uses a network of MUX'ed error signals across its submodules to decide upon a single error code. If more than one error occurs at any given point in time, error messages are picked by order of severity.
+
+When an error has been decided upon, the FPGA transitions into the `ST_BUSY` state with `opcode = FAILED`. The FAILED command handler will the write the error code onto the SPI's outgoing FIFO, drive the SPI's `ACK/NACK` line low and transition into the SPI module's `TX` procedure. The MCU will then detect the `READY` signal and the low `ACK/NACK` line and issue a read request in order to read the error code, and do the neccessary actions. 
+
+A table of all error codes and their corresponding error codes are listed below:
+
+|         ERROR NAME         | ERROR CODE |  Action / Severity      |
+|----------------------------|------------|-------------------------|
+| NO_ERROR                   |     E0     | None                    |
+| MISSING_PARAMETER_ERROR    |     E1     | Reissue command         |
+| TOO_MANY_PARAMETERS_ERROR  |     E2     | Review request setup    |
+| ILLEGAL_VALUE_ERROR        |     E3     | Change request params   |
+| RUNTIME_ERROR              |     E4     | Review FPGA logic       |
+| MEMORY_ERROR               |     E5     | Requires reset          |
+| UNKNOWN_IDENTIFIER_ERROR   |     E6     | Allocate resource       |
+| RESOURCE_EXHAUSTED_ERROR   |     E7     | Free unused resources   |
+| ILLEGAL_STATE_ERROR        |     E8     | Reissue command         |
+| UNKNOWN_COMMAND_ERROR      |     E9     | Review request opcode   |
+| CRITICAL_ERROR             |     EA     | Requires reset          |
+| UNKNOWN_ERROR              |     EF     | Review FPGA logic       |
+
+### Undetected faults
+
+If any fault occurs that the FPGA can't detect there are still some remedies present.
+
+If the FPGA get's locked up the MCU implements a timeout mechanism that resets the FPGA. The timeout is 100ms, plenty time for any ongoing command to complete, even with a big memory transaction gated by the rendering engine.
+
+The FPGA cannot detect and report any hidden faults that still returns it to the ready state before the timeout. Such critical errors should be documented and added to detected faults.

@@ -31,4 +31,24 @@ package spi_pck;
     FAILED        = 0015
   } opcode_e;
 
+  typedef enum bit [7:0] {
+    NO_ERROR                  = 8'hE0,
+    MISSING_PARAMETER_ERROR   = 8'hE1,
+    TOO_MANY_PARAMETERS_ERROR = 8'hE2,
+    ILLEGAL_VALUE_ERROR       = 8'hE3,
+    RUNTIME_ERROR             = 8'hE4,
+    MEMORY_ERROR              = 8'hE5,
+    UNKNOWN_IDENTIFIER_ERROR  = 8'hE6,
+    RESOURCE_EXHAUSTED_ERROR  = 8'hE7,
+    ILLEGAL_STATE_ERROR       = 8'hE8,
+    UNKNOWN_COMMAND_ERROR     = 8'hE9,
+    CRITICAL_ERROR            = 8'hEA,
+    UNKNOWN_ERROR             = 8'hEF
+  } error_codes_e;
+
+  typedef struct packed {
+    logic valid;
+    logic [7:0] code;
+  } error_event_t;
+
 endpackage

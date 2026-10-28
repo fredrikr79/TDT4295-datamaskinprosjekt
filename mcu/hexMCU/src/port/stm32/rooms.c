@@ -1,17 +1,19 @@
+#define LOG_TAG "rooms"
+
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "fx_api.h"
 #include "game.h"
-#include "main.h"
 #include "rooms.h"
-#include "app_filex.h"
+#include "storage.h"
+#include "log.h"
 #include "fpga.h"
 
-#define CHECK_SUCCESS() if (status != FX_SUCCESS) Error_Handler()
+/* Room files are DATA_MAX_SIZE (~5 KB): too big for the MCU stack */
+static uint8_t file_data[DATA_MAX_SIZE];
 
-FX_MEDIA media;
-UCHAR media_memory[FX_STM32_SD_DEFAULT_SECTOR_SIZE] = {0};
+#define NAME_LEN 32     /* "save/-1000,-1000.dat" fits */
 
 void decode_room(uint8_t *data, uint32_t data_length, uint8_t *tileIDs)
 {
@@ -67,64 +69,34 @@ void decode_room(uint8_t *data, uint32_t data_length, uint8_t *tileIDs)
   }
 }
 
-void read_room(int x, int y, uint8_t *tileIDs)
+bool read_room(int x, int y, uint8_t *tileIDs)
 {
-  unsigned int status;
-  FX_FILE file;
-  unsigned long bytes_read;
-  uint8_t data[DATA_MAX_SIZE] = {0};
-
-  status = fx_media_open(
-    &media,
-    "HeksSD",
-    fx_stm32_sd_driver,
-    0,
-    (void *) media_memory,
-    sizeof(media_memory)
-  );
-  CHECK_SUCCESS();
+  storage_status_t status;
+  uint32_t bytes_read = 0;
+  uint8_t *data = file_data;
 
   // Open save file is exists, otherwise, open from rom
-  char filename_rom[16] = {0};
-  snprintf(filename_rom, 16, "rom/%d,%d.dat", x, y);
-  char filename_save[16] = {0};
-  snprintf(filename_save, 16, "save/%d,%d.dat", x, y);
-  status = fx_file_open(
-    &media,
-    &file,
-    filename_save,
-    FX_OPEN_FOR_READ
-  );
-  if (FX_SUCCESS != status)
-  {
-    status = fx_file_open(
-      &media,
-      &file,
-      filename_rom,
-      FX_OPEN_FOR_READ
-    );
-    CHECK_SUCCESS();
-  }
+  char filename_rom[NAME_LEN] = {0};
+  snprintf(filename_rom, NAME_LEN, "rom/%d,%d.dat", x, y);
+  char filename_save[NAME_LEN] = {0};
+  snprintf(filename_save, NAME_LEN, "save/%d,%d.dat", x, y);
 
-  // Read open file
-  unsigned long request_size = file.fx_file_current_file_size;
-  if (DATA_MAX_SIZE < file.fx_file_current_file_size) request_size = DATA_MAX_SIZE;
-  status = fx_file_read(
-    &file,
-    data,
-    request_size,
-    &bytes_read
-  );
-  CHECK_SUCCESS();
+  // Read the file (at most DATA_MAX_SIZE bytes)
+  status = storage_read(filename_save, 0, data, DATA_MAX_SIZE, &bytes_read);
+  if (status == STORAGE_NOT_FOUND)
+  {
+    status = storage_read(filename_rom, 0, data, DATA_MAX_SIZE, &bytes_read);
+  }
+  if (status != STORAGE_OK)
+  {
+    LOG_ERR("room %d,%d: %s -- using an empty room", x, y, storage_status_str(status));
+    memset(tileIDs, 0, ROOM_X*ROOM_Y);
+    return false;
+  }
 
   // Decode file data
   decode_room(data, bytes_read, tileIDs);
-
-  status = fx_file_close(&file);
-  CHECK_SUCCESS();
-
-  status = fx_media_close(&media);
-  CHECK_SUCCESS();
+  return true;
 }
 
 void add_data(
@@ -214,65 +186,26 @@ void encode_room(uint8_t *tileIDs, uint8_t *data, unsigned long *data_size)
   );
 }
 
-void save_data(int x, int y, uint8_t *data, unsigned long data_size)
+bool save_data(int x, int y, uint8_t *data, unsigned long data_size)
 {
-  unsigned int status;
-  FX_FILE file;
-
-  status = fx_media_open(
-    &media,
-    "HeksSD",
-    fx_stm32_sd_driver,
-    0,
-    (void *) media_memory,
-    sizeof(media_memory)
-  );
-  CHECK_SUCCESS();
-
-  // Create and open save file
-  char filename[16] = {0};
-  snprintf(filename, 16, "save/%d,%d.dat", x, y);
-  status = fx_file_create(&media,filename);
-  if (status != FX_SUCCESS)
+  // Create or replace the save file
+  char filename[NAME_LEN] = {0};
+  snprintf(filename, NAME_LEN, "save/%d,%d.dat", x, y);
+  storage_status_t status = storage_write(filename, data, (uint32_t)data_size);
+  if (status != STORAGE_OK)
   {
-    if (status == FX_ALREADY_CREATED)
-    {
-      // Delete old save file and create a new one
-      status = fx_file_delete(&media, filename);
-      CHECK_SUCCESS();
-      status = fx_file_create(&media,filename);
-      CHECK_SUCCESS();
-    }
-    else Error_Handler();
+    LOG_ERR("saving room %d,%d: %s", x, y, storage_status_str(status));
+    return false;
   }
-  status = fx_file_open(
-    &media,
-    &file,
-    filename,
-    FX_OPEN_FOR_WRITE
-  );
-  CHECK_SUCCESS();
-
-  status = fx_file_write(
-    &file,
-    data,
-    data_size
-  );
-  CHECK_SUCCESS();
-
-  status = fx_file_close(&file);
-  CHECK_SUCCESS();
-
-  status = fx_media_close(&media);
-  CHECK_SUCCESS();
+  return true;
 }
 
-void save_room(int x, int y, uint8_t *tileIDs)
+bool save_room(int x, int y, uint8_t *tileIDs)
 {
-  uint8_t data[DATA_MAX_SIZE] = {0};
-  uint32_t data_size = 0;
+  uint8_t *data = file_data;
+  unsigned long data_size = 0;
   encode_room(tileIDs, data, &data_size);
-  save_data(x, y, data, data_size);
+  return save_data(x, y, data, data_size);
 }
 
 struct online_room start_online_room(int x, int y, uint8_t *tileIDs)
@@ -314,7 +247,7 @@ void progress_online_room(struct online_room *room, uint8_t *new_ids, uint16_t i
   room->tile_progress += id_length;
 }
 
-void save_online_room(struct online_room *room)
+bool save_online_room(struct online_room *room)
 {
   // Add the last section
   add_data(
@@ -323,30 +256,20 @@ void save_online_room(struct online_room *room)
   );
   room->consecutive = 0;
 
-  save_data(room->x, room->y, room->data, room->data_size);
+  return save_data(room->x, room->y, room->data, room->data_size);
 }
 
-void delete_save(int x, int y)
+bool delete_save(int x, int y)
 {
-  unsigned int status;
-
-  status = fx_media_open(
-    &media,
-    "HeksSD",
-    fx_stm32_sd_driver,
-    0,
-    (void *) media_memory,
-    sizeof(media_memory)
-  );
-  CHECK_SUCCESS();
-
-  char filename[16] = {0};
-  snprintf(filename, 16, "save/%d,%d.dat", x, y);
-  status = fx_file_delete(&media, filename);
-  if (status != FX_SUCCESS && status != FX_NOT_FOUND) Error_Handler();
-
-  status = fx_media_close(&media);
-  CHECK_SUCCESS();
+  char filename[NAME_LEN] = {0};
+  snprintf(filename, NAME_LEN, "save/%d,%d.dat", x, y);
+  storage_status_t status = storage_delete(filename);
+  if (status != STORAGE_OK && status != STORAGE_NOT_FOUND)
+  {
+    LOG_ERR("deleting save %d,%d: %s", x, y, storage_status_str(status));
+    return false;
+  }
+  return true;
 }
 
 void send_next_line(const fpga_cmd_t *prev_cmd, fpga_err_t err)
@@ -418,7 +341,7 @@ int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals)
       portals[i].x < x
       && x < portals[i].x + portals[i].dx
       && portals[i].y < y
-      && x < portals[i].y + portals[i].dy
+      && y < portals[i].y + portals[i].dy
     )
     {
       return i;

@@ -17,10 +17,10 @@
  * | READ_CONS     | 40 | X 2B, Y 2B, N 2B                              | -        | N bytes
  * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | pixels   | -
  * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | pixels
- * | WRITE_SPRITE  | 70 | -                                             | pixels   | memID
- * | SPRITE_WRITE  | 80 | memID, active, X 2B, Y 2B, W 2B, H 2B         | -        | spriteID
- * | SPRITE_UPDATE | 90 | spriteID, active, X 2B, Y 2B                  | -        | -
- * | SPRITE_DELETE | A0 | spriteID                                      | -        | -
+ * | WRITE_SPRITE  | 70 | -                                             | pixels   | memID 2B
+ * | SPRITE_WRITE  | 80 | memID 2B, active, X 2B, Y 2B, W 2B, H 2B      | -        | spriteID 2B
+ * | SPRITE_UPDATE | 90 | spriteID 2B, active, X 2B, Y 2B               | -        | -
+ * | SPRITE_DELETE | A0 | spriteID 2B                                   | -        | -
  * | START_SIM     | B0 | -                                             | -        | -
  * | STOP_SIM      | C0 | -                                             | -        | -
  * ------------------------------------------------------------------------------------------
@@ -122,7 +122,7 @@
 #define FPGA_INFO_BYTES         10u     /* W, H, N: 2 bytes each, SID 4 bytes */
 
 /* Sprite parameters travel inside the command (see struct fpga_cmd). */
-#define FPGA_PARAM_MAX          10u     /* SPRITE_WRITE's, the longest */
+#define FPGA_PARAM_MAX          11u     /* SPRITE_WRITE's, the longest */
 
 /* ACK line at READY, as transport_ready_status() reports it. */
 #define FPGA_STATUS_OK          0u      /* ACK high: the command worked */
@@ -215,7 +215,7 @@ struct fpga_cmd {
 
     /* Carried inside the command, for the sprite commands: their
      * parameters are the payload (tx points here once queued), and their
-     * one-byte answer lands here (fpga_answer_id()). */
+     * two-byte answer lands here (fpga_answer_id()). */
     bool            param_tx;               /* tx = param            */
     bool            answer_rx;              /* rx = answer           */
     uint8_t         param[FPGA_PARAM_MAX];
@@ -224,7 +224,10 @@ struct fpga_cmd {
 
 /* The memID (WRITE_SPRITE) or spriteID (SPRITE_WRITE) a command got back.
  * Valid in its done callback when err == FPGA_ERR_NONE. */
-static inline uint8_t fpga_answer_id(const fpga_cmd_t *cmd) { return cmd->answer[0]; }
+static inline uint16_t fpga_answer_id(const fpga_cmd_t *cmd)
+{
+    return (uint16_t)((cmd->answer[0] << 8) | cmd->answer[1]);     /* MSB first */
+}
 
 /* len is always the buffer size in bytes. */
 fpga_cmd_t fpga_cmd_echo(const uint8_t *tx, uint8_t *rx, uint16_t len);
@@ -244,10 +247,10 @@ fpga_cmd_t fpga_cmd_read_box(fpga_box_t box, uint8_t *buf, uint16_t len);
  * sprite_write places an instance and answers its spriteID. Read either
  * with fpga_answer_id(cmd) in the done callback. */
 fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len);
-fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16_t y,
+fpga_cmd_t fpga_cmd_sprite_write(uint16_t mem_id, bool active, uint16_t x, uint16_t y,
                                  uint16_t w, uint16_t h);
-fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y);
-fpga_cmd_t fpga_cmd_sprite_delete(uint8_t sprite_id);
+fpga_cmd_t fpga_cmd_sprite_update(uint16_t sprite_id, bool active, uint16_t x, uint16_t y);
+fpga_cmd_t fpga_cmd_sprite_delete(uint16_t sprite_id);
 
 fpga_cmd_t fpga_cmd_sim_run(bool run);      /* START_SIM / STOP_SIM      */
 

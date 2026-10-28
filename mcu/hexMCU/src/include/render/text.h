@@ -17,11 +17,12 @@
  * The letters are sent by hud_poll(), which also redraws them after a
  * resync or a new FPGA session -- nothing to do here for that.
  *
- * Budget: every different letter image takes FPGA memIDs, which are few
- * (HUD_MEMIDS, about 63 per session): one for a letter up to about 1 KB
- * of pixels (22x22 px), two up to 2 KB, and so on. A sentence uses a
- * memID per DIFFERENT letter, not per letter. Plan the letters a screen
- * shows; a whole alphabet in two sizes won't fit. */
+ * Budget: every different letter image takes FPGA memIDs (HUD_MEMIDS,
+ * 1023 per session): one for a letter up to about 1 KB of pixels
+ * (22x22 px), two up to 2 KB, and so on. A sentence uses a memID per
+ * DIFFERENT letter, not per letter. On the MCU side the letter images
+ * live in RAM (TEXT_ARENA_BYTES), which is the tighter limit on a small
+ * chip -- raise both on the U595. */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -29,9 +30,15 @@
 #include "font.h"
 #include "hud.h"
 
+#ifndef TEXT_MAX_CHARS
 #define TEXT_MAX_CHARS    48u       /* letters per text_t             */
+#endif
+#ifndef TEXT_GLYPH_MAX
 #define TEXT_GLYPH_MAX    96u       /* different letter images in all */
+#endif
+#ifndef TEXT_ARENA_BYTES
 #define TEXT_ARENA_BYTES  (64u * 1024u)   /* their pixels             */
+#endif
 
 typedef struct {
     hud_sprite_t spr[TEXT_MAX_CHARS];

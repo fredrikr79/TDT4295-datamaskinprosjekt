@@ -48,18 +48,19 @@
 #define HUD_CLEAR       0xF81Fu     /* see-through (magenta)             */
 #define RGB565(r, g, b) ((uint16_t)((((r) & 0xF8u) << 8) | (((g) & 0xFCu) << 3) | ((b) >> 3)))
 
-/* memIDs the FPGA has per session (its LUT has 64 entries, 0 = none). */
+/* memIDs the FPGA has per session (its LUT has 1024 entries; assumed
+ * 0 = none, so 1..1023). */
 #ifndef HUD_MEMIDS
-#define HUD_MEMIDS      63u
+#define HUD_MEMIDS      1023u
 #endif
 
 typedef struct hud_image {
     const uint8_t *px;              /* w*h pixels, RGB565 MSB first      */
     uint16_t       w, h;
-    uint8_t        mem_id;          /* first memID, valid when uploaded  */
+    uint16_t       mem_id;          /* first memID, valid when uploaded  */
     uint8_t        state;           /* (hud.c)                           */
-    uint8_t        chunks;          /* WRITE_SPRITEs it takes            */
-    uint8_t        sent, acked;     /* ...submitted / come back OK       */
+    uint16_t       chunks;          /* WRITE_SPRITEs it takes            */
+    uint16_t       sent, acked;     /* ...submitted / come back OK       */
     uint16_t       chunk_bytes;
     struct hud_image *next;
 } hud_image_t;
@@ -73,7 +74,7 @@ typedef struct hud_sprite {
 
     /* what the FPGA has, as far as we know (hud.c) */
     uint8_t      state;
-    uint8_t      id;                /* spriteID, valid when live         */
+    uint16_t     id;                /* spriteID, valid when live         */
     int16_t      s_x, s_y;
     bool         s_visible;
     bool         dirty;             /* an update failed: resend it       */

@@ -59,14 +59,16 @@
 #define FRAME_HZ      30u           /* SYNC pulses: one per finished frame */
 #define FRAME_NS      (1000000000ull / FRAME_HZ)
 
-#define SPRITE_MEM    (256u * 1024u)/* PROTOCOL: bytes of sprite memory    */
-#define MAX_IMAGES    64u           /* memID LUT: memIDs 1 .. MAX_IMAGES-1 */
-#define MAX_SPRITES   256u          /* PROTOCOL: spriteIDs 0 .. 255        */
+/* The real FPGA has 16 MB; memIDs run out long before 2 MB is used
+ * (1023 uploads of at most N-1 bytes). */
+#define SPRITE_MEM    (2u * 1024u * 1024u)  /* bytes of sprite memory      */
+#define MAX_IMAGES    1024u         /* memID LUT: memIDs 1 .. MAX_IMAGES-1 */
+#define MAX_SPRITES   1024u         /* PROTOCOL: spriteIDs 0 .. 1023       */
 
 /* ---- state ------------------------------------------------------------ */
 typedef struct {
     bool     used;
-    uint8_t  mem_id;
+    uint16_t mem_id;
     bool     active;
     uint16_t x, y, w, h;
 } instance_t;
@@ -81,7 +83,7 @@ static struct {
     uint8_t    mem[SPRITE_MEM]; /* sprite images, one after the other       */
     uint32_t   mem_used;
     struct { uint32_t off, len; } image[MAX_IMAGES];   /* [0] = none       */
-    uint8_t    n_images;        /* memIDs handed out: 1 .. n_images         */
+    uint16_t   n_images;        /* memIDs handed out: 1 .. n_images         */
     instance_t sprite[MAX_SPRITES];
 } ff;
 
@@ -206,13 +208,13 @@ static bool expect_fields(const transport_hdr_t *h, uint8_t fields,
 }
 
 /* ---- sprites ------------------------------------------------------------ */
-static bool image_ok(uint8_t mem_id) { return mem_id >= 1 && mem_id <= ff.n_images; }
+static bool image_ok(uint16_t mem_id) { return mem_id >= 1 && mem_id <= ff.n_images; }
 
 static bool sprite_used(unsigned id) { return id < MAX_SPRITES && ff.sprite[id].used; }
 
 /* Bytes of sprite memory from this memID's start to the end: an image
  * that spans several uploads in a row may use all of them. */
-static uint32_t bytes_from(uint8_t mem_id) { return ff.mem_used - ff.image[mem_id].off; }
+static uint32_t bytes_from(uint16_t mem_id) { return ff.mem_used - ff.image[mem_id].off; }
 
 static int32_t write_sprite(const uint8_t *data, uint16_t len, uint8_t *status)
 {
@@ -221,21 +223,22 @@ static int32_t write_sprite(const uint8_t *data, uint16_t len, uint8_t *status)
     if (ff.n_images + 1u >= MAX_IMAGES || ff.mem_used + len > SPRITE_MEM)
         return fail(status, FPGA_FAIL_RESOURCE_EXHAUSTED, "write_sprite");
 
-    uint8_t id = ++ff.n_images;
+    uint16_t id = ++ff.n_images;
     ff.image[id].off = ff.mem_used;
     ff.image[id].len = len;
     memcpy(&ff.mem[ff.mem_used], data, len);
     ff.mem_used += len;
-    answer_bytes(&id, 1);
+    uint8_t ans[2] = { (uint8_t)(id >> 8), (uint8_t)id };     /* MSB first */
+    answer_bytes(ans, 2);
     LOG_DBG("write_sprite: memID %u, %u bytes", id, len);
     return READY_US;
 }
 
 static int32_t sprite_write(const uint8_t *p, uint16_t len, uint8_t *status)
 {
-    if (!param_count(len, 10, status, "sprite_write")) return READY_US;
-    uint8_t mem_id = p[0];
-    uint16_t w = be16(&p[6]), h = be16(&p[8]);
+    if (!param_count(len, 11, status, "sprite_write")) return READY_US;
+    uint16_t mem_id = be16(&p[0]);
+    uint16_t w = be16(&p[7]), h = be16(&p[9]);
     if (!image_ok(mem_id))
         return fail(status, FPGA_FAIL_UNKNOWN_IDENTIFIER, "sprite_write");
     if (w == 0 || h == 0 || (uint32_t)w * h * PIXEL_BYTES > bytes_from(mem_id))
@@ -243,10 +246,10 @@ static int32_t sprite_write(const uint8_t *p, uint16_t len, uint8_t *status)
 
     for (unsigned id = 0; id < MAX_SPRITES; id++) {     /* lowest free ID */
         if (ff.sprite[id].used) continue;
-        ff.sprite[id] = (instance_t){ .used = true, .mem_id = mem_id, .active = p[1] & 1u,
-                                      .x = be16(&p[2]), .y = be16(&p[4]), .w = w, .h = h };
-        uint8_t sid = (uint8_t)id;
-        answer_bytes(&sid, 1);
+        ff.sprite[id] = (instance_t){ .used = true, .mem_id = mem_id, .active = p[2] & 1u,
+                                      .x = be16(&p[3]), .y = be16(&p[5]), .w = w, .h = h };
+        uint8_t ans[2] = { (uint8_t)(id >> 8), (uint8_t)id };
+        answer_bytes(ans, 2);
         return READY_US;
     }
     return fail(status, FPGA_FAIL_RESOURCE_EXHAUSTED, "sprite_write");
@@ -254,23 +257,24 @@ static int32_t sprite_write(const uint8_t *p, uint16_t len, uint8_t *status)
 
 static int32_t sprite_update(const uint8_t *p, uint16_t len, uint8_t *status)
 {
-    if (!param_count(len, 6, status, "sprite_update")) return READY_US;
-    uint8_t id = p[0];
+    if (!param_count(len, 7, status, "sprite_update")) return READY_US;
+    uint16_t id = be16(&p[0]);
     if (!sprite_used(id))
         return fail(status, FPGA_FAIL_UNKNOWN_IDENTIFIER, "sprite_update");
     instance_t *s = &ff.sprite[id];
-    s->active = p[1] & 1u;
-    s->x      = be16(&p[2]);
-    s->y      = be16(&p[4]);
+    s->active = p[2] & 1u;
+    s->x      = be16(&p[3]);
+    s->y      = be16(&p[5]);
     return READY_US;
 }
 
 static int32_t sprite_delete(const uint8_t *p, uint16_t len, uint8_t *status)
 {
-    if (!param_count(len, 1, status, "sprite_delete")) return READY_US;
-    if (!sprite_used(p[0]))
+    if (!param_count(len, 2, status, "sprite_delete")) return READY_US;
+    uint16_t id = be16(&p[0]);
+    if (!sprite_used(id))
         return fail(status, FPGA_FAIL_UNKNOWN_IDENTIFIER, "sprite_delete");
-    memset(&ff.sprite[p[0]], 0, sizeof ff.sprite[0]);  /* all parameters 0 */
+    memset(&ff.sprite[id], 0, sizeof ff.sprite[0]);    /* all parameters 0 */
     return READY_US;
 }
 

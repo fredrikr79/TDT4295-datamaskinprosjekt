@@ -125,7 +125,7 @@ static void image_done(const fpga_cmd_t *cmd, fpga_err_t err)
     if (img->state != IMG_SENDING) return;      /* an attempt that already failed */
 
     if (err == FPGA_ERR_NONE) {
-        uint8_t id = fpga_answer_id(cmd);
+        uint16_t id = fpga_answer_id(cmd);
         if (img->acked++ == 0) img->mem_id = id;            /* first chunk names it */
         if (img->acked == img->chunks) img->state = IMG_UPLOADED;
         return;
@@ -221,7 +221,7 @@ static hud_image_t *next_upload(void)
             img->state = IMG_NO_ROOM;
             continue;
         }
-        img->chunks      = (uint8_t)chunks;
+        img->chunks      = (uint16_t)chunks;
         img->chunk_bytes = max;
         img->sent = img->acked = 0;
         img->state = IMG_SENDING;

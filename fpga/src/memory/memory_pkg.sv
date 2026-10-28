@@ -30,7 +30,7 @@ package memory_pkg;
     state_e next_state;
   } transaction_output_t;
 
-  localparam int unsigned MaxMessageLength = 20;
+  localparam int unsigned MaxMessageLength = 64;
 
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
       MaxMessageLength

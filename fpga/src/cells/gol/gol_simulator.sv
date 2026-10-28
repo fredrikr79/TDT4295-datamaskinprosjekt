@@ -32,7 +32,7 @@ module gol_simulator (
     if (reset) begin
       seeding <= 1'b1;
       seed_count <= '0;
-    end 
+    end
     else if (en && seeding) begin
       seed_count <= seed_count + 1'b1;
       if (seed_count == SeedCountBits'(FrameLen - 1)) seeding <= 1'b0;

@@ -2,7 +2,7 @@ package gol_pkg;
   localparam int unsigned RowLen   = config_pkg::ActiveWidth;   // 640
   localparam int unsigned NumRows  = config_pkg::ActiveHeight;  // 360
   localparam int unsigned FrameLen = RowLen * NumRows;          // 230,400
-  
+
   localparam int unsigned RowDelay = RowLen - 2;  // 638
   localparam int unsigned RingDelay = FrameLen - RowLen - 2;  // 229,758
 

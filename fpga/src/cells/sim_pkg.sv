@@ -40,13 +40,16 @@ package sim_pkg;
   endfunction
 
   // Material IDs
-  localparam material_t MatAir = 4'd0;
-  localparam material_t MatSand = 4'd1;
-  localparam material_t MatWater = 4'd2;
-  localparam material_t MatStone = 4'd3;
-  localparam material_t MatPortal = 4'd4;
-  localparam material_t MatLava = 4'd5;
-  localparam material_t MatAcid = 4'd6;
+  typedef enum material_t {
+    MatAir    = 4'd0,
+    MatStone  = 4'd1,
+    MatSand   = 4'd2,
+    MatWater  = 4'd3,
+    MatLava   = 4'd4,
+    MatAcid   = 4'd5,
+    MatGOL    = 4'd6,
+    MatExplo  = 4'd7
+  } materials_e;
 
   // density: heavier materials sink in lighter ones
   // falls: pulled downward by gravity.

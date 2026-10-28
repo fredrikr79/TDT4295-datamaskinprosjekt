@@ -33,8 +33,13 @@ module psram_model #(
     parameter int unsigned ReadLead = 1,
     // "Linear Burst across die boundary is not supported" -- 8 MiB per die.
     parameter int unsigned DieBytes = 8 * 1024 * 1024,
-    // CS# LOW maximum time: 4 us at 85 C, after which a refresh is missed.
-    parameter realtime TcsmNs = 4000.0,
+    // CS# LOW maximum time: 4 us at 85 C, 1 us at 125 C, after which a refresh
+    // is missed. Override to 1000.0 to check the stricter grade.
+    parameter real TcsmNs = 4000.0,
+    // Real nanoseconds per ck edge. One byte crosses per edge at 50 MHz DDR,
+    // i.e. 100 MB/s, so 10 ns. This is what makes the tCSM check independent of
+    // the enclosing testbench's simulation timescale.
+    parameter real NsPerCkEdge = 10.0,
     // Print every register byte memory_initializer writes. Four CR writes at
     // startup, so it is cheap -- and it is the only way to see what actually
     // landed in CR0/CR1 versus what the init table intended.
@@ -103,7 +108,7 @@ module psram_model #(
   logic [7:0] opcode;
   logic [31:0] addr;
   int unsigned data_idx;
-  realtime cs_fell_at;
+
 
   logic [7:0] dq_drv;
   logic dq_oe;
@@ -155,15 +160,22 @@ module psram_model #(
     // whether extra latency is needed. This part always needs the 2x path.
     rwds_oe = 1'b1;
     rwds_drv = 1'b1;
-    cs_fell_at = $realtime;
+
   end
 
   always @(posedge cs_n) begin
     dq_oe   = 1'b0;
     rwds_oe = 1'b0;
-    if (($realtime - cs_fell_at) > TcsmNs)
-      $fatal(1, "psram_model: CS# low %0t ns exceeds tCSM %0t ns -- refresh would be missed",
-             $realtime - cs_fell_at, TcsmNs);
+    // Measured in ck EDGES, not $realtime. The repo has no timescale, so
+    // simulation time units are whatever the enclosing testbench's clock period
+    // makes them -- the same 84-edge transaction reported 168 "ns" under a
+    // 2-unit clock and 840 ns under a 20-unit one. A tCSM guard that moves with
+    // the testbench cannot catch an over-long burst, which is the one thing it
+    // exists for. One byte crosses the bus per ck edge (50 MHz DDR = 100 MB/s),
+    // so edges convert to real time at a fixed NsPerCkEdge.
+    if ((real'(slot) * NsPerCkEdge) > TcsmNs)
+      $fatal(1, "psram_model: CS# low %0d edges = %0.1f ns exceeds tCSM %0.1f ns -- refresh missed",
+             slot, real'(slot) * NsPerCkEdge, TcsmNs);
   end
 
   always @(posedge ck, negedge ck) begin

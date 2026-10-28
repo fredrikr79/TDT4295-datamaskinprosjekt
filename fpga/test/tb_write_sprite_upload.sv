@@ -4,7 +4,10 @@
 // This is the memory-upload handler named write_sprite. It is distinct from
 // sprite_write, which parses a sprite record for the sprite LUT manager.
 module tb_write_sprite_upload #(
-  parameter int PAYLOAD_LEN = 25
+  // Derived from the burst length so the CHUNKING path stays covered -- a flat
+  // 25 was 2 chunks at MaxMessageLength = 20 but a single transaction at 64.
+  // See the note in tb_write_cons.
+  parameter int PAYLOAD_LEN = 2 * memory_pkg::MaxMessageLength + 5
 );
   import config_pkg::*;
   import mem_driver_pkg::*;

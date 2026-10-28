@@ -31,9 +31,8 @@ package memory_pkg;
   } transaction_output_t;
 
   localparam int unsigned MaxMessageLength = 64;
-
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
-      MaxMessageLength
+      MaxMessageLength + 1
   ) : 1;
 
   typedef logic [MessageLengthRegisterWidth-1:0] message_length_t;
@@ -70,8 +69,9 @@ package memory_pkg;
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
     memory_pkg::message_length_t latency_count;
-    latency_count = 5'(MemoryClockSlowDownFactor)
-                    * (double_latency ? 5'(2 * LatencyCount) : 5'(LatencyCount));
+    latency_count = message_length_t'(MemoryClockSlowDownFactor)
+                    * (double_latency ? message_length_t'(2 * LatencyCount)
+                                      : message_length_t'(LatencyCount));
 
     return amount_of_latency_ticks > latency_count;
   endfunction

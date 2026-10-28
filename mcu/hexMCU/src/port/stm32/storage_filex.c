@@ -29,7 +29,11 @@
 #include "log.h"
 #include "platform.h"
 
-extern SD_HandleTypeDef hsd1;   /* main.c; the FileX SD driver uses it    */
+/* The SD handle; the FileX glue (fx_stm32_sd_driver_glue.c) uses it too.
+ * main.c defines it while CubeMX generates the SDMMC1 init; with "Do Not
+ * Generate Function Call" CubeMX may leave it out. Weak: main.c's wins
+ * when it's there, this one fills in when it isn't. */
+__attribute__((weak)) SD_HandleTypeDef hsd1;
 
 #define PATH_MAX_LEN 64
 

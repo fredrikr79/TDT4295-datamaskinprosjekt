@@ -20,6 +20,7 @@ module vga_phase #(
 
   assign near_frame_end = 32'(coord_y) >= TotalHeight - GuardLines;
 
+  logic line_end;
   logic last_pixel_in_line, last_line_in_blanking;
   assign last_pixel_in_line = 32'(coord_x) == TotalWidth - 1;
   assign last_line_in_blanking = 32'(coord_y) == TotalHeight - 1;

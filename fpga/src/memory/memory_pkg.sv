@@ -82,6 +82,7 @@ package memory_pkg;
   endfunction
 
   localparam bit UseFixedLatency = 0;
+  localparam bit [1:0] BurstLength = 'b00; // burst length of 128 bits
 
 
   // Possible drive strengths
@@ -93,7 +94,7 @@ package memory_pkg;
   // 101:  27 ohm
   // 110:  22 ohm
   // 111:  19 ohm
-  localparam bit [3:0] DriveStrength = 'b000;
+  localparam bit [2:0] DriveStrength = 'b000;
 
   // 1 - single ended clock
   // 0 - differential clock

@@ -42,15 +42,19 @@ module main (
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
   logic [31:0] mem_addr;
-  logic [7:0] mem_len, mem_in, mem_out;
+  logic [15:0]  mem_len;
+  logic [7:0] mem_in, mem_out;
   memory_pkg::transaction_e mem_transaction;
 
-  localparam int unsigned NumLayers = 3;
+  localparam int unsigned NumLayers  = 3;
   localparam int unsigned LayerCells = 0;
-  localparam int unsigned LayerGol = 1;
-  localparam int unsigned LayerHud = 2;
+  localparam int unsigned LayerGol   = 1;
+  localparam int unsigned LayerHud   = 2;
 
   layer_pkg::layer_px_t layers[NumLayers];
+
+  // Critical error detection (unrecoverable errors arising outside the SPI module)
+  wire error_critical;
 
   vga vga_controller (
       .clk(clk),
@@ -104,7 +108,15 @@ module main (
   );
 
   // HUD sprites LUT declaration
-  hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth];
+  hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth];
+
+  hud_pkg::sprite_op_e sprite_req_op;
+  wire sprite_req_valid, sprite_id_found, write_sprite_valid;
+  hud_pkg::sprite_mem_id sprite_mem_id;
+  hud_pkg::sprite_inst_entry_t sprite_req_body;
+  wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
+  hud_pkg::sprite_lut_id sprite_available_id;
+
   hud hud_controller (
       .clk(clk),
       .req_valid(sprite_req_valid),
@@ -169,10 +181,15 @@ module main (
       // Sprite LUT transaction signals
       .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),
+      .sprite_id_bitmap(sprite_id_bitmap),
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
-      .write_sprite_valid(write_sprite_valid)
+      .write_sprite_valid(write_sprite_valid),
+      .write_sprite_mem_id(sprite_mem_id),
+
+      // Critical error line
+      .error_critical(error_critical)
   );
 
 endmodule

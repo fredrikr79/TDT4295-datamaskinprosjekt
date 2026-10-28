@@ -141,15 +141,19 @@ module memory_controller (
   endfunction
 
   always_ff @(posedge clk) begin
-    if (reset) current_transaction <= memory_pkg::NONE;
-    else if (enable
-             && current_state == memory_pkg::IDLE
-           && transaction_toggle != current_transaction_toggle) begin
-      current_transaction <= next_transaction;
-      current_address <= address;
-      current_length <= length;
+    if (reset) begin
+      current_transaction <= memory_pkg::NONE;
+      current_transaction_toggle <= transaction_toggle;
+    end else if (enable && current_state == memory_pkg::IDLE) begin
+      if (transaction_toggle != current_transaction_toggle) begin
+        current_transaction <= next_transaction;
+        current_address <= address;
+        current_length <= length;
+        current_transaction_toggle <= transaction_toggle;
+      end else begin
+        current_transaction <= memory_pkg::NONE;
+      end
     end
-    current_transaction_toggle <= transaction_toggle;
   end
   always @(negedge clk) begin
     if (reset) begin

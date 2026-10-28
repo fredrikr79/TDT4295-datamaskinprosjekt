@@ -1,4 +1,5 @@
-`timescale 1ns/1ps
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
 
 module tb_info;
   import config_pkg::*;
@@ -35,7 +36,7 @@ module tb_info;
   initial begin
     repeat (4) @(negedge clk);
     // The LFSR runs before the first INFO request and locks on send_info.
-    expected_data = {ActiveWidth, ActiveHeight, 16'd1024, dut.sessionID};
+    expected_data = {16'(ActiveWidth), 16'(ActiveHeight), 16'd1024, dut.sessionID};
     out_full = 1'b1;
     send_info = 1'b1;
     repeat (5) begin

@@ -18,7 +18,9 @@ module spi_tx #(
     out_full,
     out_ready,
 
-    output logic tx_r_en
+    output logic tx_r_en,
+    error_valid,
+    output logic [7:0] error_code
 );
 
   import spi_pck::*;

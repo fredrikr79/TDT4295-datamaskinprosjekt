@@ -69,8 +69,9 @@ typedef struct {
      * its simulated timing. */
     void (*poll)(void);
 
-    /* Read the FPGA's 3 status pins (stable while READY is high).
-     * Called from transport_ready_isr(). NULL = always 0 (OK). */
+    /* Read the FPGA's ACK line (stable while READY is high): 0 = ACK
+     * high, the command worked; 1 = ACK low, it failed. Called from
+     * transport_ready_isr(). NULL = always 0 (OK). */
     uint8_t (*read_status)(void);
 
     /* The link is half duplex -- at most ONE transfer is in flight, so one
@@ -92,16 +93,16 @@ transport_status_t transport_init(void);
 void transport_poll(void);
 
 /* ----------------------------------------------------------------------
- * FPGA_READY edge counter + status latch.
+ * FPGA_READY edge counter + ACK latch.
  *
  * Bumped from the EXTI ISR on hardware and from the fake FPGA on the host,
  * so everything above this layer is identical on both. The main loop only
  * ever compares counts -- it never has to catch an edge live.
  *
- * On each edge the ISR also latches the 3 status pins, so the status of
- * the command that READY answers is still there when the main loop looks.
+ * On each edge the ISR also latches the ACK line, so the status of the
+ * command that READY answers is still there when the main loop looks.
  * -------------------------------------------------------------------- */
-#define TRANSPORT_STATUS_MASK  0x07u
+#define TRANSPORT_STATUS_MASK  0x01u   /* 1 = NACK */
 
 void     transport_ready_isr(void);     /* ISR / fake FPGA -> counter */
 uint32_t transport_ready_count(void);   /* main loop only */

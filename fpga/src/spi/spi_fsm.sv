@@ -2,7 +2,16 @@ module spi_fsm #(
 
 ) (
     input spi_pck::opcode_e opcode,
-    input logic reset_s, boot_done, ck_ss_s, clk, in_empty, out_full , proc_done,
+    input logic reset_s,
+    boot_done,
+    ck_ss_s,
+    clk,
+    in_empty,
+    out_full,
+    proc_done,
+    input spi_pck::error_event_t error_event,  // Incoming global error decision
+    output logic error_valid,  // outgoing error proposition
+    output logic [7:0] error_code,
     output spi_pck::state_e state
 );
 
@@ -13,6 +22,11 @@ module spi_fsm #(
 
     if (reset_s) begin
       state <= ST_BOOT;
+
+      if (error_event.valid) begin
+        // Error code owned by SPI_processor
+        state <= ST_FAILED;
+      end
 
     end else begin
       case (state)
@@ -41,22 +55,29 @@ module spi_fsm #(
 
         ST_BUSY: begin
           case (opcode)
-            ECHO: begin
-              if (in_empty && proc_done) begin
-                state <= ST_TX_IDLE;
+            ECHO, INFO, FAILED, READ_CONS, READ_BOX, WRITE_SPRITE, SPRITE_WRITE: begin // Non-void
+              if (proc_done) begin
+                if(in_empty)
+                  state <= ST_TX_IDLE;
+                else begin
+                  error_valid <= 1'b1;
+                  error_code <= TOO_MANY_PARAMETERS_ERROR;
+                end
               end
             end
-            INFO: begin
-              if(in_empty && proc_done) begin
-                state <= ST_TX_IDLE;
+            WRITE_CONS, WRITE_BOX, SPRITE_UPDATE, SPRITE_DELETE, START_SIM, STOP_SIM: begin
+              if(proc_done) begin
+                if(in_empty) begin
+                  state <= ST_READY;
+                end else begin
+                  error_valid <= 1'b1;
+                  error_code <= TOO_MANY_PARAMETERS_ERROR;
+                end
               end
-            end
-            FAILED: begin
-              if(in_empty && proc_done)
-                state <= ST_TX_IDLE;
-            end
+            end // Void
             default: begin
-              state <= ST_FAILED;
+              error_valid <= 1'b1;
+              error_code <= ILLEGAL_STATE_ERROR;
             end
           endcase
         end
@@ -74,7 +95,6 @@ module spi_fsm #(
         end
 
         ST_MEMORY: begin
-          //TODO implement
           state <= ST_READY;
         end
 
@@ -88,6 +108,8 @@ module spi_fsm #(
 
         default: begin
           // Go to fail state handler
+          error_valid <= 1'b1;
+          error_code <= ILLEGAL_STATE_ERROR;
           state <= ST_BUSY;
         end
       endcase

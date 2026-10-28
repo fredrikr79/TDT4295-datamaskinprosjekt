@@ -1,43 +1,63 @@
 /* ======================================================================
  * fpga.h - async, queued command layer for the FPGA link.
  *
- * Commands (opcode in the instruction phase, then):
- * ------------------------------------------------------------------------------------
- * |  NAME         | OP | ADDRESS (32b)  | ALT BYTES       | PAYLOAD        | ANSWER (read)
- * ------------------------------------------------------------------------------------
- * | ECHO          | 01 | -              | -               | [B1]..[BN]     | [B1]..[BN]
- * | Send_line     | 02 | [X][Y]         | [N]      (16b)  | pixels         | -
- * | Read_line     | 03 | [X][Y]         | [N]      (16b)  | -              | pixels
- * | Send_HUD_box  | 04 | [X][Y]         | [W][H]   (32b)  | pixels         | -
- * | Read_HUD_box  | 05 | [X][Y]         | [W][H]   (32b)  | -              | pixels
- * | Send_SIM_box  | 06 | [X][Y]         | [W][H]   (32b)  | pixels         | -
- * | Read_SIM_box  | 07 | [X][Y]         | [W][H]   (32b)  | -              | pixels
- * | Stop_SIM      | 08 | -              | -               | -              | -
- * | Start_SIM     | 09 | -              | -               | -              | -
- * | INFO          | 0A | -              | -               | -              | [W][H][N][SID]
- * ------------------------------------------------------------------------------------
- * Boxes: X,Y is the top-left pixel, W the pixels per row, H the rows. The
- * pixels are one stream, row by row: after W pixels the next row starts,
- * so the last one lands at (X+W-1, Y+H-1). Build boxes with fpga_box().
+ * The protocol is docs/mcu_fpga_spi_api.md (the FPGA team's spec). On the
+ * wire every command is one byte stream: opcode, then the parameters in
+ * the order the spec lists them, then any payload. OCTOSPI carries the
+ * first parameters in its address / alternate-bytes phases where they fit
+ * (x,y and N or W,H), the rest in the data phase -- the FPGA can't tell
+ * the difference, it just sees the bytes in order.
  *
- * Pixels are RGB565, 2 bytes each, MSB first. On the HUD layer 0xF81F
- * (magenta) means "empty": the SIM pixel below shows through.
+ * ------------------------------------------------------------------------------------------
+ * | NAME          | OP | PARAMETERS (all multi-byte fields MSB first)  | PAYLOAD  | ANSWER
+ * ------------------------------------------------------------------------------------------
+ * | ECHO          | 10 | -                                             | B1..BN   | B1..BN
+ * | INFO          | 20 | -                                             | -        | W H N SID
+ * | WRITE_CONS    | 30 | X 2B, Y 2B, N 2B                              | N bytes  | -
+ * | READ_CONS     | 40 | X 2B, Y 2B, N 2B                              | -        | N bytes
+ * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | pixels   | -
+ * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | pixels
+ * | WRITE_SPRITE  | 70 | -                                             | pixels   | memID
+ * | SPRITE_WRITE  | 80 | memID, active, X 2B, Y 2B, W 2B, H 2B         | -        | spriteID
+ * | SPRITE_UPDATE | 90 | spriteID, active, X 2B, Y 2B                  | -        | -
+ * | SPRITE_DELETE | A0 | spriteID                                      | -        | -
+ * | START_SIM     | B0 | -                                             | -        | -
+ * | STOP_SIM      | C0 | -                                             | -        | -
+ * ------------------------------------------------------------------------------------------
+ * CONS and BOX work on the grid (the SIM layer). The HUD is sprites:
+ * WRITE_SPRITE uploads an image once and gives its memID; SPRITE_WRITE
+ * places an instance of it and gives its spriteID; SPRITE_UPDATE moves or
+ * hides it (its image and W,H are fixed); SPRITE_DELETE frees it.
  *
- * INFO answer, MSB first (FPGA_INFO_BYTES in total): W, H, N 16 bits each,
- * SID 32 bits:
- *   W, H  size of the FPGA's screen in pixels
- *   N     size of the FPGA's input FIFO: no command, counting opcode,
- *         address and alt bytes, may be larger than this
- *   SID   session id; a new one means the FPGA restarted
+ * Sprite memory is append-only: every WRITE_SPRITE goes right after the
+ * last one and takes one memID, and nothing can be changed or freed
+ * without resetting the FPGA. An image bigger than one command is several
+ * WRITE_SPRITEs in a row; SPRITE_WRITE then names the first memID and the
+ * whole W x H. memIDs are few (see the spec), spriteIDs many.
+ *
+ * Boxes: X,Y is the top-left pixel, W the pixels per row, H the rows; the
+ * pixels are one stream, row by row, the last one at (X+W-1, Y+H-1). Build
+ * boxes with fpga_box(). Pixels are RGB565, 2 bytes each, MSB first.
+ * 0xF81F (magenta) is see-through in sprites.
+ *
+ * INFO answer, MSB first (FPGA_INFO_BYTES): W, H, N 16 bits, SID 32 bits.
+ *   W, H  screen size in pixels
+ *   N     the FPGA's input buffer: no command, opcode and parameters
+ *         included, may be larger than this
+ *   SID   session id; a new one means the FPGA restarted and its memory
+ *         (grid, sprite images and instances) is gone
  *
  * Every command is WRITE -> wait for FPGA_READY -> and, if it has an
  * answer, READ (READ_OPCODE, turnaround, then the answer bytes). When
- * READY goes high the FPGA also puts a status for that command on three
- * GPIOs (FPGA_STATUS_*); anything but OK fails the command.
+ * READY goes high the FPGA's ACK line says whether the command worked.
+ * Low (NACK): the FPGA has flushed its FIFOs and put a one-byte error code
+ * (fpga_fail_code_t) in the answer FIFO instead; fpga.c reads it, and the
+ * command fails with FPGA_ERR_STATUS -- fpga_fail_code() tells why. What a
+ * failed write left in memory is not known, so write it again.
  *
  * How to use it
  * -------------
- *   1. Build a command:      fpga_cmd_t c = fpga_cmd_read_hud_box(box, buf, len);
+ *   1. Build a command:      fpga_cmd_t c = fpga_cmd_read_box(box, buf, len);
  *      optionally add:       c.done = my_done;  c.ctx = whatever;
  *   2. Queue it:             fpga_submit(&c)
  *        FPGA_OK       queued; it will run and then call c.done
@@ -51,18 +71,20 @@
  *   3. Call fpga_poll() from the main loop. Commands run in the order
  *      they were submitted, one at a time.
  *   4. When a command ends, c.done(cmd, err) is called from fpga_poll()
- *      (main loop, never an interrupt). err == FPGA_ERR_NONE: the rx
- *      buffer holds the answer. Either way both buffers are yours again.
+ *      (main loop, never an interrupt). err == FPGA_ERR_NONE: the answer
+ *      is there -- in your rx buffer, or for the commands that answer with
+ *      an ID, in fpga_answer_id(cmd).
  *
  * Buffers belong to the caller and must stay valid (tx: unchanged) from
  * fpga_submit() until done is called -- DMA uses them directly. The
- * command struct itself is copied, so it can live on the stack.
+ * command struct itself is copied, so it can live on the stack; the sprite
+ * commands' parameters travel inside it.
  *
  * When a command FAILS, every command queued before that failure is
- * cancelled (done with FPGA_ERR_CANCELLED): after a timeout or a bad
- * status the MCU no longer knows where the FPGA is, and later commands
- * may depend on the failed one. Resync, then submit again. Commands that
- * callbacks submit while this happens are kept.
+ * cancelled (done with FPGA_ERR_CANCELLED): after a timeout or a NACK the
+ * MCU no longer knows where the FPGA is, and later commands may depend on
+ * the failed one. Resync, then submit again. Commands that callbacks
+ * submit while this happens are kept.
  *
  * Callbacks may call fpga_submit() and fpga_abort_all(), but not
  * fpga_poll().
@@ -79,26 +101,48 @@
 #define FPGA_QUEUE_LEN          10u
 #endif
 
-/* ---- opcodes -------------------------------------------------------- */
+/* ---- opcodes (spec opcode in the high nibble) ------------------------ */
 #define ECHO_OPCODE             0x10u
-#define INFO_OPCODE             0x20u   /* not agreed on yet */
-#define SEND_LINE_OPCODE        0x30u
-#define READ_LINE_OPCODE        0x40u
-#define SEND_HUD_BOX_OPCODE     0x50u
-#define READ_HUD_BOX_OPCODE     0x60u
-#define SEND_SIM_BOX_OPCODE     0x70u
-#define READ_SIM_BOX_OPCODE     0x80u
-#define STOP_SIM_OPCODE         0x90u
-#define START_SIM_OPCODE        0xA0u
+#define INFO_OPCODE             0x20u
+#define WRITE_CONS_OPCODE       0x30u
+#define READ_CONS_OPCODE        0x40u
+#define WRITE_BOX_OPCODE        0x50u
+#define READ_BOX_OPCODE         0x60u
+#define WRITE_SPRITE_OPCODE     0x70u
+#define SPRITE_WRITE_OPCODE     0x80u
+#define SPRITE_UPDATE_OPCODE    0x90u
+#define SPRITE_DELETE_OPCODE    0xA0u
+#define START_SIM_OPCODE        0xB0u
+#define STOP_SIM_OPCODE         0xC0u
 
 /* The READ step of every command that returns data. The FPGA ignores it
  * (a dummy); it is only there because the HAL and OCTOSPI need one. */
 #define READ_OPCODE             0x00u
 
-#define FPGA_INFO_BYTES         10u      /* W, H, N: 2 bytes each, SID 4 bytes*/
+#define FPGA_INFO_BYTES         10u     /* W, H, N: 2 bytes each, SID 4 bytes */
 
-/* Status GPIOs, valid while READY is high. Only OK is agreed so far. */
-#define FPGA_STATUS_OK          0u
+/* Sprite parameters travel inside the command (see struct fpga_cmd). */
+#define FPGA_PARAM_MAX          10u     /* SPRITE_WRITE's, the longest */
+
+/* ACK line at READY, as transport_ready_status() reports it. */
+#define FPGA_STATUS_OK          0u      /* ACK high: the command worked */
+#define FPGA_STATUS_NACK        1u      /* ACK low: it failed           */
+
+/* The error code the FPGA sends after a NACK (fpga_fail_code()). */
+typedef enum {
+    FPGA_FAIL_UNKNOWN_COMMAND     = 0xE0,
+    FPGA_FAIL_MISSING_PARAMETER   = 0xE1,
+    FPGA_FAIL_TOO_MANY_PARAMETERS = 0xE2,
+    FPGA_FAIL_ILLEGAL_VALUE       = 0xE3,
+    FPGA_FAIL_RUNTIME             = 0xE4,
+    FPGA_FAIL_MEMORY              = 0xE5,
+    FPGA_FAIL_UNKNOWN_IDENTIFIER  = 0xE6,
+    FPGA_FAIL_UNKNOWN_VALUE       = 0xE7,
+    FPGA_FAIL_TIMEOUT             = 0xE8,
+    FPGA_FAIL_RESOURCE_EXHAUSTED  = 0xE9,
+    FPGA_FAIL_INVALID_STATE       = 0xEA,
+    FPGA_FAIL_UNKNOWN             = 0xEF,
+} fpga_fail_code_t;
 
 /* ---- results -------------------------------------------------------- */
 typedef enum {
@@ -106,7 +150,7 @@ typedef enum {
     FPGA_EFULL,         /* queue full, try again when there is space   */
     FPGA_EBUSY,         /* an INFO is already queued                   */
     FPGA_EINVAL,        /* bad arguments (NULL buffer, zero length...) */
-    FPGA_ETOOBIG,       /* command would not fit in the FPGA's FIFO    */
+    FPGA_ETOOBIG,       /* command would not fit in the FPGA's buffer  */
 } fpga_status_t;
 
 typedef enum {
@@ -116,7 +160,7 @@ typedef enum {
     FPGA_ERR_XFER,          /* transfer / DMA error                    */
     FPGA_ERR_XFER_TIMEOUT,  /* transfer never completed                */
     FPGA_ERR_NO_READY,      /* no FPGA_READY in time (FPGA not there?) */
-    FPGA_ERR_STATUS,        /* FPGA reported an error: fpga_ready_status() */
+    FPGA_ERR_STATUS,        /* FPGA answered NACK on the ACK line      */
     FPGA_ERR_MISMATCH,      /* echo came back different; rx holds it   */
     FPGA_ERR_BAD_INFO,      /* INFO answer makes no sense              */
     FPGA_ERR_ABORTED,       /* was running when fpga_abort_all() came  */
@@ -168,27 +212,44 @@ struct fpga_cmd {
     uint8_t         kind;
     fpga_done_fn    done;   /* optional                                  */
     void           *ctx;    /* optional, for done                        */
+
+    /* Carried inside the command, for the sprite commands: their
+     * parameters are the payload (tx points here once queued), and their
+     * one-byte answer lands here (fpga_answer_id()). */
+    bool            param_tx;               /* tx = param            */
+    bool            answer_rx;              /* rx = answer           */
+    uint8_t         param[FPGA_PARAM_MAX];
+    uint8_t         answer[2];
 };
 
-/* len is always the buffer size in bytes. n / box are the header fields
- * exactly as the protocol table above has them. */
+/* The memID (WRITE_SPRITE) or spriteID (SPRITE_WRITE) a command got back.
+ * Valid in its done callback when err == FPGA_ERR_NONE. */
+static inline uint8_t fpga_answer_id(const fpga_cmd_t *cmd) { return cmd->answer[0]; }
+
+/* len is always the buffer size in bytes. */
 fpga_cmd_t fpga_cmd_echo(const uint8_t *tx, uint8_t *rx, uint16_t len);
-
-fpga_cmd_t fpga_cmd_send_line(uint16_t x, uint16_t y, uint16_t n,
-                              const uint8_t *tiles, uint16_t len);
-fpga_cmd_t fpga_cmd_read_line(uint16_t x, uint16_t y, uint16_t n,
-                              uint8_t *buf, uint16_t len);
-
-fpga_cmd_t fpga_cmd_send_hud_box(fpga_box_t box, const uint8_t *tiles, uint16_t len);
-fpga_cmd_t fpga_cmd_read_hud_box(fpga_box_t box, uint8_t *buf, uint16_t len);
-fpga_cmd_t fpga_cmd_send_sim_box(fpga_box_t box, const uint8_t *tiles, uint16_t len);
-fpga_cmd_t fpga_cmd_read_sim_box(fpga_box_t box, uint8_t *buf, uint16_t len);
-
-fpga_cmd_t fpga_cmd_sim_run(bool run);      /* Start_SIM / Stop_SIM      */
 
 /* On success fpga_link_info() holds the answer, and every later submit is
  * checked against its N. Uses a buffer inside fpga.c. */
 fpga_cmd_t fpga_cmd_info(void);
+
+/* Grid memory: n bytes from grid position (x, y) on, or a box. */
+fpga_cmd_t fpga_cmd_write_cons(uint16_t x, uint16_t y, const uint8_t *data, uint16_t n);
+fpga_cmd_t fpga_cmd_read_cons(uint16_t x, uint16_t y, uint8_t *buf, uint16_t n);
+fpga_cmd_t fpga_cmd_write_box(fpga_box_t box, const uint8_t *pixels, uint16_t len);
+fpga_cmd_t fpga_cmd_read_box(fpga_box_t box, uint8_t *buf, uint16_t len);
+
+/* Sprites. write_sprite uploads an image (w*h*2 bytes of pixels, at most
+ * fpga_max_payload(WRITE_SPRITE_OPCODE)) and answers its memID;
+ * sprite_write places an instance and answers its spriteID. Read either
+ * with fpga_answer_id(cmd) in the done callback. */
+fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len);
+fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16_t y,
+                                 uint16_t w, uint16_t h);
+fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y);
+fpga_cmd_t fpga_cmd_sprite_delete(uint8_t sprite_id);
+
+fpga_cmd_t fpga_cmd_sim_run(bool run);      /* START_SIM / STOP_SIM      */
 
 /* Debug console only, hdr exactly as given. raw_write still waits for
  * READY -- every command gets one, and a READY nobody waits for would be
@@ -216,7 +277,11 @@ void          fpga_set_link_info(const fpga_info_t *info);  /* debug / tests */
  * already subtracted. UINT16_MAX while N is not known yet. */
 uint16_t      fpga_max_payload(uint8_t opcode);
 
-uint8_t       fpga_ready_status(void);  /* status pins at the last READY used */
+uint8_t       fpga_ready_status(void);  /* ACK status at the last READY used */
+
+/* The error code that came with the last NACK; 0 if it couldn't be read. */
+uint8_t       fpga_fail_code(void);
+const char   *fpga_fail_str(uint8_t code);
 uint32_t      fpga_ready_used(void);    /* READY edges consumed by commands */
 
 const char   *fpga_err_str(fpga_err_t err);

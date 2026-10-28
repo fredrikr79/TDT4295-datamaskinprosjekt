@@ -2,10 +2,10 @@ module world_loader (
     input wire clk,
     input wire reset,
     output logic                          we,
-    output logic [cell_pkg::AddrBits-1:0] write_addr,
-    output cell_pkg::cell_word_t          data
+    output logic [sim_pkg::AddrBits-1:0] write_addr,
+    output sim_pkg::cell_word_t          data
 );
-  import cell_pkg::*;
+  import sim_pkg::*;
   import spawn_screen_pkg::word_at; // Decides what screen we are loading.
 
   logic [WordXBits-1:0] word_x = '0;

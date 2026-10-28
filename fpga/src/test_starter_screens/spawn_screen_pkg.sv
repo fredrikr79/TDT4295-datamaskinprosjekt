@@ -1,17 +1,17 @@
 package spawn_screen_pkg;
-  import cell_pkg::*;
+  import sim_pkg::*;
 
-  function automatic cell_pkg::material_t material_at(input int unsigned x, input int unsigned y);
+  function automatic sim_pkg::material_t material_at(input int unsigned x, input int unsigned y);
     if (y < 100) return MatAir; // Hardcoded air over 100
     else return MatSand;
   endfunction
 
   // Collect all 8 materials within the word
-  function automatic cell_pkg::cell_word_t word_at(
+  function automatic sim_pkg::cell_word_t word_at(
     input logic [WordXBits-1:0]
-    word_x, input cell_pkg::grid_y_t y
+    word_x, input sim_pkg::grid_y_t y
   );
-    cell_pkg::cell_word_t word;
+    sim_pkg::cell_word_t word;
     for (int unsigned i = 0; i < CellsPerWord; i++) begin
       word[i] = material_at(word_x * CellsPerWord + i, 32'(y));
     end

@@ -22,7 +22,7 @@ module gol_simulator (
   always_ff @(posedge clk) begin
     if (en) lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
   end
-  
+
   wire seed_bit = lfsr[31] & lfsr[17];
 
   // Intial state of grid, fills grid with random values
@@ -66,7 +66,7 @@ module gol_simulator (
       .data_out(pixel_out_row2)
   );
 
-  
+
   logic [3:0] neighbour_count;
   always_comb begin
     neighbour_count = 4'(r1p1) + 4'(r1p2) + 4'(pixel_out_row1)

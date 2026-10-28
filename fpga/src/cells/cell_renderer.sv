@@ -4,11 +4,11 @@ module cell_renderer (
     input vga_sync_params::x_coordinate_t coord_x,
     input vga_sync_params::y_coordinate_t coord_y,
 
-    output wire [cell_pkg::AddrBits-1:0] read_addr,
-    input cell_pkg::cell_word_t          read_data,
+    output wire [sim_pkg::AddrBits-1:0] read_addr,
+    input sim_pkg::cell_word_t          read_data,
     output layer_pkg::layer_px_t pixel
 );
-  import cell_pkg::*;
+  import sim_pkg::*;
 
   wire in_grid = active_area
       && (coord_x < vga_sync_params::x_coordinate_t'(CellGridWidth))

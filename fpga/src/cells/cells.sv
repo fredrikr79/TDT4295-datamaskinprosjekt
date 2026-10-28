@@ -10,8 +10,8 @@ module cells (
     output layer_pkg::layer_px_t            pixel
 );
     wire we;
-    wire [cell_pkg::AddrBits-1:0] write_addr, read_addr;
-    cell_pkg::cell_word_t write_data, read_data;
+    wire [sim_pkg::AddrBits-1:0] write_addr, read_addr;
+    sim_pkg::cell_word_t write_data, read_data;
 
     world_loader loader (
         .clk  (clk),

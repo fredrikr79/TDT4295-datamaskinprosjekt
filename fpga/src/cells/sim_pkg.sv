@@ -1,10 +1,11 @@
-package cell_pkg;
+package sim_pkg;
   localparam int unsigned CellGridWidth = config_pkg::ActiveWidth;
   localparam int unsigned CellGridHeight = config_pkg::ActiveHeight;
 
   localparam int unsigned MaterialBits = 4;  // support for 16 materials
-  localparam int unsigned CellsPerWord = 8;  // 8x4 = 32 which fits cleanly in registers
-  localparam int unsigned WordBits = CellsPerWord * MaterialBits;  // 32: a word contains 8 4-bit cells
+  localparam int unsigned BitsPerPixel = 8;  // support for 16 materials
+  localparam int unsigned CellsPerWord = 4;  // 8x4 = 32 which fits cleanly in registers
+  localparam int unsigned WordBits = CellsPerWord * BitsPerPixel;  // 32: a word contains 8 4-bit cells
   localparam int unsigned WordsPerRow = CellGridWidth / CellsPerWord;  // 80: a row contains 640 pixels, we contain 8 pixels in one word, 640/8 = 80 which is our screen resolution
   localparam int unsigned TotalWords = WordsPerRow * CellGridHeight;  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
   localparam int unsigned AddrBits = $clog2(TotalWords);  // 15 = 32,768, enough to address all of TotalWords
@@ -19,6 +20,8 @@ package cell_pkg;
   localparam int unsigned GridYBits = $clog2(CellGridHeight);  // 9 needed to represent 360
   typedef logic unsigned [GridXBits-1:0] grid_x_t;
   typedef logic unsigned [GridYBits-1:0] grid_y_t;
+
+  localparam int SimulationCoreCoun = 4; // Memory bound processing and wire complexity makes a wider set of cores overkill and infeasible in terms of system resources 
 
   // Addressing convention. Everything that touches the grid -- world loader,
   // simulation step, renderer -- has to agree on this:
@@ -123,4 +126,18 @@ package cell_pkg;
     target_props = props(target);
     return mover_props.falls && (target_props.density < mover_props.density);
   endfunction
+
+  typedef struct packed {
+    logic [MaterialBits] topLeft;
+    logic [MaterialBits] top;
+    logic [MaterialBits] topRight;
+    logic [MaterialBits] left;
+    logic [MaterialBits] center;
+    logic [MaterialBits] right;
+    logic [MaterialBits] bottomLeft;
+    logic [MaterialBits] bottom;
+    logic [MaterialBits] bottomRight;
+  } pixel_neighbourhood_t;
+
+
 endpackage

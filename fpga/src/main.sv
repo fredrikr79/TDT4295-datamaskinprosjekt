@@ -20,6 +20,16 @@ module main (
 
     inout wire acknack,
 
+    // PSRAM pins (Infineon S70KL1283, octal xSPI)
+    output wire mem_out_clk,
+    mem_out_clk_n,
+    mem_cs_n,
+    mem_reset_n,
+
+    inout wire [7:0] mem_dq,
+
+    inout wire mem_rwds,
+
     output wire [3:0] led,
 
     output wire led0_r,
@@ -31,7 +41,7 @@ module main (
     in_almost_full,
     in_full
 );
-  logic active_area, pixel_pulse, v_blank, h_blank, frame_start, line_end;
+  logic active_area, pixel_pulse, v_blank, h_blank, frame_start, line_end, near_frame_end;
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
@@ -45,6 +55,9 @@ module main (
   logic [15:0]  mem_len;
   logic [7:0] mem_in, mem_out;
   memory_pkg::transaction_e mem_transaction;
+
+  memory_pkg::message_length_t mem_len_burst;
+  assign mem_len_burst = memory_pkg::message_length_t'(mem_len);
 
   localparam int unsigned NumLayers  = 3;
   localparam int unsigned LayerCells = 0;
@@ -131,20 +144,27 @@ module main (
       .write_sprite_valid(write_sprite_valid)
   );
 
-  // HUD sprites LUT declaration
-  hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth];
-  hud hud_controller (
+  memory memory_subsystem (
       .clk(clk),
-      .req_valid(sprite_req_valid),
-      .sprite_mem_id(sprite_mem_id),
-      .sprite_w_mem_addr(mem_addr),
-      .sprite_req_op(sprite_req_op),
-      .sprite_req_body(sprite_req_body),
-      .spriteLUT(spriteLUT),
-      .sprite_id_bitmap(sprite_id_bitmap),
-      .sprite_available_id(sprite_available_id),
-      .sprite_id_found(sprite_id_found),
-      .write_sprite_valid(write_sprite_valid)
+      .reset(sw[3]),
+      .enable(sw[2]),
+
+      .transaction_toggle(mem_toggle),
+      .next_transaction(mem_transaction),
+      .address(mem_addr),
+      .length(mem_len_burst),
+      .write_data(mem_in),
+
+      .busy(mem_busy),
+      .data_on_cable(mem_data_on_wire),
+      .read_data(mem_out),
+
+      .out_clk(mem_out_clk),
+      .out_clk_n(mem_out_clk_n),
+      .cs_n(mem_cs_n),
+      .reset_n(mem_reset_n),
+      .dq(mem_dq),
+      .rwds(mem_rwds)
   );
 
   spi spi_controller (

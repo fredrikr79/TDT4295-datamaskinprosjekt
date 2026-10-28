@@ -15,6 +15,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/render/font.c
     ${APP_ROOT}/src/app/render/text.c
     ${APP_ROOT}/src/app/render/funny_man.c
+    ${APP_ROOT}/src/app/rooms.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

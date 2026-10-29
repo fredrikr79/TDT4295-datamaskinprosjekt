@@ -23,12 +23,14 @@ always @(posedge clk) begin
 
     for(i = sim_pkg::SimulationCoreCount-1; i >= 0; i = i + 1) begin : process_lane
 
-        neighbourhood_t neighbourhood;
+        sim_pkg::neighbourhood_t neighbourhood;
+        sim_pkg::material_t center_material;
 
         // i * stride = base addr for sim core. base = round offset.
         automatic logic curr  = (base + i * stride) * sim_pkg::BitsPerPixel;
         automatic logic left  = (base + i * stride - 1) * sim_pkg::BitsPerPixel;
         automatic logic right = (base + i * stride + 1) * sim_pkg::BitsPerPixel;
+
 
         if(i + base >= config_pkg::ActiveWidth || !row_running) begin
             base <= 0;
@@ -55,10 +57,30 @@ always @(posedge clk) begin
             neighbourhood.bottomRight = buffers[2][right +: sim_pkg::BitsPerPixel];
         end
 
-        // Add simulation handlers below
-        // Proposed mechanism: Either do sequential automata evaluation
-        // Or parallellize cell candidate and use conflict resolution to
-        // Deal with conflicts.
+        // Priority based situation resolution. Rendering occurs from left to right
+        // except for on the boundaries of parallell cores, where the rightmost pixel gets to decide.
+        center_material = neighbourhood.center[7:4];
+
+        case (center_material)
+            MatStone: begin
+                res_buffer[curr +: sim_pkg::BitsPerPixel] <= sim_stone(neighbourhood);
+            end
+            MatSand: begin
+                res_buffer[curr +: sim_pkg::BitsPerPixel] <= sim_sand(neighbourhood);
+            end
+            MatWater, MatLava, MatAcid: begin
+                res_buffer[curr +: sim_pkg::BitsPerPixel] <= sim_fluid(neighbourhood);
+            end
+            MatGOL: begin
+                res_buffer[curr +: sim_pkg::BitsPerPixel] <= sim_gol(neighbourhood);
+            end
+            MatExplo: begin
+                res_buffer[curr +: sim_pkg::BitsPerPixel] <= sim_explo(neighbourhood);
+            end
+            default:; //Matair
+
+        endcase
+
         res_buffer[curr +: sim_pkg::BitsPerPixel] <= sim_gol(neighbourhood);
 
 
@@ -68,7 +90,22 @@ always @(posedge clk) begin
     end
 end
 
-function automatic material_t sim_gol(sim_pkg::neighbourhood_t stencil);
+function automatic logic [7:0] sim_stone(sim_pkg::neighbourhood_t stencil);
+    // Simulate stone
+    return 8'd0;
+endfunction
+
+function automatic logic [7:0] sim_sand(sim_pkg::neighbourhood_t stencil);
+    // Simulate sand
+    return 8'd0;
+endfunction
+
+function automatic logic [7:0] sim_fluid(sim_pkg::neighbourhood_t stencil);
+    // Simulate fluids
+    return 8'd0;
+endfunction
+
+function automatic logic [7:0] sim_gol(sim_pkg::neighbourhood_t stencil);
     automatic logic [3:0] neighbour_count = 4'd0;
     automatic integer r, c;
 
@@ -86,6 +123,11 @@ function automatic material_t sim_gol(sim_pkg::neighbourhood_t stencil);
     return (neighbour_count | (stencil.center[7:4] == sim_pkg::MatGOL)) == 4'd3
         ? {MatGOL , 4'b0}
         : {MatAir , 4'b0};
+endfunction
+
+function automatic logic [7:0] sim_explo(sim_pkg::neighbourhood_t stencil);
+    // Simulate explosions
+    return 8'd0;
 endfunction
 
 endmodule

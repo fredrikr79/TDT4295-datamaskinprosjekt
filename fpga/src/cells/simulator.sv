@@ -132,6 +132,22 @@ function automatic logic [7:0] explosion_rules(sim_pkg::neighbourhood_t stencil)
 endfunction
 
 function automatic logic [7:0] gol_rules(sim_pkg::neighbourhood_t stencil);
+    automatic logic [3:0] neighbour_count =
+        (stencil.top[7:4]         == sim_pkg::MatGOL) +
+        (stencil.center[7:4]      == sim_pkg::MatGOL) +
+        (stencil.bottom[7:4]      == sim_pkg::MatGOL) +
+        (stencil.topLeft[7:4]     == sim_pkg::MatGOL) +
+        (stencil.left[7:4]        == sim_pkg::MatGOL) +
+        (stencil.bottomLeft[7:4]  == sim_pkg::MatGOL) +
+        (stencil.topRight[7:4]    == sim_pkg::MatGOL) +
+        (stencil.right[7:4]       == sim_pkg::MatGOL) +
+        (stencil.bottomRight[7:4] == sim_pkg::MatGOL);
+
+    if(props(stencil.center).solid) begin
+        return (neighbour_count | (stencil.center[7:4] == sim_pkg::MatGOL)) == 4'd3
+            ? {MatGOL , 4'b0}
+            : 8'hFF;
+    end
 endfunction
 
 function automatic logic [7:0] sand_rules(sim_pkg::neighbourhood_t stencil);

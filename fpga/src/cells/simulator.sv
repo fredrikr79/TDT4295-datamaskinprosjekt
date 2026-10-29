@@ -196,10 +196,6 @@ function automatic logic [7:0] fluid_rules(sim_pkg::neighbourhood_t stencil, log
     return 8'hFF;
 endfunction
 
-function automatic logic [7:0] sim_explo(sim_pkg::neighbourhood_t stencil);
-    // Simulate explosions
-    return 8'hFF;
-endfunction
 
 endmodule
 

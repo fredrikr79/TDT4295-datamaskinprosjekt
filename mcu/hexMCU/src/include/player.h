@@ -19,9 +19,9 @@ typedef struct
 typedef struct
 {
     fpga_box_t box;
-    int rel_x;
-    int rel_y;
-    uint8_t length;
+    uint8_t rel_x;
+    uint8_t rel_y;
+    uint16_t length;
 } velocity_box_t;
 
 void update_player_position(

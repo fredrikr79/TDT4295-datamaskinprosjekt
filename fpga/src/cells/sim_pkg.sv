@@ -159,5 +159,7 @@ package sim_pkg;
     logic [MaterialBits:0] bottomRight;
   } neighbourhood_t;
 
+  localparam logic [3:0] SandCounter = 4'd2;
+
 
 endpackage

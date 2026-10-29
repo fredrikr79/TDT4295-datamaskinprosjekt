@@ -146,8 +146,47 @@ function automatic logic [7:0] gol_rules(sim_pkg::neighbourhood_t stencil);
     end
 endfunction
 
-function automatic logic [7:0] sand_rules(sim_pkg::neighbourhood_t stencil);
-    return 8'hFF;
+function automatic logic [7:0] sand_rules(sim_pkg::neighbourhood_t stencil, logic r);
+    logic [3:0] c_n1_n1 = stencil.topLeft[7:4]     == sim_pkg::MatSand
+                      && (stencil.topLeft[3:0]     == 0);
+    logic [3:0] c_n1_0 = stencil.left[7:4]         == sim_pkg::MatSand
+                      && (stencil.left[3:0]        == 0);
+    logic [3:0] c_n1_1 = stencil.bottomLeft[7:4]   == sim_pkg::MatSand
+                      && (stencil.bottomLeft[3:0]  == 0);
+    logic [3:0] c_0_n1 = stencil.top[7:4]          == sim_pkg::MatSand
+                      && (stencil.top[3:0]         == 0);
+    logic [3:0] c_0_0  = stencil.center[7:4]       == sim_pkg::MatSand
+                      && (stencil.center[3:0]      == 0);
+    logic [3:0] c_0_1  = stencil.bottom[7:4]       == sim_pkg::MatSand
+                      && (stencil.bottom[3:0]      == 0);
+    logic [3:0] c_1_n1  = stencil.topRight[7:4]    == sim_pkg::MatSand
+                      && (stencil.topRight[3:0]    == 0);
+    logic [3:0] c_1_0  = stencil.right[7:4]        == sim_pkg::MatSand
+                      && (stencil.right[3:0]       == 0);
+    logic [3:0] c_1_1  = stencil.bottomRight[7:4]  == sim_pkg::MatSand
+                      && (stencil.bottomRight[3:0] == 0);
+
+    if (c_0_0 > 0) begin
+        stencil.center[3:0] = stencil.center[3:0] - 4'd1;
+        if (c_0_1 == 4'b0) begin
+            return {sim_pkg::MatAir, 4'b0};
+        end else if (r && !c_1_1 && !c_1_0) begin
+            return {sim_pkg::MatAir, 4'b0};
+        end else if (!r && !c_n1_1 && !c_n1_0) begin
+            return {sim_pkg::MatAir, 4'b0};
+        end
+    end else begin
+        if (c_0_n1) begin
+            return stencil.top;
+            stencil.center[3:0] = sim_pkg::SandCounter;
+        end else if (r && c_n1_n1 && !c_n1_0) begin
+            return stencil.topLeft;
+            stencil.center[3:0] = sim_pkg::SandCounter;
+        end else if (!r && c_1_n1 && !c_1_0) begin
+            return stencil.topRight;
+            stencil.center[3:0] = sim_pkg::SandCounter;
+        end
+    end
 endfunction
 
 function automatic logic [7:0] fluid_rules(sim_pkg::neighbourhood_t stencil);

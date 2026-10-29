@@ -144,20 +144,63 @@ module main (
       .write_sprite_valid(write_sprite_valid)
   );
 
+  // Controls who is allowed the external memory bus
+  logic [memory_pkg::NumMemClients-1:0] mem_allow;
+  mem_access_policy access_policy (
+      .v_blank(v_blank),
+      .near_frame_end(near_frame_end),
+      .sim_running(sim_running),
+      .allow(mem_allow)
+  );
+
+  logic [memory_pkg::NumMemClients-1:0] mem_client_toggle;
+  memory_pkg::transaction_e mem_client_transaction[memory_pkg::NumMemClients];
+  memory_pkg::address_t mem_client_address[memory_pkg::NumMemClients];
+  memory_pkg::message_length_t mem_client_length_burst[memory_pkg::NumMemClients];
+  logic [7:0] mem_client_write_data[memory_pkg::NumMemClients];
+  logic [memory_pkg::NumMemClients-1:0] mem_client_busy;
+  logic [memory_pkg::NumMemClients-1:0] mem_client_data_on_cable;
+  logic [memory_pkg::NumMemClients-1:0] mem_client_grant; // Used by testbenches
+  logic [7:0] mem_read_data;
+
+  always_comb begin
+    mem_client_toggle = '0;
+    for (int unsigned i = 0; i < memory_pkg::NumMemClients; i++) begin
+      mem_client_transaction[i] = memory_pkg::NONE;
+      mem_client_address[i]     = '0;
+      mem_client_length_burst[i]      = '0;
+      mem_client_write_data[i]  = '0;
+    end
+
+    mem_client_toggle[memory_pkg::MemClientSpiID]      = mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientSpiID] = mem_transaction;
+    mem_client_address[memory_pkg::MemClientSpiID]     = mem_addr;
+    mem_client_length_burst[memory_pkg::MemClientSpiID]      = mem_len_burst;
+    mem_client_write_data[memory_pkg::MemClientSpiID]  = mem_in;
+
+    // TODO: Add the other clients here when they implement the external SRAM
+  end
+
+  assign mem_busy         = mem_client_busy[memory_pkg::MemClientSpiID];
+  assign mem_data_on_wire = mem_client_data_on_cable[memory_pkg::MemClientSpiID];
+  assign mem_out          = mem_read_data;
+
   memory memory_subsystem (
       .clk(clk),
       .reset(sw[3]),
       .enable(sw[2]),
 
-      .transaction_toggle(mem_toggle),
-      .next_transaction(mem_transaction),
-      .address(mem_addr),
-      .length(mem_len_burst),
-      .write_data(mem_in),
+      .client_toggle(mem_client_toggle),
+      .client_next_transaction(mem_client_transaction),
+      .client_address(mem_client_address),
+      .client_length(mem_client_length_burst),
+      .client_write_data(mem_client_write_data),
+      .client_allow(mem_allow),
 
-      .busy(mem_busy),
-      .data_on_cable(mem_data_on_wire),
-      .read_data(mem_out),
+      .client_busy(mem_client_busy),
+      .client_data_on_cable(mem_client_data_on_cable),
+      .client_grant(mem_client_grant),
+      .read_data(mem_read_data),
 
       .out_clk(mem_out_clk),
       .out_clk_n(mem_out_clk_n),

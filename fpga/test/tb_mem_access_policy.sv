@@ -42,6 +42,10 @@ module tb_mem_access_policy #(
     #1;
     check({name, " / cells"}, allow[MemClientCellsID], want_cells);
     check({name, " / spi"}, allow[MemClientSpiID], want_spi);
+    // The display path is unconditional in every phase, so it is asserted on
+    // every case rather than given rows of its own.
+    check({name, " / scanout"}, allow[MemClientScanoutID], 1'b1);
+    check({name, " / hud"}, allow[MemClientHudID], 1'b1);
   endtask
 
   initial begin
@@ -65,13 +69,22 @@ module tb_mem_access_policy #(
     // must not grant SPI the bus even if the VGA phase logic misbehaves.
     expect_mask("active scan with stray guard", 0, 1, 1, 1, 0);
 
-    // The streamer is never denied, in any phase. It cannot be stalled.
+    // Exhaustive sweep of the three inputs. The display path and the cell
+    // streamer are never denied in any phase -- scan-out because it cannot be
+    // back-pressured at all, the streamer because priority already makes it
+    // yield and denying it as well would only add a way to stall it.
     for (int unsigned i = 0; i < 8; i++) begin
       v_blank = i[0];
       near_frame_end = i[1];
       sim_running = i[2];
       #1;
+      check($sformatf("scanout always allowed (case %0d)", i), allow[MemClientScanoutID], 1'b1);
+      check($sformatf("hud always allowed (case %0d)", i), allow[MemClientHudID], 1'b1);
       check($sformatf("cells always allowed (case %0d)", i), allow[MemClientCellsID], 1'b1);
+      // SPI is the only conditional client; restate its rule independently of
+      // the table above so a change to the policy has to break both.
+      check($sformatf("spi matches its rule (case %0d)", i), allow[MemClientSpiID],
+            !sim_running || (v_blank && !near_frame_end));
     end
 
     if (errors != 0) $fatal(1, "tb_mem_access_policy: %0d check(s) failed", errors);

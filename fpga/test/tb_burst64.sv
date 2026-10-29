@@ -35,20 +35,30 @@ module tb_burst64 #(
   always #1 clk = ~clk;
   logic reset = 1, enable = 0;
 
-  logic transaction_toggle = 0;
-  memory_pkg::transaction_e next_transaction = memory_pkg::NONE;
-  memory_pkg::address_t address = 0;
-  memory_pkg::message_length_t length = 0;
-  logic [7:0] write_data = 0;
-  logic busy, data_on_cable;
+  // Drive one arbiter slot; the others stay idle and are never granted.
+  localparam int unsigned C = memory_pkg::MemClientSpiID;
+
+  logic [memory_pkg::NumMemClients-1:0] client_toggle = '0;
+  memory_pkg::transaction_e client_transaction[memory_pkg::NumMemClients];
+  memory_pkg::address_t client_address[memory_pkg::NumMemClients];
+  memory_pkg::message_length_t client_length[memory_pkg::NumMemClients];
+  logic [7:0] client_write_data[memory_pkg::NumMemClients];
+  logic [memory_pkg::NumMemClients-1:0] client_allow = '1;
+  logic [memory_pkg::NumMemClients-1:0] client_busy, client_data_on_cable, client_grant;
   logic [7:0] read_data;
+
+  // Aliases so the body below reads the same as a single-client bus.
+  wire busy = client_busy[C];
+  wire data_on_cable = client_data_on_cable[C];
 
   wire out_clk, out_clk_n, cs_n, reset_n, rwds;
   wire [7:0] dq;
 
   memory dut (
-      .clk, .reset, .enable, .transaction_toggle, .next_transaction,
-      .address, .length, .write_data, .busy, .data_on_cable, .read_data,
+      .clk, .reset, .enable,
+      .client_toggle, .client_next_transaction(client_transaction), .client_address, .client_length,
+      .client_write_data, .client_allow,
+      .client_busy, .client_data_on_cable, .client_grant, .read_data,
       .out_clk, .out_clk_n, .cs_n, .reset_n, .dq, .rwds
   );
 
@@ -63,10 +73,10 @@ module tb_burst64 #(
   // One byte per data_on_cable, mirroring how memory_initializer feeds a write.
   always @(posedge clk) begin
     if (dut.initializer_finished && data_on_cable) begin
-      if (next_transaction == memory_pkg::WRITE) begin
+      if (client_transaction[C] == memory_pkg::WRITE) begin
         idx <= idx + 1;
-        write_data <= pattern[(idx + 1) % L];
-      end else if (next_transaction == memory_pkg::READ) begin
+        client_write_data[C] <= pattern[(idx + 1) % L];
+      end else if (client_transaction[C] == memory_pkg::READ) begin
         got[idx] <= read_data;
         idx <= idx + 1;
       end
@@ -90,11 +100,11 @@ module tb_burst64 #(
     wait (!busy);
     @(posedge clk);
     idx = 0;
-    next_transaction = t;
-    address = memory_pkg::address_t'(Base);
-    length = memory_pkg::message_length_t'(L);
-    write_data = pattern[0];
-    transaction_toggle = ~transaction_toggle;  // toggle, not a pulse -- no abort
+    client_transaction[C] = t;
+    client_address[C] = memory_pkg::address_t'(Base);
+    client_length[C] = memory_pkg::message_length_t'(L);
+    client_write_data[C] = pattern[0];
+    client_toggle[C] = ~client_toggle[C];  // toggle, not a pulse -- no abort
     @(posedge clk);
     wait (busy);
     wait (!busy);
@@ -118,10 +128,10 @@ module tb_burst64 #(
 
     run(memory_pkg::WRITE);
     $display("tb_burst64: message_length_t is %0d bits, holds %0d (requested %0d)",
-             $bits(memory_pkg::message_length_t), length, L);
-    if (32'(length) != 32'(L))
-      $fatal(1, "length field cannot represent %0d -- reads back %0d. MessageLengthRegisterWidth needs $clog2(MaxMessageLength + 1)",
-             L, length);
+             $bits(memory_pkg::message_length_t), client_length[C], L);
+    if (32'(client_length[C]) != 32'(L))
+      $fatal(1, "client_length[C] field cannot represent %0d -- reads back %0d. MessageLengthRegisterWidth needs $clog2(MaxMessageLength + 1)",
+             L, client_length[C]);
     if (idx != L) $fatal(1, "write moved %0d bytes, expected %0d", idx, L);
 
     run(memory_pkg::READ);

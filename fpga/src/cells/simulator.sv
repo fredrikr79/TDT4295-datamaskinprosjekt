@@ -31,6 +31,7 @@ always @(posedge clk) begin
         automatic logic curr  = (base + i * stride) * sim_pkg::BitsPerPixel;
         automatic logic left  = (base + i * stride - 1) * sim_pkg::BitsPerPixel;
         automatic logic right = (base + i * stride + 1) * sim_pkg::BitsPerPixel;
+        logic [31:0] lfsr = 32'hACE1_2345; // Linear feedback shift register acting as pseudo-randomizer.
 
 
         if(i + base >= config_pkg::ActiveWidth || !row_running) begin
@@ -71,11 +72,13 @@ always @(posedge clk) begin
         // Either the left or right direction (in addition to vertical)
 
         // Functions return 1'b1 if match was found in the rule
+        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
+
 
         explo_mat <= explosion_rules(neighbourhood);
         gol_mat <= gol_rules(neighbourhood);
-        sand_mat <= sand_rules(neighbourhood);
-        fluid_mat <= fluid_rules(neighbourhood);
+        sand_mat <= sand_rules(neighbourhood, lfsr[0]);
+        fluid_mat <= fluid_rules(neighbourhood, lfsr[0]);
 
         if (explo_mat != 8'hFF) begin
             res_buffer[curr +: sim_pkg::BitsPerPixel] <= explo_mat;
@@ -189,7 +192,7 @@ function automatic logic [7:0] sand_rules(sim_pkg::neighbourhood_t stencil, logi
     end
 endfunction
 
-function automatic logic [7:0] fluid_rules(sim_pkg::neighbourhood_t stencil);
+function automatic logic [7:0] fluid_rules(sim_pkg::neighbourhood_t stencil, logic r);
     return 8'hFF;
 endfunction
 

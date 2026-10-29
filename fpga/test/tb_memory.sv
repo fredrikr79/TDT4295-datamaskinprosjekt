@@ -12,6 +12,15 @@ module tb_memory #(
     inout wire [7:0] dq,
     inout wire rwds
 );
+
+  logic reset, enable, transaction_toggle;
+  memory_pkg::transaction_e next_transaction;
+  logic [31:0] address;
+  memory_pkg::message_length_t length;
+  logic [7:0] write_data, read_data;
+  logic busy, data_on_cable;
+  int command_count = 0;
+
   initial begin
     $dumpfile(DUMPFILEPATH);
     $dumpvars;
@@ -38,15 +47,8 @@ module tb_memory #(
     $finish;
   end
 
-  int command_count = 0;
   always @(negedge cs_n) if (!reset) command_count++;
 
-  logic reset, enable, transaction_toggle;
-  memory_pkg::transaction_e next_transaction;
-  logic [31:0] address;
-  memory_pkg::message_length_t length;
-  logic [7:0] write_data, read_data;
-  logic busy, data_on_cable;
   memory memory_module (
       .clk,
       .reset,

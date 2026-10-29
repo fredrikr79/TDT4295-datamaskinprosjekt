@@ -21,7 +21,8 @@ package sim_pkg;
   typedef logic unsigned [GridXBits-1:0] grid_x_t;
   typedef logic unsigned [GridYBits-1:0] grid_y_t;
 
-  localparam int SimulationCoreCoun = 4; // Memory bound processing and wire complexity makes a wider set of cores overkill and infeasible in terms of system resources 
+  localparam int SimulationCoreCount = 4; // Memory bound processing and wire complexity makes a wider set of cores overkill and infeasible in terms of system resources 
+  typedef logic [CellGridWidth * BitsPerPixel : 0] row_buffer_t;
 
   // Addressing convention. Everything that touches the grid -- world loader,
   // simulation step, renderer -- has to agree on this:
@@ -54,11 +55,13 @@ package sim_pkg;
   // density: heavier materials sink in lighter ones
   // falls: pulled downward by gravity.
   // spreads: flows sideways when blocked underneath (liquid/sand behaviour).
+  // Solid: to be recognized as a physical object or a momentary energy / force.
   // A material that neither falls nor spreads is static
   typedef struct packed {
     logic [3:0]        density;
     logic              falls;
     logic              spreads;
+    logic              solid;
     color_pkg::color_t color;
   } material_props_t;
 
@@ -66,12 +69,13 @@ package sim_pkg;
   function automatic color_pkg::color_t material_color(input material_t m);
     logic [11:0] rgb;
     case (m)
+      MatStone:  rgb = 12'h777;  // grey
       MatSand:   rgb = 12'hEC6;  // sandy yellow
       MatWater:  rgb = 12'h25F;  // blue
-      MatStone:  rgb = 12'h777;  // grey
-      MatPortal: rgb = 12'h519;  // purple
       MatLava:   rgb = 12'hF60;  // orange
       MatAcid:   rgb = 12'h8F0;  // acid green
+      MatGOL:    rgb = 12'hEEE;  // off-white
+      MatExplo:  rgb = 12'hF44;
       default:   rgb = 12'h001;  // MatAir, and every unassigned id
     endcase
     return color_pkg::color_t'(rgb);
@@ -86,36 +90,49 @@ package sim_pkg;
         p.density = 4'd8;
         p.falls   = 1'b1;
         p.spreads = 1'b0;
+        p.solid   = 1'b1;
       end
       MatWater: begin
         p.density = 4'd4;
         p.falls   = 1'b1;
         p.spreads = 1'b1;
+        p.solid   = 1'b1;
       end
       MatStone: begin
         p.density = 4'd15;
         p.falls   = 1'b0;
         p.spreads = 1'b0;
+        p.solid   = 1'b1;
       end
-      MatPortal: begin
+      MatGOL: begin
         p.density = 4'd15;
         p.falls   = 1'b0;
         p.spreads = 1'b0;
+        p.solid   = 1'b1;
+      end
+      MatExplo: begin
+        p.density = 4'd15;
+        p.falls   = 1'b0;
+        p.spreads = 1'b0;
+        p.solid   = 1'b0;
       end
       MatLava: begin
         p.density = 4'd10;
         p.falls   = 1'b1;
         p.spreads = 1'b1;
+        p.solid   = 1'b1;
       end
       MatAcid: begin
         p.density = 4'd8;
         p.falls   = 1'b1;
         p.spreads = 1'b1;
+        p.solid   = 1'b1;
       end
       default: begin  // MatAir, and every unassigned id
         p.density = 4'd0;
         p.falls   = 1'b0;
         p.spreads = 1'b0;
+        p.solid   = 1'b0;
       end
     endcase
     return p;
@@ -131,16 +148,16 @@ package sim_pkg;
   endfunction
 
   typedef struct packed {
-    logic [MaterialBits] topLeft;
-    logic [MaterialBits] top;
-    logic [MaterialBits] topRight;
-    logic [MaterialBits] left;
-    logic [MaterialBits] center;
-    logic [MaterialBits] right;
-    logic [MaterialBits] bottomLeft;
-    logic [MaterialBits] bottom;
-    logic [MaterialBits] bottomRight;
-  } pixel_neighbourhood_t;
+    logic [MaterialBits:0] topLeft;
+    logic [MaterialBits:0] top;
+    logic [MaterialBits:0] topRight;
+    logic [MaterialBits:0] left;
+    logic [MaterialBits:0] center;
+    logic [MaterialBits:0] right;
+    logic [MaterialBits:0] bottomLeft;
+    logic [MaterialBits:0] bottom;
+    logic [MaterialBits:0] bottomRight;
+  } neighbourhood_t;
 
 
 endpackage

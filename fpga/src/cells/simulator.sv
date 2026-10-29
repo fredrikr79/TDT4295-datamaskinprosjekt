@@ -14,6 +14,10 @@ integer i;
 logic row_running = 1'b0;
 logic [15:0] stride = sim_pkg::CellGridWidth / sim_pkg::SimulationCoreCount;
 
+// Keep track of 3 - 3-bit words. the nth bit indicates if core n+1 has modified process n's last column or not.
+// If it is modified, process n+1 gets the final say, if not process n may write to it.
+logic [2:0] top_row_lock = 3'b0, center_row_lock = 3'b0, bottom_row_lock = 3'b0;
+
 // Find pixel neighbourhood in parallell:
 always @(posedge clk) begin
 
@@ -58,7 +62,8 @@ always @(posedge clk) begin
         end
 
         // Priority based situation resolution. Rendering occurs from left to right
-        // except for on the boundaries of parallell cores, where the rightmost pixel gets to decide.
+        // except for on the boundaries of parallell cores, where the rightmost pixel gets to decide as it is evaluated before by neighbouring subdomains.
+
         center_material = neighbourhood.center[7:4];
 
         case (center_material)

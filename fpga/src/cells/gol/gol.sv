@@ -1,6 +1,7 @@
 module gol (
     input wire clk,
     input wire reset,
+    input wire sim_running,
 
     input logic active_area,
     pixel_pulse,
@@ -13,6 +14,7 @@ module gol (
       .clk  (clk),
       .reset(reset),
       .en   (pixel_pulse && active_area),
+      .sim_running(sim_running),
       .alive(alive)
   );
 

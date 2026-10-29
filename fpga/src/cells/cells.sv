@@ -1,6 +1,7 @@
 module cells (
     input  wire                             clk,
     input  wire [3:2]                       sw,
+    input  wire                             sim_running,
 
     input logic                             active_area,
                                             pixel_pulse,
@@ -16,6 +17,7 @@ module cells (
     world_loader loader (
         .clk  (clk),
         .reset(sw[3]),
+        .en   (sim_running),
         .we   (we),
         .write_addr (write_addr),
         .data (write_data)

@@ -19,6 +19,12 @@ module tb_main #(
 );
   logic vga_hsync, vga_vsync;
 
+  // PSRAM pins. Without a memory on the far end of these, every read returns X
+  // and the failure looks like a logic bug rather than a missing model.
+  wire mem_out_clk, mem_out_clk_n, mem_cs_n, mem_reset_n;
+  wire [7:0] mem_dq;
+  wire mem_rwds;
+
   main dut (
       .clk(clk),
       .sw({reset, enable}),
@@ -27,7 +33,22 @@ module tb_main #(
       .vga_g(color.green),
       .vga_b(color.blue),
       .vga_hsync(vga_hsync),
-      .vga_vsync(vga_vsync)
+      .vga_vsync(vga_vsync),
+
+      .mem_out_clk(mem_out_clk),
+      .mem_out_clk_n(mem_out_clk_n),
+      .mem_cs_n(mem_cs_n),
+      .mem_reset_n(mem_reset_n),
+      .mem_dq(mem_dq),
+      .mem_rwds(mem_rwds)
+  );
+
+  psram_model psram (
+      .cs_n(mem_cs_n),
+      .ck(mem_out_clk),
+      .reset_n(mem_reset_n),
+      .dq(mem_dq),
+      .rwds(mem_rwds)
   );
 
   // pixel_pulse is internal to main (no board pin), tap it for the simulator
@@ -36,7 +57,7 @@ module tb_main #(
   initial begin
     if (DUMPFILEPATH != "") begin
       $dumpfile(DUMPFILEPATH);
-      $dumpvars(0, tb);
+      $dumpvars(0, tb_main);
     end
   end
 

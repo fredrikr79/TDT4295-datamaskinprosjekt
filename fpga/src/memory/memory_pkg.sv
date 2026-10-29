@@ -30,10 +30,9 @@ package memory_pkg;
     state_e next_state;
   } transaction_output_t;
 
-  localparam int unsigned MaxMessageLength = 20;
-
+  localparam int unsigned MaxMessageLength = 64;
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
-      MaxMessageLength
+      MaxMessageLength + 1
   ) : 1;
 
   typedef logic [MessageLengthRegisterWidth-1:0] message_length_t;
@@ -70,8 +69,9 @@ package memory_pkg;
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
     memory_pkg::message_length_t latency_count;
-    latency_count = 5'(MemoryClockSlowDownFactor)
-                    * (double_latency ? 5'(2 * LatencyCount) : 5'(LatencyCount));
+    latency_count = message_length_t'(MemoryClockSlowDownFactor)
+                    * (double_latency ? message_length_t'(2 * LatencyCount)
+                                      : message_length_t'(LatencyCount));
 
     return amount_of_latency_ticks > latency_count;
   endfunction
@@ -99,5 +99,11 @@ package memory_pkg;
   // 1 - single ended clock
   // 0 - differential clock
   localparam bit MemoryClockType = 0;
+
+  localparam int unsigned NumMemClients = 4;
+  localparam int unsigned MemClientScanoutID = 0;  // highest priority
+  localparam int unsigned MemClientHudID = 1;
+  localparam int unsigned MemClientSpiID = 2;
+  localparam int unsigned MemClientCellsID = 3;  // lowest priority, elastic
 
 endpackage

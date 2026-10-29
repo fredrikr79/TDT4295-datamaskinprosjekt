@@ -24,6 +24,7 @@ storage_status_t storage_read(const char *path, uint32_t offset, void *buf,
                               uint32_t max, uint32_t *got);
 storage_status_t storage_size(const char *path, uint32_t *size);
 storage_status_t storage_write(const char *path, const void *data, uint32_t len);
+storage_status_t storage_append(const char *path, const void *data, uint32_t len);
 storage_status_t storage_delete(const char *path);
 storage_status_t storage_init(void);     /* optional: mount now */
 bool             storage_ready(void);    /* mounted right now?  */
@@ -46,7 +47,16 @@ const char      *storage_status_str(storage_status_t st);
   it's 0 (still `STORAGE_OK`). **Big files are read piece by piece by moving
   `offset` forward**, which is how `sprite.c` streams sprite files.
 - **`storage_write`** creates or replaces the whole file and makes any missing
-  folders.
+  folders. `storage_write(path, NULL, 0)` leaves an empty file.
+- **`storage_append`** adds bytes to the end of the file, making it (and its
+  folders) if it's missing. Together with `storage_write` it saves something too
+  big for RAM piece by piece:
+  ```c
+  storage_write(path, NULL, 0);          /* start empty           */
+  storage_append(path, piece, n);        /* ...as each piece is ready */
+  ```
+  Each call is flushed to the card before it returns, so a save cut off halfway
+  keeps the pieces written so far.
 - **Everything blocks** (about 0.1–1 ms per 512-byte sector on the card). Call it
   from the main loop only, never from an interrupt or an FPGA callback.
 
@@ -102,6 +112,10 @@ off, endless loop) before `myMain()` even starts. So:
    in memory; without the flush, losing power or pulling the card can lose the
    file.
 
+`storage_append` is the same, except an existing file is kept: after opening
+(which starts at the beginning), it seeks to the end with
+`fx_file_relative_seek(&f, 0, FX_SEEK_END)` before writing.
+
 The card stays mounted between calls.
 
 ### Errors
@@ -127,7 +141,8 @@ Every FileX status goes through `result()`:
 - **No folder behaves exactly like no card**, which is handy for testing that
   path.
 - Paths containing `..` are refused, so nothing outside the folder can be touched.
-- Plain `fopen`/`fread`/`fwrite`/`remove`. Missing folders are made on write.
+- Plain `fopen`/`fread`/`fwrite`/`remove` (`"ab"` for append). Missing folders
+  are made on write.
 
 ## Who uses it
 
@@ -156,8 +171,10 @@ can't be held in memory whole. The plan:
   the current tile ID, how many are left in the run, and any header bytes cut off
   at the end of a piece. It produces one grid row (one WRITE_CONS) at a time.
 - **Save in reverse:** READ_CONS pieces go to the incremental encoder
-  (`progress_online_room()`). Fully streamed saving would need an append call in
-  `storage.h`.
+  (`progress_online_room()`). It only writes out runs that are finished; the run
+  still in progress stays in `prev_id`/`consecutive`. So after each batch you can
+  `storage_append()` the bytes in `room->data`, set `data_size = 0`, and carry
+  on. The last run goes out in `save_online_room()`.
 
 `storage_read` with an offset already supports this. For hundreds of pieces per
 room, an open / read-next / close interface would save looking the file up on

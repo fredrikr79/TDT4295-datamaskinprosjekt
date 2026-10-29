@@ -126,15 +126,18 @@ static void make_parents(char *fp)
     }
 }
 
-storage_status_t storage_write(const char *path, const void *data, uint32_t len)
+/* append: add to the end (file made if missing); else replace the file */
+static storage_status_t write_file(const char *path, const void *data, uint32_t len,
+                                   bool append)
 {
     char fp[PATH_MAX_LEN];
     storage_status_t st = mount();
     if (st != STORAGE_OK) return st;
     if (!full_path(path, fp)) return STORAGE_ERROR;
+    if (len && !data) return STORAGE_ERROR;
 
     make_parents(fp);
-    FILE *f = fopen(fp, "wb");
+    FILE *f = fopen(fp, append ? "ab" : "wb");
     if (!f) return from_errno(errno);
     size_t n = len ? fwrite(data, 1, len, f) : 0;
     int e = errno;
@@ -143,6 +146,16 @@ storage_status_t storage_write(const char *path, const void *data, uint32_t len)
         return from_errno(e);
     }
     return STORAGE_OK;
+}
+
+storage_status_t storage_write(const char *path, const void *data, uint32_t len)
+{
+    return write_file(path, data, len, false);
+}
+
+storage_status_t storage_append(const char *path, const void *data, uint32_t len)
+{
+    return write_file(path, data, len, true);
 }
 
 storage_status_t storage_delete(const char *path)

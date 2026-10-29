@@ -178,30 +178,48 @@ static UINT make_parents(CHAR *p)
     return FX_SUCCESS;
 }
 
-storage_status_t storage_write(const char *path, const void *data, uint32_t len)
+/* append: add to the end (file made if missing); else replace the file */
+static storage_status_t write_file(const char *path, const void *data, uint32_t len,
+                                   bool append)
 {
     CHAR p[PATH_MAX_LEN];
     FX_FILE f;
     storage_status_t s = mount();
     if (s != STORAGE_OK) return s;
     if (!copy_path(path, p)) return STORAGE_ERROR;
+    if (len && !data) return STORAGE_ERROR;
 
     UINT st = make_parents(p);
     if (st != FX_SUCCESS) return result(st);
     st = fx_file_create(&media, p);
-    if (st == FX_ALREADY_CREATED) {             /* replace it */
-        st = fx_file_delete(&media, p);
-        if (st == FX_SUCCESS) st = fx_file_create(&media, p);
+    if (st == FX_ALREADY_CREATED) {
+        if (append) {
+            st = FX_SUCCESS;                    /* keep it, write at the end */
+        } else {                                /* replace it */
+            st = fx_file_delete(&media, p);
+            if (st == FX_SUCCESS) st = fx_file_create(&media, p);
+        }
     }
     if (st != FX_SUCCESS) return result(st);
 
     st = fx_file_open(&media, &f, p, FX_OPEN_FOR_WRITE);
     if (st != FX_SUCCESS) return result(st);
-    if (len) st = fx_file_write(&f, (VOID *)data, len);
+    if (append) st = fx_file_relative_seek(&f, 0, FX_SEEK_END);  /* opens at the start */
+    if (st == FX_SUCCESS && len) st = fx_file_write(&f, (VOID *)data, len);
     UINT cst = fx_file_close(&f);
     if (st == FX_SUCCESS) st = cst;
     if (st == FX_SUCCESS) st = fx_media_flush(&media);  /* on the card now, not just cached */
     return result(st);
+}
+
+storage_status_t storage_write(const char *path, const void *data, uint32_t len)
+{
+    return write_file(path, data, len, false);
+}
+
+storage_status_t storage_append(const char *path, const void *data, uint32_t len)
+{
+    return write_file(path, data, len, true);
 }
 
 storage_status_t storage_delete(const char *path)

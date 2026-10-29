@@ -47,8 +47,19 @@ storage_status_t storage_read(const char *path, uint32_t offset, void *buf,
 
 storage_status_t storage_size(const char *path, uint32_t *size);
 
-/* Create or replace the whole file. Missing folders are made. */
+/* Create or replace the whole file. Missing folders are made.
+ * storage_write(path, NULL, 0) leaves an empty file. */
 storage_status_t storage_write(const char *path, const void *data, uint32_t len);
+
+/* Add len bytes to the end of the file; it (and its folders) is made if
+ * missing. For saving something too big for RAM piece by piece:
+ *
+ *   storage_write(path, NULL, 0);          start empty
+ *   storage_append(path, piece, n);        ...as each piece is ready
+ *
+ * Each call is on the card when it returns (flushed), so a save cut off
+ * halfway keeps the pieces written so far. */
+storage_status_t storage_append(const char *path, const void *data, uint32_t len);
 
 /* STORAGE_NOT_FOUND if it wasn't there. */
 storage_status_t storage_delete(const char *path);

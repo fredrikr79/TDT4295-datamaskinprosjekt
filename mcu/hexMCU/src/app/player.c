@@ -4,6 +4,9 @@
 #include <math.h>
 #include <stdint.h>
 
+float move_force = 0;
+bool jump_next_frame = false;
+
 void update_player_position(
     float force_x,
     float force_y,
@@ -12,6 +15,17 @@ void update_player_position(
     velocity_box_t velocity_box
 )
 {
+    if (jump_next_frame) perform_jump(player, box, velocity_box);
+
+    // TODO: Add horizontal friction
+
+    if (move_force)
+    {
+        float move_force_from_max = copysignf(fmaxf(fabsf(player.velocity_x) - 5, 0), move_force);
+        if (move_force < move_force_from_max) player.velocity_x += move_force;
+        else player.velocity_x += move_force_from_max;
+    }
+
     player.velocity_x += force_x / 2;
     player.velocity_y += (force_y + GRAVITY) / 2;
 
@@ -100,11 +114,13 @@ void update_player_position(
         {
             prio_x = ceilf(prio_x);
             prio_y += y_of_x * prio_x;
+            // TODO: Check vertical done
         }
         else
         {
             prio_y = ceilf(prio_y);
             prio_x += x_of_y * prio_y;
+            // TODO: Check horizontal done
         }
     }
 
@@ -144,6 +160,47 @@ void update_player_position(
 
     player.velocity_x += force_x / 2;
     player.velocity_y += (force_y + GRAVITY) / 2;
+}
+
+static void perform_jump(
+    player_t player,
+    uint8_t *box,
+    velocity_box_t velocity_box
+)
+{
+    jump_next_frame = false;
+    bool is_grounded = false;
+    uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
+    for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
+    {
+        if (box[x + y*velocity_box.box.x2] != 0)
+        {
+            is_grounded = true;
+            break;
+        }
+    }
+
+    player.velocity_y = -5;
+}
+
+void move_left()
+{
+    move_force = -1;
+}
+
+void move_right()
+{
+    move_force = 1;
+}
+
+void move_stop()
+{
+    move_force = 0;
+}
+
+void start_jump()
+{
+    jump_next_frame = true;
 }
 
 velocity_box_t next_velocity_box(player_t player)

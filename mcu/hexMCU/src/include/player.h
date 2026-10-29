@@ -29,4 +29,8 @@ void update_player_position(
     player_t player,
     uint8_t *box, velocity_box_t velocity_box
 );
+void move_left();
+void move_right();
+void move_stop();
+void start_jump();
 velocity_box_t next_velocity_box(player_t player);

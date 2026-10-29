@@ -274,11 +274,24 @@ static void run_poll(void)
 
     if (key_pressed(&in, KEY_ESCAPE))
         r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
-        
+
+    handle_movement_keys(in);
 
     if (!hud_poll()) { failed = true; return; }
     uint32_t n = frame_sync_take(&run.sync_seen);
     if (n) run_frame(n);
+}
+
+static void handle_movement_keys(input_t in)
+{
+    bool left_pressed = key_pressed(&in, KEY_A);
+    bool right_pressed = key_pressed(&in, KEY_D);
+
+    if (left_pressed && !right_pressed) move_left();
+    if (right_pressed && !left_pressed) move_right();
+    else move_stop();
+
+    if (key_pressed(&in, KEY_SPACE)) start_jump();
 }
 
 /* Leave the current room: save it, then load `to`.

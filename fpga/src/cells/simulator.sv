@@ -50,6 +50,14 @@ always @(posedge clk) begin
             neighbourhood.center      = buffers[1][curr +: sim_pkg::BitsPerPixel];
             neighbourhood.bottom      = buffers[2][curr +: sim_pkg::BitsPerPixel];
 
+        if(i + base >= config_pkg::ActiveWidth || !row_running) begin
+            if(row_running)
+                pulse_row_done <= 1'b1;
+            base <= 0;
+            row_running <= 1'b0;
+            continue;
+        end
+
         if((base + i) > 0) begin
             neighbourhood.topLeft     = buffers[0][left +: sim_pkg::BitsPerPixel];
             neighbourhood.left        = buffers[1][left +: sim_pkg::BitsPerPixel];

@@ -166,10 +166,32 @@ static const char *const run_state_names[] =
 
 static run_state_t  run_state = RS_SIM;
 
+struct {
+    sprite_t *menu_bg;
+    sprite_t *menu_paused;
+    sprite_t *menu_save;
+    sprite_t *menu_load;             
+} menu;
+
+
 static void r_go(run_state_t s)
 {
     if (s != run_state) LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
     run_state = s;
+    switch (run_state) {
+        case RS_SIM: // exit menu
+            sprite_show(menu.menu_bg, false);
+            sprite_show(menu.menu_load, false);
+            sprite_show(menu.menu_paused, false);
+            sprite_show(menu.menu_save, false);
+        break;
+        case RS_MENU: // enter menu
+            sprite_show(menu.menu_bg, true);
+            sprite_show(menu.menu_load, true);
+            sprite_show(menu.menu_paused, true);
+            sprite_show(menu.menu_save, true);
+        break;
+    }
 }
 /* HUD: the cursor, a test sentence and a demo animation (sprite.h) */
 static sprite_t     *cursor;
@@ -192,6 +214,16 @@ static void run_enter(void)
     run.sync_seen = frame_sync_count();
 }
 
+/* setup things for the menu */
+static void menu_setup(void)
+{
+    menu.menu_bg = sprite_new(sprite_img_solid(200, 400, RGB565(19, 5, 30)), 200, 50, false);
+    menu.menu_paused = sprite_new(assets.paused,200, 50, false);
+    menu.menu_save   = sprite_new(assets.save_game,200, 100, false);
+    menu.menu_load   = sprite_new(assets.load_game,200, 150, false);
+}
+
+
 /* Images and the HUD's sprites, made once, on the first load. From here
  * on sprite_poll() uploads the images in the background, and sends
  * everything again after a resync or a new FPGA session. */
@@ -205,7 +237,7 @@ static void sprites_setup(void)
     assets_init();              /* reads the sprite files' headers from the card */
 
     const fpga_info_t *scr = fpga_link_info();
-    cursor = sprite_new(assets.cursor, 0, 0, true);
+    player_init(100, 100);      /* start position for the room */
 
     /* test: a sentence centred near the top */
     int32_t w = sprite_img_w(assets.title);
@@ -214,6 +246,9 @@ static void sprites_setup(void)
 
     /* demo: an animation from the card, top-left, 10 frames a second */
     spinner = sprite_ani_file("sprites/spinner.spr", 6, 8, 8, true);
+
+    menu_setup();
+    cursor = sprite_new(assets.cursor, 0, 0, true);
 }
 
 /* Per-room game state: from load_start(), once per room. */
@@ -224,7 +259,6 @@ static void room_enter(void)
     run.cx = (scr->width  - cursor_w()) / 2;
     run.cy = (scr->height - cursor_h()) / 2;
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);
-    player_init(100, 100);      /* start position for the room */
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */

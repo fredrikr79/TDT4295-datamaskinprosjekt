@@ -12,6 +12,7 @@ import sim_pkg::*;
 integer base = 0;
 integer i;
 logic row_running = 1'b0;
+logic [15:0] stride = sim_pkg::CellGridWidth / sim_pkg::SimulationCoreCount;
 
 // Find pixel neighbourhood in parallell:
 always @(posedge clk) begin
@@ -23,9 +24,11 @@ always @(posedge clk) begin
     for(i = sim_pkg::SimulationCoreCount-1; i >= 0; i = i + 1) begin : process_lane
 
         neighbourhood_t neighbourhood;
-        automatic logic curr  = (base + i) * sim_pkg::BitsPerPixel;
-        automatic logic left  = (base + i - 1) * sim_pkg::BitsPerPixel;
-        automatic logic right = (base + i + 1) * sim_pkg::BitsPerPixel;
+
+        // i * stride = base addr for sim core. base = round offset.
+        automatic logic curr  = (base + i * stride) * sim_pkg::BitsPerPixel;
+        automatic logic left  = (base + i * stride - 1) * sim_pkg::BitsPerPixel;
+        automatic logic right = (base + i * stride + 1) * sim_pkg::BitsPerPixel;
 
         if(i + base >= config_pkg::ActiveWidth || !row_running) begin
             base <= 0;

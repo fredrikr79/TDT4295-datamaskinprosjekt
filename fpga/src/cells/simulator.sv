@@ -99,6 +99,36 @@ always @(posedge clk) begin
 end
 
 function automatic logic [7:0] explosion_rules(sim_pkg::neighbourhood_t stencil);
+    logic [3:0] p1 = (stencil.topLeft[7:4]    == sim_pkg::MatExplo ? stencil.topLeft[3:0]    :4'd0)-
+                     (stencil.bottomRight[7:4]== sim_pkg::MatExplo ? stencil.bottomRight[3:0]:4'd0);
+    logic [3:0] p2 = (stencil.top[7:4]        == sim_pkg::MatExplo ? stencil.top[3:0]        :4'd0)-
+                     (stencil.bottom[7:4]     == sim_pkg::MatExplo ? stencil.bottom[3:0]     :4'd0);
+    logic [3:0] p3 = (stencil.topRight[7:4]   == sim_pkg::MatExplo ? stencil.topRight[3:0]   :4'd0)-
+                     (stencil.bottomLeft[7:4] == sim_pkg::MatExplo ? stencil.bottomleft[3:0] :4'd0);
+    logic [3:0] p4 = (stencil.right[7:4]      == sim_pkg::MatExplo ? stencil.right[3:0]      :4'd0)-
+                     (stencil.left[7:4]       == sim_pkg::MatExplo ? stencil.left[3:0]      :4'd0);
+    logic [3:0] blast_resistance = props(stencil.center[7:4]).blast_resistance;
+
+    logic [3:0] force_strength = 8'b0;
+    // Abs value
+    if (p1 < 0) begin
+        p1 = -p1;
+    end
+    if (p2 < 0) begin
+        p2 = -p2;
+    end
+    if (p3 < 0) begin
+        p3 = -p3;
+    end
+    if (p4 < 0) begin
+        p4 = -p4;
+    end
+
+    force_strength = p1 + p2 + p3 + p4 - blast_resistance;
+
+    return force_strength > 0
+        ? {sim_pkg::MatExplo, force_strength}
+        : 8'hFF;
 endfunction
 
 function automatic logic [7:0] gol_rules(sim_pkg::neighbourhood_t stencil);

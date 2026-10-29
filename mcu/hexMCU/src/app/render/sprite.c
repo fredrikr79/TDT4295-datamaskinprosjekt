@@ -103,30 +103,40 @@ static unsigned      memids_pending;/* claimed by chunks not resolved yet      *
 static bool          failed;
 
 /* ---- pixels -------------------------------------------------------------- */
+/* Write one RGB565 pixel at p, high byte first -- the byte order the FPGA
+ * wants on the wire. (Storing the uint16_t directly would put the low byte
+ * first on the little-endian MCU and PC.) */
 static void put_px(uint8_t *p, uint16_t colour)
 {
     p[0] = (uint8_t)(colour >> 8);
     p[1] = (uint8_t)colour;
 }
 
+/* Set pixel (x, y) of a w-pixel-wide buffer. The buffer is row after row,
+ * PX_BYTES per pixel, so pixel (x, y) starts at byte (y * w + x) * 2.
+ * For filling in your own RAM images (sprite_img_ram). */
 void sprite_px_set(uint8_t *px, uint16_t w, uint16_t x, uint16_t y, uint16_t colour)
 {
     put_px(&px[((uint32_t)y * w + x) * PX_BYTES], colour);
 }
 
+/* Fill a whole w x h buffer with one colour (SPRITE_CLEAR: see-through). */
 void sprite_px_fill(uint8_t *px, uint16_t w, uint16_t h, uint16_t colour)
 {
     for (uint32_t i = 0; i < (uint32_t)w * h; i++) put_px(&px[i * PX_BYTES], colour);
 }
 
+/* Read a 16-bit MSB-first number, as in the sprite file header. */
 static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 
+/* The image's whole pixel stream in bytes: w * h * 2. */
 static uint32_t img_bytes(const sprite_img_t *img)
 {
     return (uint32_t)img->w * img->h * PX_BYTES;
 }
 
-/* for log lines */
+/* Something to show in log lines: the file path or the text, or what kind
+ * of image it is. */
 static const char *img_name(const sprite_img_t *img)
 {
     switch (img->src) {
@@ -139,6 +149,10 @@ static const char *img_name(const sprite_img_t *img)
 }
 
 /* ---- making images ------------------------------------------------------- */
+/* Take a free image slot and set it up as an image of this source and
+ * size, not on the FPGA yet (IMG_NONE). The caller fills in the source's
+ * own fields (path, text, colour...). NULL, logged, for a zero size or
+ * when all SPRITE_IMG_MAX slots are taken. */
 static sprite_img_t *img_new(uint8_t src, uint16_t w, uint16_t h)
 {
     if (w == 0 || h == 0) {
@@ -158,6 +172,11 @@ static sprite_img_t *img_new(uint8_t src, uint16_t w, uint16_t h)
     return NULL;
 }
 
+/* Read and check a sprite file's 8-byte header: "SP", then W, H and the
+ * number of frames. Also checks that the file is long enough to hold all
+ * the frames it claims, so a cut-off file is caught here and not halfway
+ * through an upload. Blocking (a storage read). false, logged, if there's
+ * no card, no file, or it isn't a good sprite file. */
 static bool file_header(const char *path, uint16_t *w, uint16_t *h, uint16_t *frames)
 {
     uint8_t  hd[FILE_HDR];
@@ -184,12 +203,18 @@ static bool file_header(const char *path, uint16_t *w, uint16_t *h, uint16_t *fr
     return true;
 }
 
+/* How many frames a sprite file has; 0 if it can't be read. Used by
+ * sprite_ani_file() to know how many images to make. */
 uint16_t sprite_file_frames(const char *path)
 {
     uint16_t w, h, frames;
     return path && file_header(path, &w, &h, &frames) ? frames : 0;
 }
 
+/* Register one frame of a sprite file as an image. Reads only the header
+ * now (to learn W and H); the pixels are read later, a chunk at a time,
+ * while uploading -- see make_chunk(). Stores the path and the byte offset
+ * where this frame's pixels start: after the header and all frames before. */
 sprite_img_t *sprite_img_file(const char *path, uint16_t frame)
 {
     uint16_t w, h, frames;
@@ -210,6 +235,10 @@ sprite_img_t *sprite_img_file(const char *path, uint16_t frame)
     return img;
 }
 
+/* Register a text as one image. Its size comes from the font: the width
+ * of all its letters times scale, by the font's height times scale. The
+ * string is copied (so it may be a temporary buffer); the pixels are drawn
+ * from the font while uploading -- see make_text(). */
 sprite_img_t *sprite_img_text(const font_t *f, const char *s, uint16_t colour, uint8_t scale)
 {
     if (!f || !s) return NULL;
@@ -232,6 +261,7 @@ sprite_img_t *sprite_img_text(const font_t *f, const char *s, uint16_t colour, u
     return img;
 }
 
+/* Register a w x h image of one colour. Only the colour is stored. */
 sprite_img_t *sprite_img_solid(uint16_t w, uint16_t h, uint16_t colour)
 {
     sprite_img_t *img = img_new(SRC_SOLID, w, h);
@@ -239,6 +269,10 @@ sprite_img_t *sprite_img_solid(uint16_t w, uint16_t h, uint16_t colour)
     return img;
 }
 
+/* Register pixels you already have in RAM (RGB565, MSB first, row after
+ * row). They're sent straight from px by DMA, so px must stay valid and
+ * unchanged for as long as the image may be uploaded -- after a new FPGA
+ * session too. */
 sprite_img_t *sprite_img_ram(const uint8_t *px, uint16_t w, uint16_t h)
 {
     if (!px) return NULL;
@@ -247,6 +281,9 @@ sprite_img_t *sprite_img_ram(const uint8_t *px, uint16_t w, uint16_t h)
     return img;
 }
 
+/* Register an image whose pixels your function makes on request:
+ * fn(ctx, offset, buf, len) must write bytes [offset, offset + len) of the
+ * pixel stream into buf. Called once per chunk while uploading. */
 sprite_img_t *sprite_img_fill(uint16_t w, uint16_t h, sprite_fill_fn fn, void *ctx)
 {
     if (!fn) return NULL;
@@ -255,11 +292,17 @@ sprite_img_t *sprite_img_fill(uint16_t w, uint16_t h, sprite_fill_fn fn, void *c
     return img;
 }
 
+/* An image's width in pixels (0 for NULL). */
 uint16_t sprite_img_w(const sprite_img_t *img)     { return img ? img->w : 0; }
+/* An image's height in pixels (0 for NULL). */
 uint16_t sprite_img_h(const sprite_img_t *img)     { return img ? img->h : 0; }
+/* Is the image on the FPGA right now (all chunks uploaded)? */
 bool     sprite_img_ready(const sprite_img_t *img) { return img && img->state == IMG_UPLOADED; }
 
 /* ---- making chunks --------------------------------------------------------- */
+/* Take the next letter of a UTF-8 string (moving *s past it) and give its
+ * glyph, with its scaled width in *gw. NULL (and *gw = 0) at the end of the
+ * string. */
 static const font_glyph_t *next_glyph(const font_t *f, const char **s, uint32_t *gw, uint8_t sc)
 {
     uint32_t cp = font_utf8_next(s);
@@ -269,7 +312,14 @@ static const font_glyph_t *next_glyph(const font_t *f, const char **s, uint32_t 
     return g;
 }
 
-/* Pixels [off/2, (off+len)/2) of a text: walk along the row's letters. */
+/* Draw pixels [off/2, (off+len)/2) of a text image into buf.
+ *
+ * A chunk can start anywhere in the image -- in the middle of a row, in the
+ * middle of a letter. For each pixel: work out x and y from its number,
+ * then walk along the row's letters, adding up their widths in `pen`, until
+ * the letter that covers x. Its pixel ((x - pen) / scale, y / scale) in the
+ * font decides between the text colour and see-through. At the start of
+ * each row the walk begins again from the first letter. */
 static void make_text(const sprite_img_t *img, uint32_t off, uint8_t *buf, uint32_t len)
 {
     const font_t *f  = img->u.text.font;
@@ -295,6 +345,11 @@ static void make_text(const sprite_img_t *img, uint32_t off, uint8_t *buf, uint3
     }
 }
 
+/* Make bytes [off, off + len) of an image's pixel stream into buf, from
+ * wherever the image comes from: read from its file, drawn from the font,
+ * filled with its colour, or made by its fill function. (RAM images never
+ * come here; they're sent from their own buffer.) Runs in sprite_poll(),
+ * right before the chunk is sent. */
 static void make_chunk(sprite_img_t *img, uint32_t off, uint8_t *buf, uint32_t len)
 {
     switch (img->src) {
@@ -327,6 +382,8 @@ static void make_chunk(sprite_img_t *img, uint32_t off, uint8_t *buf, uint32_t l
     }
 }
 
+/* Take a free staging buffer for one chunk; NULL if all SPRITE_STAGE_BUFS
+ * are in flight (then sprite_poll() stops and tries again next poll). */
 static uint8_t *stage_get(void)
 {
     for (unsigned i = 0; i < SPRITE_STAGE_BUFS; i++)
@@ -334,12 +391,17 @@ static uint8_t *stage_get(void)
     return NULL;
 }
 
+/* Give a staging buffer back, found by its address. Called from
+ * image_done() with the command's tx pointer; a RAM image's pointer matches
+ * no buffer, so nothing happens for those. */
 static void stage_put(const uint8_t *p)
 {
     for (unsigned i = 0; i < SPRITE_STAGE_BUFS; i++)
         if (p == stage[i]) stage_busy[i] = false;
 }
 
+/* Every staging buffer free again, and no chunk waiting. Only safe when
+ * nothing is in flight: after fpga_abort_all() or at a new session. */
 static void stage_reset(void)
 {
     memset(stage_busy, 0, sizeof stage_busy);
@@ -347,6 +409,9 @@ static void stage_reset(void)
 }
 
 /* ---- sprites ----------------------------------------------------------------- */
+/* Take a free sprite slot: a sprite showing img at x, y. Nothing is sent
+ * here; sprite_poll() creates it on the FPGA (SPRITE_WRITE) once its image
+ * is uploaded. NULL for a NULL image or when all SPRITE_MAX are taken. */
 sprite_t *sprite_new(sprite_img_t *img, int16_t x, int16_t y, bool visible)
 {
     if (!img) return NULL;
@@ -360,14 +425,23 @@ sprite_t *sprite_new(sprite_img_t *img, int16_t x, int16_t y, bool visible)
     return NULL;
 }
 
+/* Move a sprite. Only the wanted position changes; sprite_poll() sees it
+ * differs from what the FPGA has and sends one SPRITE_UPDATE -- however
+ * often this is called in between. */
 void sprite_move(sprite_t *s, int16_t x, int16_t y) { if (s) { s->x = x; s->y = y; } }
+/* Show or hide a sprite (same way: sprite_poll() sends the update). */
 void sprite_show(sprite_t *s, bool visible)         { if (s) s->visible = visible; }
 
+/* Position and visibility in one go (the notes' "sprite_update"). */
 void sprite_set(sprite_t *s, int16_t x, int16_t y, bool visible)
 {
     if (s) { s->x = x; s->y = y; s->visible = visible; }
 }
 
+/* Delete a sprite. If it never reached the FPGA, its slot is free at once;
+ * otherwise it's marked `remove` and sprite_poll() sends SPRITE_DELETE (as
+ * soon as any command in flight for it is done). Don't use the handle
+ * after this: the slot may be reused. The image stays. */
 void sprite_delete(sprite_t *s)
 {
     if (!s || s->state == SPR_FREE) return;
@@ -376,11 +450,19 @@ void sprite_delete(sprite_t *s)
         s->state = SPR_FREE;                    /* never made it to the FPGA */
 }
 
+/* Where the game wants the sprite: x (0 for NULL). */
 int16_t       sprite_x(const sprite_t *s)     { return s ? s->x : 0; }
+/* ...and y (0 for NULL). */
 int16_t       sprite_y(const sprite_t *s)     { return s ? s->y : 0; }
+/* The image a sprite shows (NULL for NULL). */
 sprite_img_t *sprite_image(const sprite_t *s) { return s ? s->img : NULL; }
 
 /* ---- animations ---------------------------------------------------------------- */
+/* Make an animation: one sprite per frame, all at x, y, only frame 0
+ * visible. Takes at most SPRITE_ANI_FRAMES frames; all should be the same
+ * size (a warning if not). If a frame's sprite can't be made, the ones
+ * already made are deleted and it returns NULL. ticks = game frames each
+ * animation frame is shown (0 counts as 1). */
 sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t ticks,
                              int16_t x, int16_t y, bool visible)
 {
@@ -416,6 +498,8 @@ sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t tic
     return a;
 }
 
+/* Make an animation from every frame of a sprite file: reads how many
+ * frames it has, registers an image per frame, then sprite_ani_new(). */
 sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_t y,
                               bool visible)
 {
@@ -431,7 +515,10 @@ sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_
     return sprite_ani_new(frames, (uint8_t)n, ticks, x, y, visible);
 }
 
-/* Hide the frame shown, show frame f where the animation is. */
+/* Switch an animation to frame f: hide the sprite shown now, then show
+ * frame f's sprite at the animation's position. The hidden frames don't
+ * follow sprite_ani_move(), so the position is set here, in the same
+ * update that shows it. Two SPRITE_UPDATEs per switch. */
 static void ani_to(sprite_ani_t *a, uint8_t f)
 {
     if (f == a->cur) return;
@@ -440,6 +527,9 @@ static void ani_to(sprite_ani_t *a, uint8_t f)
     sprite_set(a->frame[a->cur], a->x, a->y, a->visible);
 }
 
+/* Move an animation. Only the frame on screen is moved; the others get
+ * the new position when they're next shown (ani_to). One update per move,
+ * however many frames there are. */
 void sprite_ani_move(sprite_ani_t *a, int16_t x, int16_t y)
 {
     if (!a) return;
@@ -448,6 +538,7 @@ void sprite_ani_move(sprite_ani_t *a, int16_t x, int16_t y)
     sprite_move(a->frame[a->cur], x, y);        /* the hidden ones move when shown */
 }
 
+/* Show or hide the whole animation (the frame on screen). */
 void sprite_ani_show(sprite_ani_t *a, bool visible)
 {
     if (!a) return;
@@ -455,9 +546,12 @@ void sprite_ani_show(sprite_ani_t *a, bool visible)
     sprite_show(a->frame[a->cur], visible);
 }
 
+/* Pause (it stays on its frame) or play again. */
 void sprite_ani_play(sprite_ani_t *a, bool playing) { if (a) a->playing = playing; }
+/* How many game frames each animation frame is shown (0 counts as 1). */
 void sprite_ani_speed(sprite_ani_t *a, uint8_t ticks) { if (a) a->ticks = ticks ? ticks : 1; }
 
+/* Jump to a frame (wraps around), and start counting its time from now. */
 void sprite_ani_goto(sprite_ani_t *a, uint8_t frame)
 {
     if (!a) return;
@@ -465,6 +559,8 @@ void sprite_ani_goto(sprite_ani_t *a, uint8_t frame)
     a->count = 0;
 }
 
+/* Delete every frame's sprite and free the animation. The images stay
+ * on the FPGA (they can't be freed). */
 void sprite_ani_delete(sprite_ani_t *a)
 {
     if (!a || !a->used) return;
@@ -472,6 +568,10 @@ void sprite_ani_delete(sprite_ani_t *a)
     a->used = false;
 }
 
+/* Step the animations. Call once per game frame with n = SYNCs since the
+ * last call. Each animation counts game frames; every `ticks` of them it
+ * moves on a frame. Counting n (not 1) keeps the speed right when the game
+ * falls behind and several FPGA frames go by at once. */
 void sprite_frame(uint32_t n)
 {
     for (unsigned i = 0; i < SPRITE_ANI_MAX; i++) {
@@ -485,12 +585,16 @@ void sprite_frame(uint32_t n)
 }
 
 /* ---- callbacks ------------------------------------------------------------------ */
+/* Did the FPGA refuse because it's full (NACK, "resource exhausted")? Then
+ * trying again this session would only fail again. */
 static bool out_of_room(fpga_err_t err)
 {
     return err == FPGA_ERR_STATUS && fpga_fail_code() == FPGA_FAIL_RESOURCE_EXHAUSTED;
 }
 
-/* An image gives up the chunks it claimed but never submitted. */
+/* An image whose upload stopped gives back the memIDs it claimed for
+ * chunks it never submitted. Marks them all as sent, so it isn't done
+ * twice. */
 static void release_unsent(sprite_img_t *img)
 {
     unsigned n = (unsigned)(img->chunks - img->sent);
@@ -498,6 +602,16 @@ static void release_unsent(sprite_img_t *img)
     img->sent = img->chunks;
 }
 
+/* Done callback of every WRITE_SPRITE chunk (from fpga_poll()).
+ *   1. Frees the chunk's staging buffer.
+ *   2. Keeps the memID budget right: an OK answer says exactly how many
+ *      memIDs are in use; a cancelled or NACKed chunk used none; one with
+ *      a lost answer may have, so it counts.
+ *   3. OK: the first chunk's memID names the image; when every chunk is
+ *      back, the image is UPLOADED and sprites waiting for it can be made.
+ *   4. Failed: the image's memory isn't one block any more, so it's
+ *      uploaded whole again (NONE) -- or left out (NO_ROOM) if the FPGA is
+ *      full -- and `failed` makes sprite_poll() ask for a resync. */
 static void image_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
     sprite_img_t *img = cmd->ctx;
@@ -536,6 +650,14 @@ static void image_done(const fpga_cmd_t *cmd, fpga_err_t err)
     failed = true;
 }
 
+/* Done callback of SPRITE_WRITE / UPDATE / DELETE (from fpga_poll()).
+ *   OK:     create -> the answer is the spriteID; create or update -> LIVE,
+ *           and what was sent (p_*) is now what the FPGA has (s_*); delete
+ *           -> the slot is free.
+ *   Failed: a create goes back to NONE and is done again (or NO_ROOM if the
+ *           FPGA is out of spriteIDs); an update or delete goes back to
+ *           LIVE with `dirty`, so it's sent again. `failed` asks for a
+ *           resync. */
 static void sprite_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
     sprite_t *s = cmd->ctx;
@@ -574,7 +696,9 @@ static void sprite_done(const fpga_cmd_t *cmd, fpga_err_t err)
 }
 
 /* ---- sending ----------------------------------------------------------------------- */
-/* false: the queue is full, stop for this poll */
+/* Queue a command with our callback. true: queued. false: the queue is
+ * full (stop for this poll, try again next) -- or the command was refused
+ * outright, which sets `failed`. */
 static bool submit(fpga_cmd_t *c, fpga_done_fn done, void *ctx)
 {
     c->done = done;
@@ -588,6 +712,8 @@ static bool submit(fpga_cmd_t *c, fpga_done_fn done, void *ctx)
     return false;
 }
 
+/* Is any sprite that's still wanted waiting for this image? Those images
+ * are uploaded first. */
 static bool image_needed(const sprite_img_t *img)
 {
     for (unsigned i = 0; i < SPRITE_MAX; i++) {
@@ -598,8 +724,15 @@ static bool image_needed(const sprite_img_t *img)
     return false;
 }
 
-/* The next image to upload -- one a sprite waits for first -- with its
- * chunks worked out. */
+/* Pick the next image to upload and work out its chunks.
+ *   - Chunk size: as much as one WRITE_SPRITE may carry (N - 1), but at
+ *     most a staging buffer, rounded down to whole pixels. Nothing until
+ *     INFO has told us N.
+ *   - Two passes: first images a sprite waits for, then all the rest.
+ *   - Budget: if its chunks don't fit in the memIDs left (in-flight ones
+ *     count as used), the image is NO_ROOM and skipped.
+ * The chosen image is SENDING, its chunks claimed in memids_pending. NULL
+ * if there's nothing to upload. */
 static sprite_img_t *next_upload(void)
 {
     uint16_t max = fpga_max_payload(WRITE_SPRITE_OPCODE);
@@ -633,15 +766,28 @@ static sprite_img_t *next_upload(void)
     return NULL;
 }
 
+/* Screen coordinates on the wire are unsigned: negative becomes 0. */
 static uint16_t clamp_u16(int16_t v) { return v < 0 ? 0u : (uint16_t)v; }
 
+/* Send whatever it takes to make the FPGA match what the game wants. Call
+ * it every poll. Stops early when the FPGA queue is full and carries on
+ * next time. Returns false when a command has failed: then the game
+ * resyncs (fpga_abort_all(), sprite_lost()).
+ *
+ * First images: the current image's chunks, one WRITE_SPRITE each, all
+ * submitted before the next image starts (they must land side by side in
+ * sprite memory). A chunk is made into a staging buffer right before it
+ * goes; if the queue is full, it waits in ready_buf so it isn't made twice.
+ *
+ * Then sprites, at most one command each: create the ones whose image is
+ * ready, delete the removed ones, update the ones that moved. */
 bool sprite_poll(void)
 {
     if (failed) return false;
 
     /* Images, one at a time: an image's chunks must follow each other
      * with no other upload in between. */
-    while(1) {
+    for (;;) {
         if (!uploading && !(uploading = next_upload())) break;
         sprite_img_t *img = uploading;
         uint32_t total = img_bytes(img);
@@ -670,20 +816,20 @@ bool sprite_poll(void)
     for (unsigned i = 0; i < SPRITE_MAX; i++) {
         sprite_t *s = &sprs[i];
         fpga_cmd_t c;
-        if (s->state == SPR_NONE && !s->remove) {
+        if (s->state == SPR_NONE && !s->remove) {       /* not on the FPGA: create */
             if (s->img->state != IMG_UPLOADED) continue;
             s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
             c = fpga_cmd_sprite_write(s->img->mem_id, s->visible, clamp_u16(s->x),
                                       clamp_u16(s->y), s->img->w, s->img->h);
             if (!submit(&c, sprite_done, s)) return !failed;
             s->state = SPR_CREATING;
-        } else if (s->state == SPR_LIVE && s->remove) {
+        } else if (s->state == SPR_LIVE && s->remove) {  /* removed: delete */
             c = fpga_cmd_sprite_delete(s->id);
             if (!submit(&c, sprite_done, s)) return !failed;
             s->state = SPR_DELETING;
         } else if (s->state == SPR_LIVE &&
                    (s->dirty || s->x != s->s_x || s->y != s->s_y ||
-                    s->visible != s->s_visible)) {
+                    s->visible != s->s_visible)) {          /* moved / shown / hidden: update */
             s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
             c = fpga_cmd_sprite_update(s->id, s->visible, clamp_u16(s->x), clamp_u16(s->y));
             if (!submit(&c, sprite_done, s)) return !failed;
@@ -694,6 +840,8 @@ bool sprite_poll(void)
 }
 
 /* ---- errors, sessions ------------------------------------------------------------------- */
+/* Empty everything: no images, sprites or animations, budget at 0. Once
+ * at start, before anything is registered. */
 void sprite_init(void)
 {
     memset(imgs, 0, sizeof imgs);
@@ -706,6 +854,11 @@ void sprite_init(void)
     failed         = false;
 }
 
+/* After a resync (call it right after fpga_abort_all()). The cancelled
+ * commands' callbacks have already put their images and sprites back. What
+ * had no callback: an image partway through submitting its chunks -- it
+ * goes back to NONE and gives back the memIDs of its unsent chunks.
+ * Nothing is in flight now, so all staging buffers are free. */
 void sprite_lost(void)
 {
     /* The aborted commands' callbacks already put most things back. An
@@ -718,6 +871,10 @@ void sprite_lost(void)
     failed    = false;
 }
 
+/* New FPGA session: its sprite memory and sprites are gone. Every image
+ * and sprite goes back to NONE (so all of it is uploaded and created again
+ * -- files re-read, texts redrawn), sprites already being deleted are just
+ * freed, and every memID is free again. */
 void sprite_forget(void)
 {
     /* New session: empty sprite memory, every memID free again. */
@@ -736,6 +893,8 @@ void sprite_forget(void)
     failed         = false;
 }
 
+/* How many images aren't on the FPGA yet (waiting or uploading). 0 = all
+ * uploaded, except any left out for lack of room. */
 unsigned sprite_pending(void)
 {
     unsigned n = 0;
@@ -744,4 +903,6 @@ unsigned sprite_pending(void)
     return n;
 }
 
+/* memIDs in use as far as we know: answered ones plus those claimed by
+ * chunks still in flight. */
 unsigned sprite_memids_used(void) { return memids_known + memids_pending; }

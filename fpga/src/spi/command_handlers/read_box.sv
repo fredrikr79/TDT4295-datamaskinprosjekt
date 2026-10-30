@@ -3,18 +3,21 @@ module read_box #(
 ) (
     input wire clk,
     ck_rst,
-    data_rdy,
+    mem_data_on_wire,
     send_read_box,
     mem_busy,
+    input logic in_empty,
     input logic [7:0] mem_out,
     in_fifo,
     output logic [7:0] read_box_fifo,
+    error_code,
+    output logic [15:0] mem_len,
     output logic read_box_done,
     read_box_w_en,
     read_box_r_en,
-    mem_toggle,
-    output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_func
+    mem_req,
+    error_valid,
+    output logic [31:0] mem_addr
 );
 
 
@@ -34,39 +37,41 @@ module read_box #(
     GET_HEIGHT_TOP,
     GET_HEIGHT_BOTTOM,
     GET_MEM_ADDR,
-    DATA
+    INIT_REQ,
+    DATA,
+    DONE
   } r_box_states_e;
 
-  logic [7:0] row_index, col_index = 8'd0;
+  logic [7:0] read_bytes = 8'd0;
+  logic [15:0] row_index, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
-  logic [31:0] memAddr;
-  logic toggle_init;  // Init captures toggle at the start of the transaction.
-
 
   r_box_states_e state = START;
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
-      col_index <= 8'd0;
-      row_index <= 8'd0;
+    if (ck_rst) begin
+      col_index     <= 16'd0;
+      row_index     <= 16'd0;
       read_box_done <= 1'b0;
       read_box_w_en <= 1'b0;
       read_box_r_en <= 1'b0;
       read_box_fifo <= 8'd0;
+      mem_req       <= 1'b0;
       state <= START;
+      error_valid <= 1'b0;
 
     end else begin
       read_box_w_en <= 1'b0;
       read_box_r_en <= 1'b0;
       read_box_done <= 1'b0;
+      mem_req       <= 1'b0;
 
-      if(send_read_box) begin
+      if (send_read_box) begin
         case (state)
           START: begin
             read_box_r_en <= 1'b1;
-            toggle_init <= mem_toggle;
             state <= GET_X_TOP;
           end
           GET_X_TOP: begin
@@ -108,32 +113,57 @@ module read_box #(
             read_box_r_en <= 1'b1;
             rows[7:0] <= in_fifo;
             state <= GET_MEM_ADDR;
+
+            // IF empty at this point, too few parameters we're supplied.
+            if(in_empty) begin
+              error_valid <= 1'b1;
+              error_code <= MISSING_PARAMETER_ERROR;
+            end
           end
           GET_MEM_ADDR: begin
-            memAddr <= GridPosToMemAddr(gridX, gridY + row_index);
-            mem_func <= READ;
-            state   <= DATA;
+            mem_len <= cols > 16'(memory_pkg::MaxMessageLength)
+              ? 16'(memory_pkg::MaxMessageLength)
+              : cols - col_index;
+            mem_addr <= GridPosToMemAddr(gridX + col_index, gridY + row_index);
+            state   <= INIT_REQ;
+          end
+          INIT_REQ: begin
+            if (!mem_busy) begin
+              mem_req <= 1'b1;
+              state <= DATA;
+            end
           end
           DATA: begin
-            mem_toggle <= !toggle_init;
-
-            if (col_index <= cols && data_rdy) begin
+            if (!mem_busy && mem_data_on_wire) begin
               read_box_fifo <= mem_out;
               read_box_w_en <= 1'b1;
-              col_index <= col_index + 8'd1;
-            end else begin
-              col_index <= 8'd0;
-              if (row_index < rows) begin
-                  row_index <= row_index + 8'd1;
+
+              if (col_index >= cols - 1) begin
+                col_index <= 16'b0;
+
+                if (row_index < rows - 1) begin
+                  row_index <= row_index + 16'd1;
                   state <= GET_MEM_ADDR;
-              end else begin
-                  row_index <= 8'd0;
+                end else begin
+                  row_index <= 16'd0;
                   read_box_done <= 1'b1;
-                  state <= START;
+                  state <= DONE;
+                end
+              end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength) - 1) begin
+                col_index <= col_index + 16'd1;
+                read_bytes <= 8'b0;
+                state <= GET_MEM_ADDR;
+              end else if(mem_data_on_wire) begin
+                col_index <= col_index + 16'd1;
+                read_bytes <= read_bytes + 8'd1;
               end
             end
           end
-          default:;
+          DONE: begin
+            // Simply wait one cycle for done signal to be processed.
+            state <= START;
+          end
+          default: ;
         endcase
       end
     end

@@ -1,4 +1,4 @@
-module vga_mod_n_counter #(
+module mod_n_counter #(
     parameter int unsigned N = 10,
     parameter bit AT_POSEDGE = 1,
     parameter bit AT_NEGEDGE = 0,

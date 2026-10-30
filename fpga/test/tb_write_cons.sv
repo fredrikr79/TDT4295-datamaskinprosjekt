@@ -1,0 +1,151 @@
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
+
+module tb_write_cons #(
+  parameter int PAYLOAD_LEN = 25
+);
+  import config_pkg::*;
+  import mem_driver_pkg::*;
+  import memory_pkg::*;
+
+  localparam int HEADER_LEN = 6;
+  localparam int STREAM_LEN = HEADER_LEN + PAYLOAD_LEN;
+  localparam int CHUNK_COUNT = (PAYLOAD_LEN + memory_pkg::MaxMessageLength - 1)
+                             / memory_pkg::MaxMessageLength;
+
+  logic clk = 1'b0;
+  always #5 clk = ~clk;
+  logic ck_rst = 1'b0;
+  logic mem_data_on_wire = 1'b0;
+  logic send_write_cons = 1'b0;
+  logic mem_busy = 1'b1;
+  logic [7:0] in_fifo;
+  logic [7:0] mem_in;
+  logic [15:0] mem_len;
+  logic write_cons_done, write_cons_r_en, mem_req;
+  logic [31:0] mem_addr;
+
+  logic [7:0] stream [0:STREAM_LEN-1];
+  logic [7:0] payload_seen [0:PAYLOAD_LEN-1];
+  logic [31:0] request_addresses [0:CHUNK_COUNT-1];
+  logic [15:0] request_lengths [0:CHUNK_COUNT-1];
+  integer fifo_ptr = 0;
+  integer payload_count = 0;
+  integer req_count = 0;
+  integer cycles = 0;
+  logic [31:0] expected_addr;
+
+  always_comb in_fifo = (fifo_ptr < STREAM_LEN) ? stream[fifo_ptr] : 8'hEE;
+
+  // FWFT model: pop on the rising edge where the previously registered r_en is high.
+  always @(posedge clk) begin
+    if (ck_rst) fifo_ptr <= 0;
+    else if (write_cons_r_en && fifo_ptr < STREAM_LEN)
+      fifo_ptr <= fifo_ptr + 1;
+  end
+
+  write_cons dut (
+    .clk(clk), .ck_rst(ck_rst), .mem_data_on_wire(mem_data_on_wire),
+    .send_write_cons(send_write_cons), .mem_busy(mem_busy), .in_fifo(in_fifo),
+    .mem_len(mem_len), .mem_in(mem_in), .write_cons_done(write_cons_done),
+    .write_cons_r_en(write_cons_r_en), .mem_req(mem_req), .mem_addr(mem_addr)
+  );
+
+  always @(posedge clk) begin
+    logic sampled_read_enable;
+    integer sampled_fifo_ptr;
+    sampled_read_enable = write_cons_r_en;
+    sampled_fifo_ptr = fifo_ptr;
+    #1;
+    if (!ck_rst) begin
+      if (mem_req) begin
+        if (req_count >= CHUNK_COUNT) $fatal(1, "WRITE_CONS issued too many requests");
+        request_addresses[req_count] = mem_addr;
+        request_lengths[req_count] = mem_len;
+        req_count = req_count + 1;
+      end
+      if (mem_data_on_wire && !mem_busy && sampled_read_enable &&
+          sampled_fifo_ptr >= HEADER_LEN) begin
+        if (payload_count >= PAYLOAD_LEN) $fatal(1, "WRITE_CONS emitted too many payload samples");
+        payload_seen[payload_count] = mem_in;
+        payload_count = payload_count + 1;
+      end
+    end
+  end
+
+  task automatic pulse_data_ready;
+    begin
+      @(negedge clk); mem_data_on_wire = 1'b1;
+      @(negedge clk); mem_data_on_wire = 1'b0;
+      @(negedge clk); // allow the registered read enable to pop the FWFT head
+    end
+  endtask
+
+  initial begin
+    stream[0] = 8'h00; stream[1] = 8'h0A; // X = 10
+    stream[2] = 8'h00; stream[3] = 8'h14; // Y = 20
+    stream[4] = 8'h00;
+    stream[5] = PAYLOAD_LEN[7:0];
+    for (int i = 0; i < PAYLOAD_LEN; i++) stream[HEADER_LEN + i] = 8'(8'hA0 + i);
+
+    ck_rst = 1'b1;
+    repeat (3) @(negedge clk);
+
+    ck_rst = 1'b0;  // Release reset
+    send_write_cons = 1'b1;
+    // Keep memory busy while the request state is reached.
+    repeat (10) @(negedge clk);
+    mem_busy = 1'b0;
+
+    while (req_count == 0 && cycles < 30) begin
+      @(negedge clk); cycles = cycles + 1;
+    end
+    if (req_count < 1) $fatal(1, "WRITE_CONS expected a memory request");
+
+    // Payload is available continuously, so hold data_on_wire high.
+    @(negedge clk);
+    mem_data_on_wire = 1'b1;
+
+    cycles = 0;
+    while (!write_cons_done && cycles < PAYLOAD_LEN * 3 + 30) begin
+      @(negedge clk);
+      cycles = cycles + 1;
+    end
+
+    if (!write_cons_done)
+      $fatal(1, "WRITE_CONS timed out");
+
+    // No more payload data is available after completion.
+    mem_data_on_wire = 1'b0;
+    send_write_cons = 1'b0;
+    repeat (1) @(negedge clk);
+
+
+    if (payload_count != PAYLOAD_LEN)
+      $fatal(1, "WRITE_CONS payload samples %0d, expected %0d", payload_count, PAYLOAD_LEN);
+    for (int i = 0; i < PAYLOAD_LEN; i++) begin
+      if (payload_seen[i] !== stream[HEADER_LEN + i])
+        $fatal(1, "WRITE_CONS payload byte %0d got %02h expected %02h",
+               i, payload_seen[i], stream[HEADER_LEN + i]);
+    end
+    if (req_count != CHUNK_COUNT)
+      $fatal(1, "WRITE_CONS request count %0d expected %0d", req_count, CHUNK_COUNT);
+    for (int chunk = 0; chunk < CHUNK_COUNT; chunk++) begin
+      int chunk_offset;
+      int expected_chunk_len;
+      chunk_offset = chunk * memory_pkg::MaxMessageLength;
+      expected_chunk_len = (PAYLOAD_LEN - chunk_offset > memory_pkg::MaxMessageLength)
+                         ? memory_pkg::MaxMessageLength
+                         : PAYLOAD_LEN - chunk_offset;
+      if (request_addresses[chunk] !==
+          GridPosToMemAddr(16'h000A + 16'(chunk_offset), 16'h0014))
+        $fatal(1, "WRITE_CONS chunk %0d address %08h", chunk, request_addresses[chunk]);
+      if (request_lengths[chunk] !== 16'(expected_chunk_len))
+        $fatal(1, "WRITE_CONS chunk %0d length %0d expected %0d",
+               chunk, request_lengths[chunk], expected_chunk_len);
+    end
+
+    $display("PASS tb_write_cons");
+    $finish;
+  end
+endmodule

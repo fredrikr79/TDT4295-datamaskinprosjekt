@@ -64,6 +64,11 @@ storage_status_t storage_append(const char *path, const void *data, uint32_t len
 /* STORAGE_NOT_FOUND if it wasn't there. */
 storage_status_t storage_delete(const char *path);
 
+/* Rename from -> to, replacing `to` if it exists. For saving safely: write
+ * the new version under a temporary name, then rename it over the old one,
+ * so a save that's cut off never replaces the last good file. */
+storage_status_t storage_rename(const char *from, const char *to);
+
 const char *storage_status_str(storage_status_t st);
 
 #endif

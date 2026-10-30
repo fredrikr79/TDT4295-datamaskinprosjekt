@@ -1,17 +1,26 @@
+/* rooms.c - rooms: tile IDs <-> run-length files <-> the FPGA grid.
+ * Portable: the files go through storage.h (SD card on the MCU, a local
+ * folder on the PC). */
+
 #define LOG_TAG "rooms"
 
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "game.h"
 #include "rooms.h"
 #include "storage.h"
 #include "log.h"
 #include "fpga.h"
 
-/* Room files are DATA_MAX_SIZE (~5 KB): too big for the MCU stack */
+/* Room files are DATA_MAX_SIZE (~5 KB): too big for the MCU stack (CubeMX
+ * default 1 KB), so they live here. Not re-entrant -- one at a time. */
 static uint8_t file_data[DATA_MAX_SIZE];
+
+/* The room we're in, as tile IDs (row after row: cell x, y is
+ * room_tiles[y * ROOM_X + x]). Loaded from the card, then sent to the FPGA;
+ * read back from the FPGA, then saved. */
+static uint8_t room_tiles[ROOM_X*ROOM_Y];
 
 #define NAME_LEN 32     /* "save/-1000,-1000.dat" fits */
 
@@ -225,7 +234,7 @@ void progress_online_room(struct online_room *room, uint8_t *new_ids, uint16_t i
   if (room->tile_progress == 0)
   {
     room->prev_id = new_ids[0];
-    room->consecutive = 1;
+    room->consecutive = 0;  // the loop below counts new_ids[0] itself
   }
 
   // Iterate through IDs in received batch
@@ -272,38 +281,113 @@ bool delete_save(int x, int y)
   return true;
 }
 
-void send_next_line(const fpga_cmd_t *prev_cmd, fpga_err_t err)
+/* ---- moving a room to / from the FPGA ------------------------------------
+ * One row of room_tiles per command (WRITE_CONS to load, READ_CONS to save),
+ * up to ROOM_ROWS_IN_FLIGHT at a time. The callbacks only count the rows
+ * that came back OK (or note a failure); room_poll() sends the rows and, for
+ * a save, writes the file once every row is in. */
+#define ROOM_ROWS_IN_FLIGHT 4
+
+enum { JOB_IDLE, JOB_LOAD, JOB_SAVE };
+
+static struct
 {
-  fpga_cmd_t cmd = fpga_cmd_write_cons(
-    0, prev_cmd->hdr.y + 1, prev_cmd->tx+ROOM_X, ROOM_X
-  );
-  if (cmd.hdr.y + 1 < ROOM_Y) cmd.done = send_next_line;
-  else load_finish();
-  fpga_submit(&cmd);
+  uint8_t kind;             // JOB_LOAD / JOB_SAVE
+  room_status_t status;
+  int x, y;                 // the room
+  uint16_t next_row;        // next row to send a command for
+  uint16_t rows_done;       // rows whose command came back OK
+  uint8_t in_flight;        // commands sent, not back yet
+} job;
+
+static void row_done(const fpga_cmd_t *cmd, fpga_err_t err)
+{
+  job.in_flight--;
+  if (err != FPGA_ERR_NONE)
+  {
+    if (job.status != ROOM_FAILED)
+      LOG_WARN("room %s, row %u: %s", job.kind == JOB_LOAD ? "load" : "save",
+               cmd->hdr.y, fpga_err_str(err));
+    job.status = ROOM_FAILED;  // the game resyncs, then room_resume()
+    return;
+  }
+  // Rows come back in the order they were sent, and a failure cancels
+  // everything behind it, so the rows done are always rows 0..rows_done-1.
+  job.rows_done++;
 }
 
-void send_room_to_fpga(uint8_t *tileIDs)
+static void job_start(uint8_t kind, int x, int y)
 {
-  fpga_cmd_t cmd = fpga_cmd_write_cons(0, 0, tileIDs, ROOM_X);
-  cmd.done = send_next_line;
-  fpga_submit(&cmd);
+  job.kind = kind;
+  job.status = ROOM_BUSY;
+  job.x = x;
+  job.y = y;
+  job.next_row = 0;
+  job.rows_done = 0;
+  job.in_flight = 0;
 }
 
-void read_next_line(const fpga_cmd_t *prev_cmd, fpga_err_t err)
+void room_load_start(int x, int y)
 {
-  fpga_cmd_t cmd = fpga_cmd_read_cons(
-    0, prev_cmd->hdr.y + 1, prev_cmd->rx+ROOM_X, ROOM_X
-  );
-  if (cmd.hdr.y + 1 < ROOM_Y) cmd.done = read_next_line;
-  else save_finish();
-  fpga_submit(&cmd);
+  LOG_INFO("loading room %d, %d", x, y);
+  read_room(x, y, room_tiles);   // an empty room if there's no file (logged)
+  job_start(JOB_LOAD, x, y);
 }
 
-void read_room_from_fpga(uint8_t *tile_buffer)
+void room_save_start(int x, int y)
 {
-  fpga_cmd_t cmd = fpga_cmd_read_cons(0, 0, tile_buffer, ROOM_X);
-  cmd.done = read_next_line;
-  fpga_submit(&cmd);
+  LOG_INFO("saving room %d, %d", x, y);
+  job_start(JOB_SAVE, x, y);
+}
+
+bool room_resume(void)
+{
+  if (job.status != ROOM_BUSY && job.status != ROOM_FAILED) return false;
+  // After fpga_abort_all() nothing is in flight. room_tiles still holds the
+  // room (load) or the rows read so far (save): carry on after the last
+  // row that came back OK.
+  job.status = ROOM_BUSY;
+  job.next_row = job.rows_done;
+  job.in_flight = 0;
+  LOG_INFO("room %d, %d: %s resumed at row %u", job.x, job.y,
+           job.kind == JOB_LOAD ? "load" : "save", job.rows_done);
+  return true;
+}
+
+room_status_t room_poll(void)
+{
+  if (job.status != ROOM_BUSY) return job.status;
+
+  // Every row is in: done. (Only now -- not when the last row is sent.)
+  if (job.rows_done == ROOM_Y)
+  {
+    if (job.kind == JOB_SAVE) save_room(job.x, job.y, room_tiles);  // no card: logged
+    LOG_INFO("room %d, %d %s", job.x, job.y, job.kind == JOB_LOAD ? "loaded" : "saved");
+    job.status = ROOM_DONE;
+    return job.status;
+  }
+
+  // Send the next rows, as many as may be in flight.
+  while (job.next_row < ROOM_Y && job.in_flight < ROOM_ROWS_IN_FLIGHT)
+  {
+    uint8_t *row = &room_tiles[job.next_row * ROOM_X];
+    fpga_cmd_t cmd = job.kind == JOB_LOAD
+      ? fpga_cmd_write_cons(0, job.next_row, row, ROOM_X)
+      : fpga_cmd_read_cons(0, job.next_row, row, ROOM_X);
+    cmd.done = row_done;
+
+    fpga_status_t st = fpga_submit(&cmd);
+    if (st == FPGA_EFULL) break;       // queue full: the rest next poll
+    if (st != FPGA_OK)
+    {
+      LOG_ERR("room row %u refused: %s", job.next_row, fpga_status_str(st));
+      job.status = ROOM_FAILED;
+      break;
+    }
+    job.in_flight++;
+    job.next_row++;
+  }
+  return job.status;
 }
 
 void init_empty_portals(portal_t *portals, uint8_t n_portals)

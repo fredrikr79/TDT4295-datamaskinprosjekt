@@ -38,8 +38,26 @@ bool save_online_room(struct online_room *room);
 
 bool delete_save(int x, int y);
 
-void send_room_to_fpga(uint8_t *tileIDs);
-void read_room_from_fpga(uint8_t *tile_buffer);
+/* ---- moving the current room to / from the FPGA ---------------------------
+ *   room_load_start(x, y)   read the room's file, then send it row by row
+ *   room_save_start(x, y)   read the room back row by row, then save it
+ *   every poll:  room_poll() -> ROOM_BUSY, ROOM_DONE, or ROOM_FAILED (an
+ *                FPGA command failed: resync, then room_resume())
+ * The room is kept in rooms.c (ROOM_X * ROOM_Y bytes). */
+typedef enum
+{
+  ROOM_IDLE,                /* nothing started                           */
+  ROOM_BUSY,
+  ROOM_DONE,                /* every row came back OK (file problems: see the log) */
+  ROOM_FAILED,              /* an FPGA command failed                    */
+} room_status_t;
+
+void room_load_start(int x, int y);
+void room_save_start(int x, int y);
+room_status_t room_poll(void);
+/* After a resync that kept the FPGA session: carry on from the first row
+ * not done. Call it after fpga_abort_all(). false: nothing to resume. */
+bool room_resume(void);
 
 typedef struct
 {

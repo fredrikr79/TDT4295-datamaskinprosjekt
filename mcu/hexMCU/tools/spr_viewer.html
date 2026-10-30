@@ -1,0 +1,532 @@
+<title>Heks Sprite Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen&display=swap">
+<style>
+/* Layout: a workbench. Header bar with the file, a strip of file facts, then two panes side by side
+   (frames as stored | playback) that stack on phones, and a pixel inspector pinned to the bottom. */
+:root {
+  --bg: #F2F1F5;
+  --surface: #FFFFFF;
+  --sunk: #E8E6ED;
+  --line: #D7D3DF;
+  --fg: #1D1A24;
+  --muted: #676174;
+  --accent: #A8137A;
+  --accent-ink: #FFFFFF;
+  --key: #F800F8;          /* 0xF81F as the FPGA shows it, the see-through colour */
+  --warn-fg: #8A4F00;
+  --warn-bg: #FFF1D6;
+  --check-a: #E1DEE6;
+  --check-b: #F8F7FA;
+  --f-display: "Silkscreen", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141219; --surface: #1C1923; --sunk: #25212E; --line: #363142; --fg: #ECE9F2;
+    --muted: #9D96AB; --accent: #F062C9; --accent-ink: #1B0A16; --key: #F800F8;
+    --warn-fg: #F3B860; --warn-bg: #2F2414; --check-a: #2B2734; --check-b: #211E29;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141219; --surface: #1C1923; --sunk: #25212E; --line: #363142; --fg: #ECE9F2;
+  --muted: #9D96AB; --accent: #F062C9; --accent-ink: #1B0A16; --key: #F800F8;
+  --warn-fg: #F3B860; --warn-bg: #2F2414; --check-a: #2B2734; --check-b: #211E29;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px calc(64px + env(safe-area-inset-bottom, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 16px; }
+
+/* header */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.brand { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: 26px; letter-spacing: .02em; margin: 0; line-height: 1.1; }
+.fname { font-family: var(--f-mono); font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.fname b { color: var(--fg); font-weight: 500; }
+.tag { font-family: var(--f-body); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); border: 1px solid currentColor; border-radius: 3px; padding: 0 5px; margin-left: 6px; vertical-align: 1px; }
+
+.btn {
+  font: 500 14px/1 var(--f-body); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r); padding: 9px 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 38px;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:focus-visible, select:focus-visible, input:focus-visible, .seg button:focus-visible, .frame:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* facts strip */
+.facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px;
+  background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden;
+}
+.fact { background: var(--surface); padding: 10px 14px; min-width: 0; }
+.fact dt { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 2px; }
+.fact dd { margin: 0; font-family: var(--f-mono); font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fact dd small { color: var(--muted); font-size: 12px; }
+
+.msg { margin: 0; padding: 10px 14px; border-radius: var(--r); background: var(--warn-bg); color: var(--warn-fg); font-size: 14px; }
+
+/* toolbar */
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); min-width: 0; }
+.ctl input[type=range] { width: 130px; accent-color: var(--accent); }
+.ctl output, .ctl .num { font-family: var(--f-mono); color: var(--fg); font-variant-numeric: tabular-nums; }
+.ctl input[type=number], .ctl select {
+  font: 14px var(--f-mono); color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 5px 8px; min-height: 32px;
+}
+.ctl input[type=number] { width: 78px; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg button {
+  font: 13px var(--f-body); color: var(--fg); background: var(--surface); border: 0; border-right: 1px solid var(--line);
+  padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 32px;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--sunk); font-weight: 600; }
+.sw { width: 12px; height: 12px; border-radius: 2px; border: 1px solid var(--line); display: inline-block; }
+.sw.checker { background: conic-gradient(var(--check-a) 25%, var(--check-b) 0 50%, var(--check-a) 0 75%, var(--check-b) 0) 0 0 / 6px 6px; }
+.sw.key { background: var(--key); }
+.sw.black { background: #000; }
+.sw.white { background: #fff; }
+
+/* panes */
+.panes { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 820px) { .panes { grid-template-columns: minmax(0, 1fr); } }
+.pane { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.pane-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; margin: 0; font-weight: 600; }
+.pane-head span { font-size: 13px; color: var(--muted); }
+
+.strip { display: flex; flex-wrap: wrap; gap: 14px; }
+.frame {
+  display: grid; gap: 6px; justify-items: start; padding: 6px; margin: -6px; border-radius: var(--r);
+  border: 2px solid transparent; background: none; cursor: pointer; text-align: left; color: inherit; font: inherit; max-width: 100%;
+}
+.frame.cur { border-color: var(--accent); }
+.frame canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; }
+.cap { font-family: var(--f-mono); font-size: 12px; color: var(--muted); line-height: 1.35; font-variant-numeric: tabular-nums; }
+.cap b { color: var(--fg); font-weight: 500; }
+
+.stage { display: grid; place-items: center; background: var(--sunk); border-radius: var(--r); padding: 16px; min-height: 160px; overflow: hidden; }
+.stage canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.readout { font-family: var(--f-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.rate { font-size: 13px; color: var(--muted); margin: 0; }
+
+.code { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.code pre {
+  margin: 0; flex: 1; min-width: 0; overflow-x: auto; font: 13px/1.5 var(--f-mono); background: var(--sunk);
+  border-radius: var(--r); padding: 8px 10px; white-space: pre;
+}
+.code .btn { min-height: 0; padding: 6px 10px; font-size: 13px; }
+
+/* inspector */
+.inspect {
+  position: fixed; left: 0; right: 0; bottom: 0; margin: 0; z-index: 5;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  font-family: var(--f-mono); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted);
+  white-space: nowrap; overflow-x: auto;
+}
+.inspect b { color: var(--fg); font-weight: 500; }
+.inspect .chip { display: inline-block; width: 11px; height: 11px; border-radius: 2px; border: 1px solid var(--line); vertical-align: -1px; margin: 0 4px 0 2px; }
+
+.dropzone {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 100%;
+  padding: 6px 6px 6px 14px; border: 2px dashed var(--line); border-radius: var(--r);
+  font-size: 13px; color: var(--muted);
+}
+.dropzone.over { border-color: var(--accent); background: var(--sunk); color: var(--fg); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">
+      <h1>Sprite Viewer</h1>
+      <span class="fname" id="fname"></span>
+    </div>
+    <div class="dropzone" id="dropzone">
+      <span>Drop a .spr file here, or</span>
+      <label class="btn primary" for="file">Open .spr file</label>
+      <input type="file" id="file" accept=".spr,application/octet-stream" class="sr">
+    </div>
+  </header>
+
+  <dl class="facts" id="facts"></dl>
+  <p class="msg" id="msg" hidden></p>
+
+  <div class="tools">
+    <div class="ctl"><label for="zoom">Zoom</label><input type="range" id="zoom" min="1" max="16" step="1" value="4"><output id="zoomOut" for="zoom">4×</output></div>
+    <div class="ctl"><span id="bgLabel">Behind see-through</span>
+      <div class="seg" role="group" aria-labelledby="bgLabel" id="bgSeg">
+        <button type="button" data-bg="checker" aria-pressed="true"><span class="sw checker"></span>Checker</button>
+        <button type="button" data-bg="key" aria-pressed="false"><span class="sw key"></span>0xF81F</button>
+        <button type="button" data-bg="black" aria-pressed="false"><span class="sw black"></span>Black</button>
+        <button type="button" data-bg="white" aria-pressed="false"><span class="sw white"></span>White</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="nIn">FPGA N</label><input type="number" id="nIn" min="9" max="65535" value="1024"><span id="chunkOut"></span></div>
+  </div>
+
+  <main class="panes">
+    <section class="pane" aria-labelledby="h-raw">
+      <div class="pane-head"><h2 id="h-raw">Frames as stored</h2><span>file order · click one to show it</span></div>
+      <div class="strip" id="strip"></div>
+    </section>
+
+    <section class="pane" aria-labelledby="h-play">
+      <div class="pane-head"><h2 id="h-play">Playback</h2><span id="playSub">as sprite_frame() steps it</span></div>
+      <div class="stage"><canvas id="play" width="1" height="1" aria-label="Animated sprite"></canvas></div>
+      <div class="controls">
+        <button type="button" class="btn" id="prev" aria-label="Previous frame">◀</button>
+        <button type="button" class="btn" id="playBtn">Pause</button>
+        <button type="button" class="btn" id="next" aria-label="Next frame">▶</button>
+        <span class="readout" id="readout">frame 0 / 0</span>
+      </div>
+      <div class="controls">
+        <div class="ctl"><label for="ticks">ticks</label><input type="number" id="ticks" min="1" max="255" value="6"></div>
+        <div class="ctl"><label for="hz">SYNC</label>
+          <select id="hz"><option value="30">30 Hz (fake FPGA)</option><option value="60">60 Hz</option></select>
+        </div>
+      </div>
+      <p class="rate" id="rate"></p>
+      <div class="code"><pre id="code"></pre><button type="button" class="btn" id="copy">Copy</button></div>
+    </section>
+  </main>
+</div>
+
+<p class="inspect" id="inspect">Point at a pixel to see its value, its byte in the file and its chunk.</p>
+
+<script>
+(() => {
+  "use strict";
+  const SAMPLE_B64 = "U1AAIAAgAAT4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////6ivqK+or6ivqK+or4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+or6ivqK+or6ivqK+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H///////////+B/4H/qK+or6ivqK+or6iv//////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B////////////gf+B/6ivqK+or6ivqK+or///////////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+or6ivqK+or6ivqK+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/qK+or6ivqK+or6ivgf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/6ivqK+or6ivqK+or4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+or6ivqK+or6ivqK+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/qK+or6ivqK+or6ivgf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/6ivqK+or6ivqK+or4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+or6ivqK+or6ivqK+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/qK+or6ivqK+or6ivgf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/6ivqK+or6ivqK+or4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+or6ivqK+or6ivqK+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/qK+or6ivqK+or6ivgf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/6ivqK+or6ivqK+or4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+or6ivqK+or6ivqK+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/qK+or6ivqK+or6ivgf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/6ivqK+or6ivqK+or4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+or6ivqK+or6ivqK+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/qK+or6ivqK+or6ivgf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/6ivqK+or6ivqK+or4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+or6ivqK+or6ivqK+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/qK+or6ivqK+or6ivgf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B////////////gf+B/6ivqK+or6ivqK+or///////////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf///////////4H/gf+or6ivqK+or6ivqK///////////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////qK+or6ivqK+or6ivgf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////6ivqK+or6ivqK+or4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////////////////////gf+B/4H/gfV+pX6vgf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////////////////////4H/gf+B/4H1fqV+r4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf///////////4H/gf+B/4H/gf+B/4H/gf/////1fqV+pX6lfqV+pX6vgf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H///////////+B/4H/gf+B/4H/gf+B/4H/////9X6lfqV+pX6lfqV+r4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B9X6lfqV+pX6lfqV+pX6lfqV+pX6vgf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gfV+pX6lfqV+pX6lfqV+pX6lfqV+r4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gfV+pX6lfqV+pX6lfqV+pX6lfqV+r4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H1fqV+pX6lfqV+pX6lfqV+pX6lfq+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H1fqV+pX6lfqV+pX6lfqV+pX6lfq//////gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B9X6lfqV+pX6lfqV+pX6lfqV+pX6v/////4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B9X6lfqV+pX6lfqV+pX6lfqV+pX6vgf+B/4H/gf//////gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gfV+pX6lfqV+pX6lfqV+pX6lfqV+r4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gfV+pX6lfqV+pX6lfqV+pX6lfqV+r4H/gf+B/4H/gf+B//////+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H1fqV+pX6lfqV+pX6lfqV+pX6lfq+B/4H/gf+B/4H/gf//////gf+B/4H/gf//////gf+B/4H/gf+B/4H1fqV+pX6lfqV+pX6lfqV+pX6lfq+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/gf+B9X6lfqV+pX6lfqV+pX6lfqV+pX6vgf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B//////+B/4H/gf+B9X6lfqV+pX6lfqV+pX6lfqV+pX6vgf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf//////gf+B/4H/gfV+pX6lfqV+pX6lfqV+pX6lfqV+r4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B//////V+pX6lfqV+pX6lfqV+pX6lfqV+r4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf/////1fqV+pX6lfqV+pX6lfqV+pX6lfq+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H1fqV+pX6lfqV+pX6lfqV+pX6lfq+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B9X6lfqV+pX6lfqV+pX6lfqV+pX6vgf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B9X6lfqV+pX6lfqV+pX6lfqV+pX6vgf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gfV+pX6lfqV+pX6lfqV+pX6lfqV+r4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B9X6lfqV+pX6lfqV+r/////+B/4H/gf+B/4H/gf+B/4H///////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gfV+pX6lfqV+pX6lfq//////gf+B/4H/gf+B/4H/gf+B////////////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B9X6lfq+B/4H/gf+B//////////////////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gfV+pX6vgf+B/4H/gf//////////////////////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////////////////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////////////////////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B////////////gf+B/4H/gf+B/4H/gf+B////////////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf///////////4H/gf+B/4H/gf+B/4H/gf///////////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR/4H/gf+B/4H1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1Uf+B/4H/gf+B9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH/gf+B/4H/gfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR/4H/gf+B/4H1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1Uf+B/4H/gf+B9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH1UfVR9VH/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf///////////4H/gf+B/4H/gf+B/4H/gf///////////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H///////////+B/4H/gf+B/4H/gf+B/4H///////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////////////////////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////////////////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/7g/uD4H/gf+B/4H//////////////////////4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/+4P7g+B/4H/gf+B//////////////////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/+4P7g/uD+4P7g/uD/////+B/4H/gf+B/4H/gf+B/4H///////////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g//////gf+B/4H/gf+B/4H/gf+B////////////gf+B/4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B///////uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf//////7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf//////gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B//////+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf//////gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B//////+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf//////gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H//////4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B//////+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD/////+B/4H/gf+B/4H/gf+B/4H//////4H/gf+B/4H/gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g//////gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H/gf+B//////+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf/uD+4P7g/uD+4P7g/uD+4P7g/uD4H/gf+B/4H/gf+B/4H/gf//////gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/7g/uD+4P7g/uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H/gf+B////////////gf+B/4H/gf+B/4H/gf+B///////uD+4P7g/uD+4P7g+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf///////////4H/gf+B/4H/gf+B/4H/gf//////7g/uD+4P7g/uD+4Pgf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf//////////////////////gf+B/4H/gf/uD+4Pgf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H//////////////////////4H/gf+B/4H/7g/uD4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4H/gf+B/4Hw==";
+  const CLEAR = 0xF81F, HDR = 8, STAGE = 1024, MEMIDS = 1023;
+  const $ = id => document.getElementById(id);
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("sprview." + k); return v === null ? d : v; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("sprview." + k, String(v)); } catch { /* storage off: fine */ } },
+  };
+
+  const st = {
+    spr: null, cur: 0, playing: true, zoom: 4,
+    bg: store.get("bg", "checker"), hz: Number(store.get("hz", 30)) || 30,
+    ticks: 6, N: 1024, offs: [], acc: 0, last: 0,
+  };
+  if (!["checker", "key", "black", "white"].includes(st.bg)) st.bg = "checker";
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) st.playing = false;
+
+  /* ---- parsing ------------------------------------------------------ */
+  function parse(buf, name, example) {
+    const u8 = new Uint8Array(buf);
+    const r = { name, example, size: u8.length, errors: [], notes: [], frames: [], header: u8.slice(0, HDR) };
+    if (u8.length < HDR) { r.errors.push(`This file is ${u8.length} bytes; a sprite file starts with an 8-byte header.`); return r; }
+    if (u8[0] !== 0x53 || u8[1] !== 0x50) {
+      r.errors.push('Not a sprite file: it should start with "SP" (53 50). Make one with tools/png2spr.py.');
+      return r;
+    }
+    const be = i => (u8[i] << 8) | u8[i + 1];
+    r.w = be(2); r.h = be(4); r.n = be(6);
+    if (!r.w || !r.h || !r.n) { r.errors.push(`The header says ${r.w} × ${r.h} px, ${r.n} frame(s); none of these can be 0.`); return r; }
+    r.per = r.w * r.h * 2;
+    r.need = HDR + r.per * r.n;
+    const whole = Math.min(r.n, Math.floor((u8.length - HDR) / r.per));
+    if (u8.length < r.need) {
+      r.errors.push(`The file is cut short: ${fmt(u8.length)} bytes, its header needs ${fmt(r.need)}. ` +
+        `sprite.c refuses it; ${whole ? `the ${whole} whole frame(s) are shown` : "no whole frame is in it"}.`);
+    } else if (u8.length > r.need) {
+      r.notes.push(`${fmt(u8.length - r.need)} extra byte(s) after the last frame; sprite.c ignores them.`);
+    }
+    for (let f = 0; f < whole; f++) {
+      const px = new Uint16Array(r.w * r.h), off = HDR + f * r.per;
+      for (let i = 0; i < px.length; i++) px[i] = (u8[off + 2 * i] << 8) | u8[off + 2 * i + 1];
+      r.frames.push(px);
+    }
+    return r;
+  }
+
+  const fmt = n => n.toLocaleString("en-US");
+  const hex4 = v => "0x" + v.toString(16).toUpperCase().padStart(4, "0");
+  const chunkBytes = () => Math.min(st.N - 1, STAGE) & ~1;
+  function rgb(c) {
+    const r = (c >> 11) & 31, g = (c >> 5) & 63, b = c & 31;
+    return [(r << 3) | (r >> 2), (g << 2) | (g >> 4), (b << 3) | (b >> 2), r, g, b];
+  }
+
+  /* one offscreen canvas per frame, see-through = alpha 0 */
+  function buildOffscreens(s) {
+    st.offs = s.frames.map(px => {
+      const c = document.createElement("canvas");
+      c.width = s.w; c.height = s.h;
+      const ctx = c.getContext("2d"), id = ctx.createImageData(s.w, s.h), d = id.data;
+      for (let i = 0; i < px.length; i++) {
+        const v = px[i];
+        if (v === CLEAR) { d[4 * i + 3] = 0; continue; }
+        const [r, g, b] = rgb(v);
+        d[4 * i] = r; d[4 * i + 1] = g; d[4 * i + 2] = b; d[4 * i + 3] = 255;
+      }
+      ctx.putImageData(id, 0, 0);
+      return c;
+    });
+  }
+
+  /* ---- drawing -------------------------------------------------------- */
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  function paint(canvas, f) {
+    const s = st.spr, z = st.zoom;
+    canvas.width = s.w * z; canvas.height = s.h * z;
+    const ctx = canvas.getContext("2d");
+    if (st.bg === "checker") {
+      const a = css("--check-a"), b = css("--check-b"), cell = 8;
+      for (let y = 0; y < canvas.height; y += cell)
+        for (let x = 0; x < canvas.width; x += cell) {
+          ctx.fillStyle = ((x / cell + y / cell) & 1) ? a : b;
+          ctx.fillRect(x, y, cell, cell);
+        }
+    } else {
+      ctx.fillStyle = st.bg === "key" ? "#F800F8" : st.bg === "black" ? "#000" : "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.imageSmoothingEnabled = false;
+    if (st.offs[f]) ctx.drawImage(st.offs[f], 0, 0, canvas.width, canvas.height);
+  }
+
+  function renderStrip() {
+    const s = st.spr, strip = $("strip");
+    strip.textContent = "";
+    if (!s || !s.frames.length) {
+      const p = document.createElement("p"); p.className = "rate";
+      p.textContent = "No frames to show."; strip.append(p); return;
+    }
+    const cb = chunkBytes(), chunks = Math.ceil(s.per / cb);
+    s.frames.forEach((_, f) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "frame" + (f === st.cur ? " cur" : "");
+      b.setAttribute("aria-label", `Show frame ${f}`);
+      const c = document.createElement("canvas"); c.dataset.frame = f;
+      paint(c, f);
+      const cap = document.createElement("span"); cap.className = "cap";
+      cap.innerHTML = `<b>frame ${f}</b><br>byte ${fmt(HDR + f * s.per)}<br>${chunks} memID${chunks > 1 ? "s" : ""}`;
+      b.append(c, cap);
+      b.addEventListener("click", () => { st.cur = f; st.acc = 0; drawPlay(); });
+      strip.append(b);
+    });
+  }
+
+  function drawPlay() {
+    const s = st.spr, c = $("play");
+    if (!s || !s.frames.length) { c.width = 1; c.height = 1; $("readout").textContent = "no frames"; return; }
+    if (st.cur >= s.frames.length) st.cur = 0;
+    paint(c, st.cur);
+    c.dataset.frame = st.cur;
+    $("readout").textContent = `frame ${st.cur} / ${s.frames.length}`;
+    document.querySelectorAll(".frame").forEach((el, i) => el.classList.toggle("cur", i === st.cur));
+  }
+
+  function renderFacts() {
+    const s = st.spr, cb = chunkBytes();
+    const facts = [];
+    if (s && s.w) {
+      const chunks = Math.ceil(s.per / cb), total = chunks * s.n;
+      facts.push(["Size", `${s.w} × ${s.h} px`]);
+      facts.push(["Frames", `${s.n}`]);
+      facts.push(["Per frame", `${fmt(s.per)} B <small>· ${chunks} memID${chunks > 1 ? "s" : ""}</small>`]);
+      facts.push(["memIDs, all frames", `${fmt(total)} <small>of ${MEMIDS}</small>`]);
+      facts.push(["File", `${fmt(s.size)} B`]);
+    } else if (s) {
+      facts.push(["File", `${fmt(s.size)} B`]);
+    }
+    if (s) facts.push(["Header", Array.from(s.header, b => b.toString(16).toUpperCase().padStart(2, "0")).join(" ") || "–"]);
+    $("facts").innerHTML = facts.map(([k, v]) => `<div class="fact"><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+    $("chunkOut").textContent = `→ ${fmt(cb)} B chunks`;
+    const msgs = s ? [...s.errors, ...s.notes] : [];
+    $("msg").hidden = !msgs.length;
+    $("msg").textContent = msgs.join(" ");
+  }
+
+  function renderRate() {
+    const s = st.spr, n = s ? s.frames.length : 0;
+    const fps = st.hz / st.ticks, cycle = n * st.ticks / st.hz;
+    let t;
+    if (n <= 1) t = n ? "A still image: one frame, nothing to step." : "";
+    else t = `Every ${st.ticks} game frame${st.ticks > 1 ? "s" : ""} at ${st.hz} Hz: ${+fps.toFixed(2)} animation frames a second, ` +
+             `a full loop in ${+cycle.toFixed(2)} s. Each step is two SPRITE_UPDATEs (hide one, show the next).`;
+    if (reduce && n > 1 && !st.playing) t += " Paused because your system asks for reduced motion; press Play.";
+    $("rate").textContent = t;
+    const path = s && s.name ? "sprites/" + s.name : "sprites/thing.spr";
+    $("code").textContent = n > 1
+      ? `sprite_ani_file("${path}", ${st.ticks}, x, y, true);`
+      : `sprite_new(sprite_img_file("${path}", 0), x, y, true);`;
+    const many = n > 1;
+    $("playBtn").disabled = $("prev").disabled = $("next").disabled = !many;
+    $("playBtn").textContent = st.playing && many ? "Pause" : "Play";
+    $("ticks").disabled = !many;
+  }
+
+  function renderName() {
+    const s = st.spr;
+    $("fname").innerHTML = s ? `<b></b>${s.example ? '<span class="tag">example</span>' : ""}` : "";
+    if (s) $("fname").querySelector("b").textContent = s.name;
+  }
+
+  function renderAll() {
+    renderName(); renderFacts(); renderStrip(); drawPlay(); renderRate();
+  }
+
+  /* ---- loading -------------------------------------------------------- */
+  function load(buf, name, example) {
+    const s = parse(buf, name, example);
+    st.spr = s; st.cur = 0; st.acc = 0;
+    if (s.w) {
+      st.zoom = Math.max(1, Math.min(16, Math.floor(256 / Math.max(s.w, s.h))));
+      $("zoom").value = st.zoom; $("zoomOut").textContent = st.zoom + "×";
+    }
+    buildOffscreens(s);
+    renderAll();
+  }
+
+  $("file").addEventListener("change", async e => {
+    const f = e.target.files && e.target.files[0];
+    if (f) load(await f.arrayBuffer(), f.name, false);
+    e.target.value = "";
+  });
+
+  /* Drop zone next to the Open button: a file dropped on it opens. Drops
+   * anywhere else are stopped, so the browser doesn't open the file itself.
+   * The highlight is set and cleared by every dragover, so it can't stick. */
+  const zone = $("dropzone");
+  const isFile = e => e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+  addEventListener("dragover", e => {
+    if (!isFile(e)) return;
+    e.preventDefault();
+    const inZone = zone.contains(e.target);
+    e.dataTransfer.dropEffect = inZone ? "copy" : "none";
+    zone.classList.toggle("over", inZone);
+  });
+  zone.addEventListener("dragleave", e => { if (!zone.contains(e.relatedTarget)) zone.classList.remove("over"); });
+  addEventListener("dragend", () => zone.classList.remove("over"));
+  addEventListener("drop", async e => {
+    if (!isFile(e)) return;
+    e.preventDefault();
+    zone.classList.remove("over");
+    if (!zone.contains(e.target)) return;
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) load(await f.arrayBuffer(), f.name, false);
+  });
+
+  /* ---- controls ------------------------------------------------------- */
+  $("zoom").addEventListener("input", e => {
+    st.zoom = Number(e.target.value); $("zoomOut").textContent = st.zoom + "×";
+    renderStrip(); drawPlay();
+  });
+  document.querySelectorAll("#bgSeg button").forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.bg === st.bg));
+    b.addEventListener("click", () => {
+      st.bg = b.dataset.bg; store.set("bg", st.bg);
+      document.querySelectorAll("#bgSeg button").forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+      renderStrip(); drawPlay();
+    });
+  });
+  $("nIn").addEventListener("input", e => {
+    const v = Number(e.target.value);
+    if (v >= 9 && v <= 65535) { st.N = v; renderFacts(); renderStrip(); }
+  });
+  $("ticks").addEventListener("input", e => {
+    const v = Math.round(Number(e.target.value));
+    if (v >= 1 && v <= 255) { st.ticks = v; st.acc = 0; renderRate(); }
+  });
+  $("hz").value = String(st.hz);
+  $("hz").addEventListener("change", e => { st.hz = Number(e.target.value); store.set("hz", st.hz); renderRate(); });
+
+  const step = d => {
+    const n = st.spr ? st.spr.frames.length : 0;
+    if (n < 2) return;
+    st.cur = (st.cur + d + n) % n; st.acc = 0; drawPlay();
+  };
+  $("prev").addEventListener("click", () => { st.playing = false; step(-1); renderRate(); });
+  $("next").addEventListener("click", () => { st.playing = false; step(1); renderRate(); });
+  $("playBtn").addEventListener("click", () => { st.playing = !st.playing; st.acc = 0; renderRate(); });
+  addEventListener("keydown", e => {
+    if (e.target.closest("input, select, textarea")) return;
+    if (e.key === " ") { e.preventDefault(); $("playBtn").click(); }
+    else if (e.key === "ArrowLeft") $("prev").click();
+    else if (e.key === "ArrowRight") $("next").click();
+  });
+
+  $("copy").addEventListener("click", async () => {
+    const t = $("code").textContent;
+    try { await navigator.clipboard.writeText(t); $("copy").textContent = "Copied"; }
+    catch {
+      const r = document.createRange(); r.selectNodeContents($("code"));
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      $("copy").textContent = "Selected";
+    }
+    setTimeout(() => { $("copy").textContent = "Copy"; }, 1400);
+  });
+
+  /* ---- the animation clock: game frames at hz, a step every `ticks` ---- */
+  function tick(now) {
+    const s = st.spr;
+    if (st.last && st.playing && s && s.frames.length > 1) {
+      st.acc += (now - st.last) * st.hz / 1000;          /* game frames gone by */
+      const steps = Math.floor(st.acc / st.ticks);
+      if (steps) { st.acc -= steps * st.ticks; st.cur = (st.cur + steps) % s.frames.length; drawPlay(); }
+    }
+    st.last = now;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  /* ---- pixel inspector ------------------------------------------------- */
+  addEventListener("pointermove", e => {
+    const c = e.target.closest && e.target.closest("canvas[data-frame]");
+    const s = st.spr;
+    if (!c || !s || !s.w) return;
+    const rect = c.getBoundingClientRect(), f = Number(c.dataset.frame);
+    const x = Math.min(s.w - 1, Math.max(0, Math.floor((e.clientX - rect.left) / rect.width * s.w)));
+    const y = Math.min(s.h - 1, Math.max(0, Math.floor((e.clientY - rect.top) / rect.height * s.h)));
+    const i = y * s.w + x, v = s.frames[f][i], inFrame = i * 2;
+    const cb = chunkBytes(), chunks = Math.ceil(s.per / cb), ch = Math.floor(inFrame / cb);
+    const [R, G, B, r5, g6, b5] = rgb(v);
+    const swatch = v === CLEAR ? "transparent" : `rgb(${R},${G},${B})`;
+    $("inspect").innerHTML =
+      `<b>frame ${f}</b> · x <b>${x}</b> y <b>${y}</b> · ` +
+      `<span class="chip" style="background:${swatch}"></span><b>${hex4(v)}</b> ` +
+      (v === CLEAR ? "see-through" : `r ${r5} g ${g6} b ${b5}`) +
+      ` · file byte <b>${fmt(HDR + f * s.per + inFrame)}</b> · chunk <b>${ch + 1}</b> of ${chunks}`;
+  });
+
+  /* repaint when the theme changes (the checker uses theme colours) */
+  const repaint = () => { if (st.spr) { renderStrip(); drawPlay(); } };
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", repaint);
+  new MutationObserver(repaint).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  /* start with the example */
+  const bin = atob(SAMPLE_B64), buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  load(buf.buffer, "spinner.spr", true);
+})();
+</script>

@@ -47,7 +47,7 @@
 #include "host_hooks.h"
 #include "frame_sync.h"
 #include "display_host.h"       /* only for display_init() in main() */
-#include "hud.h"                /* the cube is a sprite; PX_BYTES, RGB565 */
+#include "sprite.h"             /* the cube is a sprite; RGB565 */
 
 /* ---- tuning ------------------------------------------------------------ */
 #define PROBE_LEN       100u
@@ -282,11 +282,9 @@ static void load_poll(void)
 
 /* ---- RUN: a cube bouncing around the HUD --------------------------------
  * The cube is a sprite: its image is uploaded once, then each frame only
- * moves it. hud_poll() sends the moves (and after an error or a new FPGA
+ * moves it. sprite_poll() sends the moves (and after an error or a new FPGA
  * session, the upload and the sprite again). */
-static uint8_t      cube_px[CUBE * CUBE * PX_BYTES];
-static hud_image_t  cube_img;
-static hud_sprite_t cube_spr;
+static sprite_t *cube_spr;
 
 static struct {
     int16_t    x, y, dx, dy;    /* where the cube is going           */
@@ -300,9 +298,8 @@ static void run_enter(void)
     static bool made;
     if (!made) {
         made = true;
-        hud_fill(cube_px, CUBE, CUBE, CUBE_COLOUR);
-        hud_image_init(&cube_img, cube_px, CUBE, CUBE);
-        hud_sprite_init(&cube_spr, &cube_img, cube.x, cube.y, true);
+        sprite_init();
+        cube_spr = sprite_new(sprite_img_solid(CUBE, CUBE, CUBE_COLOUR), cube.x, cube.y, true);
     }
     cube.sync_seen = frame_sync_count();
     cube.frames = cube.behind = 0;
@@ -317,12 +314,12 @@ static void cube_move(void)
     cube.y = (int16_t)(cube.y + cube.dy);
     if (cube.x < 0 || cube.x + CUBE > in->width)  { cube.dx = (int16_t)-cube.dx; cube.x = (int16_t)(cube.x + 2 * cube.dx); }
     if (cube.y < 0 || cube.y + CUBE > in->height) { cube.dy = (int16_t)-cube.dy; cube.y = (int16_t)(cube.y + 2 * cube.dy); }
-    hud_sprite_move(&cube_spr, cube.x, cube.y);
+    sprite_move(cube_spr, cube.x, cube.y);
 }
 
 static void run_poll(void)
 {
-    if (!hud_poll()) { failed = true; return; }
+    if (!sprite_poll()) { failed = true; return; }
 
     /* Next frame when the FPGA starts one. More than one SYNC since last
      * time means we were still busy when a frame went by: behind. */
@@ -359,7 +356,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
     } else {
         have_session = true;
         session      = in->session;
-        hud_forget();            /* new FPGA memory: sprites are gone */
+        sprite_forget();         /* new FPGA memory: sprites are gone */
         load_start();
     }
 }
@@ -369,7 +366,7 @@ static void resync(void)
 {
     LOG_WARN("command failed in '%s' -> resync", state_names[state]);
     fpga_abort_all();            /* callbacks run now and free the buffers */
-    hud_lost();                  /* ...so this comes after them           */
+    sprite_lost();               /* ...so this comes after them           */
     failed        = false;
     retry_at      = plat_millis();
     go(S_PROBE);

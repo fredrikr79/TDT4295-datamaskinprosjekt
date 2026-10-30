@@ -1,3 +1,7 @@
+#ifndef ROOMS_H
+#define ROOMS_H
+
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 
@@ -8,10 +12,12 @@
 #define MAX_PORTALS 8
 #define MAX_PORTAL_EXITS 8
 #define PORTAL_THICKNESS 2
-#define DATA_MAX_SIZE ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS
+#define DATA_MAX_SIZE (ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS)
 
-void read_room(int x, int y, uint8_t *tileIDs);
-void save_room(int x, int y, uint8_t *tileIDs);
+/* false: no card / file / write failed (logged). read_room() then gives
+ * an empty room (all tile 0), so the game goes on. */
+bool read_room(int x, int y, uint8_t *tileIDs);
+bool save_room(int x, int y, uint8_t *tileIDs);
 
 struct online_room
 {
@@ -28,9 +34,9 @@ struct online_room
 };
 struct online_room start_online_room(int x, int y, uint8_t *tileIDs);
 void progress_online_room(struct online_room *room, uint8_t *new_ids, uint16_t id_length);
-void save_online_room(struct online_room *room);
+bool save_online_room(struct online_room *room);
 
-void delete_save(int x, int y);
+bool delete_save(int x, int y);
 
 void send_room_to_fpga(uint8_t *tileIDs);
 void read_room_from_fpga(uint8_t *tile_buffer);
@@ -59,3 +65,5 @@ struct portal_exit
 };
 void init_empty_portals(portal_t *portals, uint8_t n_portals);
 int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals);
+
+#endif

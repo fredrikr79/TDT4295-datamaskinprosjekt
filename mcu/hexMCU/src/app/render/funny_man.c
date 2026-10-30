@@ -1,10 +1,10 @@
-/* player.c - the stand-in character (see player.h). */
+/* funny_man.c - the stand-in character (see funny_man.h). */
 
 #include <string.h>
 
 #include "funny_man.h"
 #include "fpga.h"
-#include "hud.h"
+#include "sprite.h"
 
 /* The drawing: one letter per pixel, looked up in palette() below.
  * Front face, top face to the back, side face to the right. Edit away --
@@ -36,41 +36,36 @@ static uint16_t palette(char c)
     case 'L': return RGB565(255, 235, 130);     /* top, in the light    */
     case 'D': return RGB565(200, 130,  20);     /* side, in the shade   */
     case 'P': return RGB565(255, 120, 140);     /* cheeks               */
-    default:  return HUD_CLEAR;                 /* ' ': see-through     */
+    default:  return SPRITE_CLEAR;              /* ' ': see-through     */
     }
 }
 
-static uint8_t      px[PLAYER_SIZE * PLAYER_SIZE * PX_BYTES];
-static hud_image_t  img;
-static hud_sprite_t spr;
-static int16_t      x, y;
+static sprite_t *spr;
+static int16_t   x, y;
 
-/* Each art pixel becomes a PLAYER_SCALE x PLAYER_SCALE block. */
-static void make_image(void)
+/* The image is drawn straight from the art while it uploads (no pixel
+ * buffer): each art pixel becomes a PLAYER_SCALE x PLAYER_SCALE block. */
+static void make_px(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
 {
-    for (uint16_t ay = 0; ay < PLAYER_ART; ay++)
-        for (uint16_t ax = 0; ax < PLAYER_ART; ax++) {
-            char c = ax < strlen(art[ay]) ? art[ay][ax] : ' ';
-            uint16_t colour = palette(c);
-            for (uint16_t sy = 0; sy < PLAYER_SCALE; sy++)
-                for (uint16_t sx = 0; sx < PLAYER_SCALE; sx++)
-                    hud_set_px(px, PLAYER_SIZE, (uint16_t)(ax * PLAYER_SCALE + sx),
-                               (uint16_t)(ay * PLAYER_SCALE + sy), colour);
-        }
+    (void)ctx;
+    for (uint32_t i = 0; i < len; i += PX_BYTES) {
+        uint32_t p  = (offset + i) / PX_BYTES;
+        uint32_t ax = (p % PLAYER_SIZE) / PLAYER_SCALE;
+        uint32_t ay = (p / PLAYER_SIZE) / PLAYER_SCALE;
+        char c = ax < strlen(art[ay]) ? art[ay][ax] : ' ';
+        uint16_t colour = palette(c);
+        buf[i]     = (uint8_t)(colour >> 8);
+        buf[i + 1] = (uint8_t)colour;
+    }
 }
 
 void player_init(int16_t px0, int16_t py0)
 {
-    static bool made;
     x = px0;
     y = py0;
-    if (!made) {
-        made = true;
-        make_image();
-        hud_image_init(&img, px, PLAYER_SIZE, PLAYER_SIZE);
-        hud_sprite_init(&spr, &img, x, y, true);
-    }
-    hud_sprite_move(&spr, x, y);
+    if (!spr)       /* after sprite_init() */
+        spr = sprite_new(sprite_img_fill(PLAYER_SIZE, PLAYER_SIZE, make_px, NULL), x, y, true);
+    sprite_move(spr, x, y);
 }
 
 static int16_t clamp16(int32_t v, int32_t lo, int32_t hi)
@@ -92,7 +87,7 @@ void player_frame(const input_t *keys, uint32_t n)
     const fpga_info_t *scr = fpga_link_info();
     x = clamp16(x + dx * step, 0, (int32_t)scr->width  - (int32_t)PLAYER_SIZE);
     y = clamp16(y + dy * step, 0, (int32_t)scr->height - (int32_t)PLAYER_SIZE);
-    hud_sprite_move(&spr, x, y);            /* hud_poll() sends it */
+    sprite_move(spr, x, y);                 /* sprite_poll() sends it */
 }
 
 int16_t player_x(void) { return x; }

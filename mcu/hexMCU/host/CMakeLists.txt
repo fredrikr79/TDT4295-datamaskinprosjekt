@@ -28,10 +28,13 @@ add_library(hexmcu_host_common OBJECT
     ${APP_ROOT}/src/port/host/display_host.c
     ${APP_ROOT}/src/port/host/fake_fpga.c
     ${APP_ROOT}/src/port/host/usb_backend_sdl.c
+    ${APP_ROOT}/src/port/host/storage_host.c
 )
 
 # PUBLIC: both executables inherit includes, defines, flags and SDL.
 target_link_libraries(hexmcu_host_common PUBLIC SDL3::SDL3)
+
+target_compile_definitions(hexmcu_host_common PRIVATE STORAGE_HOST_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/sd")
 
 target_include_directories(hexmcu_host_common PUBLIC
     ${APP_INCLUDES}

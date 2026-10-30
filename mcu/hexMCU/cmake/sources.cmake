@@ -11,10 +11,11 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/game.c
     ${APP_ROOT}/src/app/player.c
     ${APP_ROOT}/src/app/usb_input.c
-    ${APP_ROOT}/src/app/render/hud.c
+    ${APP_ROOT}/src/app/rooms.c
     ${APP_ROOT}/src/app/render/font.c
-    ${APP_ROOT}/src/app/render/text.c
     ${APP_ROOT}/src/app/render/funny_man.c
+    ${APP_ROOT}/src/app/render/sprite.c
+    ${APP_ROOT}/src/app/render/assets.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

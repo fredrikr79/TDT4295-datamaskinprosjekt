@@ -59,13 +59,14 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     src/port/stm32/io_uart.c
     src/port/stm32/platform_stm32.c
     src/port/stm32/transport_ospi.c
-    src/port/stm32/rooms.c
+    src/port/stm32/storage_filex.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${APP_INCLUDES}
+    src/port/stm32/
 )
 
 

@@ -283,9 +283,9 @@ static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
     else if (what == PEND_READ)
         print_hex(rd_buf, pend.len);
     else if (what == PEND_SPR_UPLOAD)
-        LOG_INFO("sprite upload: memID %u", fpga_answer_id(cmd));
+        LOG_INFO("sprite upload: memID %u", (unsigned)fpga_answer_id(cmd));
     else if (what == PEND_SPR_NEW)
-        LOG_INFO("sprite new: spriteID %u", fpga_answer_id(cmd));
+        LOG_INFO("sprite new: spriteID %u", (unsigned)fpga_answer_id(cmd));
     else
         LOG_INFO("%s: ok", pend_names[what]);
 }
@@ -545,30 +545,30 @@ static void cmd_sprite(int argc, char **argv)
         return;
     }
     if (strcmp(sub, "new") == 0 && (argc == 7 || argc == 8)) {
-        if (!parse_arg("memID", argv[2], 0xFF, &a[0]) ||
+        if (!parse_arg("memID", argv[2], 0xFFFF, &a[0]) ||
             !parse_arg("x", argv[3], 0xFFFF, &a[1]) || !parse_arg("y", argv[4], 0xFFFF, &a[2]) ||
             !parse_arg("w", argv[5], 0xFFFF, &a[3]) || !parse_arg("h", argv[6], 0xFFFF, &a[4]))
             return;
         bool show = !(argc == 8 && strcmp(argv[7], "hide") == 0);
         if (console_busy()) return;
-        pend_start(PEND_SPR_NEW, fpga_cmd_sprite_write((uint8_t)a[0], show, (uint16_t)a[1],
+        pend_start(PEND_SPR_NEW, fpga_cmd_sprite_write((uint16_t)a[0], show, (uint16_t)a[1],
                    (uint16_t)a[2], (uint16_t)a[3], (uint16_t)a[4]));
         return;
     }
     if (strcmp(sub, "move") == 0 && (argc == 5 || argc == 6)) {
-        if (!parse_arg("id", argv[2], 0xFF, &a[0]) ||
+        if (!parse_arg("id", argv[2], 0xFFFF, &a[0]) ||
             !parse_arg("x", argv[3], 0xFFFF, &a[1]) || !parse_arg("y", argv[4], 0xFFFF, &a[2]))
             return;
         bool show = !(argc == 6 && strcmp(argv[5], "hide") == 0);
         if (console_busy()) return;
-        pend_start(PEND_SPR_MOVE, fpga_cmd_sprite_update((uint8_t)a[0], show,
+        pend_start(PEND_SPR_MOVE, fpga_cmd_sprite_update((uint16_t)a[0], show,
                    (uint16_t)a[1], (uint16_t)a[2]));
         return;
     }
     if (strcmp(sub, "del") == 0 && argc == 3) {
-        if (!parse_arg("id", argv[2], 0xFF, &a[0])) return;
+        if (!parse_arg("id", argv[2], 0xFFFF, &a[0])) return;
         if (console_busy()) return;
-        pend_start(PEND_SPR_DEL, fpga_cmd_sprite_delete((uint8_t)a[0]));
+        pend_start(PEND_SPR_DEL, fpga_cmd_sprite_delete((uint16_t)a[0]));
         return;
     }
     log_raw("usage: sprite upload <w> <h> <colour>\r\n"

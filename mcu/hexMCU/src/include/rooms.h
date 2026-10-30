@@ -39,8 +39,10 @@ bool save_online_room(struct online_room *room);
 bool delete_save(int x, int y);
 
 /* ---- moving the current room to / from the FPGA ---------------------------
- *   room_load_start(x, y)   read the room's file, then send it row by row
- *   room_save_start(x, y)   read the room back row by row, then save it
+ *   room_load_start(x, y)   read the room's file; STOP_SIM, send it row by
+ *                           row, START_SIM
+ *   room_save_start(x, y)   STOP_SIM, read the room back row by row, then save
+ *                           it (the simulation stays stopped: a load follows)
  *   every poll:  room_poll() -> ROOM_BUSY, ROOM_DONE, or ROOM_FAILED (an
  *                FPGA command failed: resync, then room_resume())
  * The room is kept in rooms.c (ROOM_X * ROOM_Y bytes). */

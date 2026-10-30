@@ -282,11 +282,18 @@ bool delete_save(int x, int y)
 }
 
 /* ---- moving a room to / from the FPGA ------------------------------------
- * One row of room_tiles per command (WRITE_CONS to load, READ_CONS to save),
- * up to ROOM_ROWS_IN_FLIGHT at a time. The callbacks only count the rows
- * that came back OK (or note a failure); room_poll() sends the rows and, for
- * a save, writes the file once every row is in. */
+ *   load:  STOP_SIM -> WRITE_CONS row 0 .. ROOM_Y-1 -> START_SIM
+ *   save:  STOP_SIM -> READ_CONS  row 0 .. ROOM_Y-1 -> write the file
+ * The simulation is stopped first so the grid holds still while it's
+ * written or read; a save leaves it stopped, because the next room's load
+ * follows and starts it. One row of room_tiles per command, up to
+ * ROOM_ROWS_IN_FLIGHT at a time. The callbacks only note what came back OK
+ * (or a failure); room_poll() sends everything and writes the file. */
 #define ROOM_ROWS_IN_FLIGHT 4
+
+#if FPGA_SIM_IDS_PER_BYTE != 1
+#error "rooms.c sends one material ID per byte; packing two per byte isn't done here yet"
+#endif
 
 enum { JOB_IDLE, JOB_LOAD, JOB_SAVE };
 
@@ -297,8 +304,41 @@ static struct
   int x, y;                 // the room
   uint16_t next_row;        // next row to send a command for
   uint16_t rows_done;       // rows whose command came back OK
-  uint8_t in_flight;        // commands sent, not back yet
+  uint8_t in_flight;        // row commands sent, not back yet
+  bool sim_stopped;         // STOP_SIM came back OK
+  bool sim_started;         // START_SIM came back OK (load)
+  bool sim_in_flight;       // a STOP_SIM / START_SIM is on its way
 } job;
+
+static void sim_done(const fpga_cmd_t *cmd, fpga_err_t err)
+{
+  job.sim_in_flight = false;
+  if (err != FPGA_ERR_NONE)
+  {
+    LOG_WARN("room: %s: %s", cmd->hdr.opcode == STOP_SIM_OPCODE ? "STOP_SIM" : "START_SIM",
+             fpga_err_str(err));
+    job.status = ROOM_FAILED;
+    return;
+  }
+  if (cmd->hdr.opcode == STOP_SIM_OPCODE) job.sim_stopped = true;
+  else job.sim_started = true;
+}
+
+// Send STOP_SIM (run = false) or START_SIM; the queue being full just
+// means "next poll".
+static void send_sim(bool run)
+{
+  if (job.sim_in_flight) return;
+  fpga_cmd_t cmd = fpga_cmd_sim_run(run);
+  cmd.done = sim_done;
+  fpga_status_t st = fpga_submit(&cmd);
+  if (st == FPGA_OK) job.sim_in_flight = true;
+  else if (st != FPGA_EFULL)
+  {
+    LOG_ERR("room: %s refused: %s", run ? "START_SIM" : "STOP_SIM", fpga_status_str(st));
+    job.status = ROOM_FAILED;
+  }
+}
 
 static void row_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
@@ -325,6 +365,9 @@ static void job_start(uint8_t kind, int x, int y)
   job.next_row = 0;
   job.rows_done = 0;
   job.in_flight = 0;
+  job.sim_stopped = false;
+  job.sim_started = false;
+  job.sim_in_flight = false;
 }
 
 void room_load_start(int x, int y)
@@ -346,9 +389,11 @@ bool room_resume(void)
   // After fpga_abort_all() nothing is in flight. room_tiles still holds the
   // room (load) or the rows read so far (save): carry on after the last
   // row that came back OK.
+  // A STOP_SIM that came back OK still holds (same FPGA session).
   job.status = ROOM_BUSY;
   job.next_row = job.rows_done;
   job.in_flight = 0;
+  job.sim_in_flight = false;
   LOG_INFO("room %d, %d: %s resumed at row %u", job.x, job.y,
            job.kind == JOB_LOAD ? "load" : "save", job.rows_done);
   return true;
@@ -358,15 +403,28 @@ room_status_t room_poll(void)
 {
   if (job.status != ROOM_BUSY) return job.status;
 
-  // Every row is in: done. (Only now -- not when the last row is sent.)
+  // 1. Stop the simulation first, and wait until it has.
+  if (!job.sim_stopped)
+  {
+    send_sim(false);
+    return job.status;
+  }
+
+  // 3. Every row is in (only now -- not when the last row is sent).
   if (job.rows_done == ROOM_Y)
   {
+    if (job.kind == JOB_LOAD && !job.sim_started)
+    {
+      send_sim(true);                  // the new room runs from here
+      return job.status;
+    }
     if (job.kind == JOB_SAVE) save_room(job.x, job.y, room_tiles);  // no card: logged
     LOG_INFO("room %d, %d %s", job.x, job.y, job.kind == JOB_LOAD ? "loaded" : "saved");
     job.status = ROOM_DONE;
     return job.status;
   }
 
+  // 2. The rows.
   // Send the next rows, as many as may be in flight.
   while (job.next_row < ROOM_Y && job.in_flight < ROOM_ROWS_IN_FLIGHT)
   {

@@ -7,8 +7,12 @@
  *     display_host.c (display_layer()), which shows the HUD over the SIM
  *     layer with DISPLAY_HUD_CLEAR pixels see-through. Pixels travel MSB
  *     first, 2 bytes each.
- *   - WRITE/READ_CONS and _BOX go to the grid. CONS is contiguous memory:
- *     N bytes from (X, Y) on, row after row.
+ *   - The grid holds a 4-bit material ID per cell (SIM_AIR, SIM_SAND...,
+ *     fpga.h), shown through a colour lookup table (sim_lut) like the real
+ *     FPGA's. WRITE/READ_CONS move IDs: N bytes from cell (X, Y) on, row
+ *     after row, one or two IDs per byte (FPGA_SIM_IDS_PER_BYTE).
+ *   - WRITE/READ_BOX move IDs too: W x H cells from (X, Y), one stream row
+ *     by row, packed the same way. Only the HUD layer (sprites) is RGB565.
  *   - Sprites: WRITE_SPRITE appends its payload to sprite memory and
  *     answers a memID (1, 2, ...; 0 means none). Memory is append-only and
  *     contiguous, so an image uploaded as several WRITE_SPRITEs in a row is
@@ -121,6 +125,21 @@ static bool param_count(uint16_t len, uint16_t n, uint8_t *status, const char *w
     return false;
 }
 
+/* ---- the grid: material IDs, and the colours they show as ------------- */
+#define LUT565(r, g, b) ((uint16_t)((((r) & 0xF8u) << 8) | (((g) & 0xFCu) << 3) | ((b) >> 3)))
+
+/* PROTOCOL: the FPGA team's colours aren't known; these are stand-ins. */
+static const uint16_t sim_lut[SIM_ID_MAX + 1] = {
+    [SIM_AIR]   = LUT565(  0,   0,   0),
+    [SIM_SAND]  = LUT565(222, 190, 110),
+    [SIM_WATER] = LUT565( 40, 110, 225),
+    [SIM_WALL]  = LUT565(125, 125, 135),
+    [SIM_LIFE]  = LUT565( 90, 230,  90),
+    [5 ... 15]  = LUT565(255,   0, 200),    /* not in use: shows up loud */
+};
+
+static uint8_t cells[FAKE_W * FAKE_H];      /* one ID per cell, row after row */
+
 /* ---- pixel access -----------------------------------------------------
  * A region is w pixels wide starting at (x, y); pixel i lands at
  * (x + i % w, y + i / w). */
@@ -132,52 +151,106 @@ static uint16_t *pixel(display_layer_t L, uint32_t x, uint32_t y)
 
 static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 
-/* Write whole pixels from src into the grid region. */
-static void put_region(const char *what, uint16_t x, uint16_t y, uint16_t w,
-                       const uint8_t *src, uint32_t nbytes)
+/* Cell i (counted from the top-left, row after row) gets material id, and
+ * the SIM picture its colour. */
+static void cell_set(uint32_t i, uint8_t id)
 {
-    uint32_t npix = nbytes / PIXEL_BYTES, oob = 0;
-
-    if (w == 0) { LOG_WARN("%s: zero width, nothing written", what); return; }
-    if (nbytes % PIXEL_BYTES)
-        LOG_WARN("%s: %lu bytes is not a whole number of %u-byte pixels, "
-                 "last %lu dropped", what, (unsigned long)nbytes, PIXEL_BYTES,
-                 (unsigned long)(nbytes % PIXEL_BYTES));
-
-    for (uint32_t i = 0; i < npix; i++) {
-        uint16_t *p = pixel(DISPLAY_SIM, x + i % w, y + i / w);
-        if (p) *p = be16(&src[2 * i]);
-        else   oob++;
-    }
-    if (oob)
-        LOG_WARN("%s at (%u,%u): %lu of %lu pixels out of bounds (%ux%u)",
-                 what, x, y, (unsigned long)oob, (unsigned long)npix,
-                 FAKE_W, FAKE_H);
+    cells[i] = id;
+    uint16_t *p = pixel(DISPLAY_SIM, i % FAKE_W, i / FAKE_W);
+    if (p) *p = sim_lut[id];
 }
 
-/* Answer with nbytes read from the grid region. Out of bounds reads as 0. */
-static void answer_region(const char *what, uint16_t x, uint16_t y, uint16_t w,
-                          uint32_t nbytes)
+/* The k-th ID in packed data. */
+static uint8_t packed_id(const uint8_t *data, uint32_t k)
 {
+    uint8_t b = data[k / FPGA_SIM_IDS_PER_BYTE];
+    if (FPGA_SIM_IDS_PER_BYTE == 2) return (k & 1u) ? (b & 0x0Fu) : (uint8_t)(b >> 4);
+    return b & 0x0Fu;
+}
+
+/* WRITE_CONS: IDs from (x, y) on, contiguous. */
+static void cons_write(uint16_t x, uint16_t y, const uint8_t *data, uint16_t nbytes)
+{
+    uint32_t start = (uint32_t)y * FAKE_W + x, n = (uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE;
+    uint32_t oob = 0, big = 0;
+    for (uint32_t k = 0; k < n; k++) {
+        uint8_t id = packed_id(data, k);
+        if (FPGA_SIM_IDS_PER_BYTE == 1) big += data[k] > SIM_ID_MAX;
+        if (x >= FAKE_W || start + k >= (uint32_t)FAKE_W * FAKE_H) { oob++; continue; }
+        cell_set(start + k, id);
+    }
+    if (oob) LOG_WARN("write_cons at (%u,%u): %lu of %lu cells out of bounds (%ux%u)",
+                      x, y, (unsigned long)oob, (unsigned long)n, FAKE_W, FAKE_H);
+    if (big) LOG_WARN("write_cons at (%u,%u): %lu byte(s) above %u -- only 4 bits are used",
+                      x, y, (unsigned long)big, SIM_ID_MAX);
+}
+
+/* Cell k of a W-wide box at (x, y): its index in cells[], or -1 if it's
+ * off the grid. */
+static int32_t box_cell(uint16_t x, uint16_t y, uint16_t w, uint32_t k)
+{
+    uint32_t cx = x + k % w, cy = y + k / w;
+    if (cx >= FAKE_W || cy >= FAKE_H) return -1;
+    return (int32_t)(cy * FAKE_W + cx);
+}
+
+/* WRITE_BOX: w x h IDs, row by row. */
+static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                      const uint8_t *data, uint16_t nbytes)
+{
+    uint32_t n = (uint32_t)w * h, oob = 0;
+    if (fpga_sim_bytes(n) != nbytes) {
+        LOG_WARN("write_box: %ux%u box is %lu bytes, got %u", w, h,
+                 (unsigned long)fpga_sim_bytes(n), nbytes);
+        if ((uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE < n) n = (uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE;
+    }
+    for (uint32_t k = 0; k < n; k++) {
+        int32_t c = box_cell(x, y, w, k);
+        if (c < 0) { oob++; continue; }
+        cell_set((uint32_t)c, packed_id(data, k));
+    }
+    if (oob) LOG_WARN("write_box at (%u,%u): %lu of %lu cells out of bounds (%ux%u)",
+                      x, y, (unsigned long)oob, (unsigned long)n, FAKE_W, FAKE_H);
+}
+
+/* READ_BOX: w x h IDs, row by row. Off the grid reads as air. */
+static void box_read(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+    uint32_t n = (uint32_t)w * h, nbytes = fpga_sim_bytes(n);
     if (nbytes > OUT_FIFO) {
-        LOG_WARN("%s: answer of %lu bytes > %u byte FIFO, truncated",
-                 what, (unsigned long)nbytes, OUT_FIFO);
+        LOG_WARN("read_box: answer of %lu bytes > %u byte FIFO, truncated",
+                 (unsigned long)nbytes, OUT_FIFO);
         nbytes = OUT_FIFO;
     }
-    if (w == 0) nbytes = 0;
-
-    uint32_t oob = 0;
-    for (uint32_t b = 0; b < nbytes; b++) {
-        uint32_t i = b / PIXEL_BYTES;
-        const uint16_t *p = pixel(DISPLAY_SIM, x + i % w, y + i / w);
-        uint16_t v = p ? *p : 0x0000u;
-        ff.out[b] = (b % PIXEL_BYTES == 0) ? (uint8_t)(v >> 8) : (uint8_t)v;
-        if (!p && b % PIXEL_BYTES == 0) oob++;
+    memset(ff.out, 0, nbytes);
+    for (uint32_t k = 0; k < n && k / FPGA_SIM_IDS_PER_BYTE < nbytes; k++) {
+        int32_t c = box_cell(x, y, w, k);
+        uint8_t id = c < 0 ? SIM_AIR : cells[c];
+        if (FPGA_SIM_IDS_PER_BYTE == 2) ff.out[k / 2] |= (k & 1u) ? id : (uint8_t)(id << 4);
+        else                            ff.out[k] = id;
     }
     ff.out_len = (uint16_t)nbytes;
-    if (oob)
-        LOG_WARN("%s at (%u,%u): %lu pixels out of bounds, read as 0",
-                 what, x, y, (unsigned long)oob);
+}
+
+/* READ_CONS: nbytes of IDs from (x, y) on. Out of bounds reads as air. */
+static void cons_read(uint16_t x, uint16_t y, uint32_t nbytes)
+{
+    if (nbytes > OUT_FIFO) {
+        LOG_WARN("read_cons: answer of %lu bytes > %u byte FIFO, truncated",
+                 (unsigned long)nbytes, OUT_FIFO);
+        nbytes = OUT_FIFO;
+    }
+    uint32_t start = (uint32_t)y * FAKE_W + x, total = (uint32_t)FAKE_W * FAKE_H;
+    for (uint32_t b = 0; b < nbytes; b++) {
+        uint8_t v = 0;
+        for (uint32_t j = 0; j < FPGA_SIM_IDS_PER_BYTE; j++) {
+            uint32_t k = b * FPGA_SIM_IDS_PER_BYTE + j;
+            uint8_t id = (x < FAKE_W && start + k < total) ? cells[start + k] : SIM_AIR;
+            v = (uint8_t)(FPGA_SIM_IDS_PER_BYTE == 2 ? (v << 4) | id : id);
+        }
+        ff.out[b] = v;
+    }
+    ff.out_len = (uint16_t)nbytes;
 }
 
 static void answer_bytes(const uint8_t *src, uint16_t n)
@@ -328,28 +401,25 @@ int32_t fake_fpga_write(const transport_hdr_t *h, const uint8_t *data,
             break;
         if ((uint16_t)h->alt != len)       /* N = payload bytes */
             LOG_WARN("write_cons: N=%u but %u payload bytes", (unsigned)(uint16_t)h->alt, len);
-        put_region("write_cons", h->x, h->y, FAKE_W, data, len);  /* contiguous */
+        cons_write(h->x, h->y, data, len);
         break;
 
     case READ_CONS_OPCODE:
         if (!expect_fields(h, TRANSPORT_F_XY | TRANSPORT_F_ALT16, "read_cons", status))
             break;
-        answer_region("read_cons", h->x, h->y, FAKE_W, (uint16_t)h->alt);
+        cons_read(h->x, h->y, (uint16_t)h->alt);
         break;
 
     case WRITE_BOX_OPCODE:
         if (!expect_fields(h, TRANSPORT_F_XY | TRANSPORT_F_ALT32, "write_box", status)) break;
         box_extent(h, &x, &y, &w, &hh);
-        if ((uint32_t)w * hh * PIXEL_BYTES != len)
-            LOG_WARN("write_box: %ux%u box is %lu bytes, got %u", w, hh,
-                     (unsigned long)w * hh * PIXEL_BYTES, len);
-        put_region("write_box", x, y, w, data, len);
+        box_write(x, y, w, hh, data, len);
         break;
 
     case READ_BOX_OPCODE:
         if (!expect_fields(h, TRANSPORT_F_XY | TRANSPORT_F_ALT32, "read_box", status)) break;
         box_extent(h, &x, &y, &w, &hh);
-        answer_region("read_box", x, y, w, (uint32_t)w * hh * PIXEL_BYTES);
+        box_read(x, y, w, hh);
         break;
 
     case WRITE_SPRITE_OPCODE:  return write_sprite(data, len, status);
@@ -429,6 +499,7 @@ void fake_fpga_reset(void)
 {
     /* The layers are not cleared here: display_init() already did. */
     memset(&ff, 0, sizeof ff);
+    for (uint32_t i = 0; i < (uint32_t)FAKE_W * FAKE_H; i++) cell_set(i, SIM_AIR);
 
     /* A fresh id per "power-up", like an FPGA that just got configured. */
     srand((unsigned)time(NULL));

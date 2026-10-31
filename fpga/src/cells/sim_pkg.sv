@@ -5,10 +5,15 @@ package sim_pkg;
   localparam int unsigned MaterialBits = 4;  // support for 16 materials
   localparam int unsigned BitsPerPixel = 8;  // support for 16 materials
   localparam int unsigned CellsPerWord = 4;  // 8x4 = 32 which fits cleanly in registers
-  localparam int unsigned WordBits = CellsPerWord * BitsPerPixel;  // 32: a word contains 8 4-bit cells
-  localparam int unsigned WordsPerRow = CellGridWidth / CellsPerWord;  // 80: a row contains 640 pixels, we contain 8 pixels in one word, 640/8 = 80 which is our screen resolution
-  localparam int unsigned TotalWords = WordsPerRow * CellGridHeight;  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
-  localparam int unsigned AddrBits = $clog2(TotalWords);  // 15 = 32,768, enough to address all of TotalWords
+
+  // 32: a word contains 8 4-bit cells
+  localparam int unsigned WordBits = CellsPerWord * BitsPerPixel;
+  // 80: a row contains 640 pixels, we contain 8 pixels in one word, 640/8 = 80 which is our screen resolution
+  localparam int unsigned WordsPerRow = CellGridWidth / CellsPerWord;
+  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
+  localparam int unsigned TotalWords = WordsPerRow * CellGridHeight;
+  // 15 = 32,768, enough to address all of TotalWords
+  localparam int unsigned AddrBits = $clog2(TotalWords);
 
   typedef logic [MaterialBits-1:0] material_t;
   typedef material_t [CellsPerWord-1:0] cell_word_t; // same as logic [7:0][3:0]
@@ -21,7 +26,8 @@ package sim_pkg;
   typedef logic unsigned [GridXBits-1:0] grid_x_t;
   typedef logic unsigned [GridYBits-1:0] grid_y_t;
 
-  localparam int SimulationCoreCount = 4; // Memory bound processing and wire complexity makes a wider set of cores overkill and infeasible in terms of system resources 
+  // Memory bound processing and wire complexity makes a wider set of cores overkill and infeasible in terms of system resources
+  localparam int SimulationCoreCount = 4;
   typedef logic [CellGridWidth * BitsPerPixel : 0] row_buffer_t;
 
   // Addressing convention. Everything that touches the grid -- world loader,
@@ -62,6 +68,8 @@ package sim_pkg;
     logic              falls;
     logic              spreads;
     logic              solid;
+    logic              displaceable;
+    logic [3:0]        delay;
     color_pkg::color_t color;
   } material_props_t;
 
@@ -87,52 +95,68 @@ package sim_pkg;
     p.color = material_color(m);
     case (m)
       MatSand: begin
-        p.density = 4'd8;
-        p.falls   = 1'b1;
-        p.spreads = 1'b0;
-        p.solid   = 1'b1;
+        p.density      = 4'd8;
+        p.falls        = 1'b1;
+        p.spreads      = 1'b0;
+        p.solid        = 1'b1;
+        p.displaceable = 1'b1;
+        p.delay        = 4'd2;
       end
       MatWater: begin
-        p.density = 4'd4;
-        p.falls   = 1'b1;
-        p.spreads = 1'b1;
-        p.solid   = 1'b1;
+        p.density      = 4'd4;
+        p.falls        = 1'b1;
+        p.spreads      = 1'b1;
+        p.solid        = 1'b1;
+        p.displaceable = 1'b1;
+        p.delay        = 4'd2;
       end
       MatStone: begin
-        p.density = 4'd15;
-        p.falls   = 1'b0;
-        p.spreads = 1'b0;
-        p.solid   = 1'b1;
+        p.density      = 4'd15;
+        p.falls        = 1'b0;
+        p.spreads      = 1'b0;
+        p.solid        = 1'b1;
+        p.displaceable = 1'b0;
+        p.delay        = 4'd1;
       end
       MatGOL: begin
-        p.density = 4'd15;
-        p.falls   = 1'b0;
-        p.spreads = 1'b0;
-        p.solid   = 1'b1;
+        p.density      = 4'd15;
+        p.falls        = 1'b0;
+        p.spreads      = 1'b0;
+        p.solid        = 1'b1;
+        p.displaceable = 1'b0;
+        p.delay        = 4'd1;
       end
       MatExplo: begin
-        p.density = 4'd15;
-        p.falls   = 1'b0;
-        p.spreads = 1'b0;
-        p.solid   = 1'b0;
+        p.density      = 4'd15;
+        p.falls        = 1'b0;
+        p.spreads      = 1'b0;
+        p.solid        = 1'b0;
+        p.displaceable = 1'b0;
+        p.delay        = 4'd1;
       end
       MatLava: begin
-        p.density = 4'd10;
-        p.falls   = 1'b1;
-        p.spreads = 1'b1;
-        p.solid   = 1'b1;
+        p.density      = 4'd10;
+        p.falls        = 1'b1;
+        p.spreads      = 1'b1;
+        p.solid        = 1'b1;
+        p.displaceable = 1'b1;
+        p.delay        = 4'd1;
       end
       MatAcid: begin
-        p.density = 4'd8;
-        p.falls   = 1'b1;
-        p.spreads = 1'b1;
-        p.solid   = 1'b1;
+        p.density      = 4'd8;
+        p.falls        = 1'b1;
+        p.spreads      = 1'b1;
+        p.solid        = 1'b1;
+        p.displaceable = 1'b1;
+        p.delay        = 4'd1;
       end
       default: begin  // MatAir, and every unassigned id
-        p.density = 4'd0;
-        p.falls   = 1'b0;
-        p.spreads = 1'b0;
-        p.solid   = 1'b0;
+        p.density      = 4'd0;
+        p.falls        = 1'b0;
+        p.spreads      = 1'b0;
+        p.solid        = 1'b0;
+        p.displaceable = 1'b1;
+        p.delay        = 4'd1;
       end
     endcase
     return p;
@@ -148,18 +172,15 @@ package sim_pkg;
   endfunction
 
   typedef struct packed {
-    logic [MaterialBits:0] topLeft;
-    logic [MaterialBits:0] top;
-    logic [MaterialBits:0] topRight;
-    logic [MaterialBits:0] left;
-    logic [MaterialBits:0] center;
-    logic [MaterialBits:0] right;
-    logic [MaterialBits:0] bottomLeft;
-    logic [MaterialBits:0] bottom;
-    logic [MaterialBits:0] bottomRight;
+    logic [BitsPerPixel-1:0] topLeft;
+    logic [BitsPerPixel-1:0] top;
+    logic [BitsPerPixel-1:0] topRight;
+    logic [BitsPerPixel-1:0] left;
+    logic [BitsPerPixel-1:0] center;
+    logic [BitsPerPixel-1:0] right;
+    logic [BitsPerPixel-1:0] bottomLeft;
+    logic [BitsPerPixel-1:0] bottom;
+    logic [BitsPerPixel-1:0] bottomRight;
   } neighbourhood_t;
-
-  localparam logic [3:0] SandCounter = 4'd2;
-
 
 endpackage

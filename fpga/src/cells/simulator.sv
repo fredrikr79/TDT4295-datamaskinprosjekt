@@ -1,10 +1,10 @@
 module simulator #(
 
 )(
-    input wire clk, pulse_new_row, sim_running,
+    input wire clk, pulse_new_row, sim_running, frame_toggle,
     input sim_pkg::row_buffer_t buffers [3],
-    output logic pulse_row_done,
-    output sim_pkg::row_buffer_t res_buffer
+    output logic pulse_transaction_pair_done,
+    output sim_pkg::row_buffer_t res_buffer [2]
 );
 
 import sim_pkg::*;
@@ -18,27 +18,35 @@ logic [3:0] sim_clock = 4'b0;
 logic [15:0] row_index = 16'd0;
 logic even_major_evaluation = 1'b0;
 
-// Linear feedback shift register acting as pseudo-randomizer.
+// Linear feedback shift register acting as a L/R decision selector.
 logic [31:0] lfsr = 32'hACE1_2345;
+
+// Write transaction sends to res_buffer 0 and recieves to 1
+logic sending_row;
+assign sending_row = row_index[0] != even_major_evaluation;
+
 
 
 // Find pixel neighbourhood in parallell:
 always @(posedge clk) begin
 
-    if(pulse_new_row && sim_running) begin
-        row_running <= 1'b1;
-        // Functions return 1'b1 if match was found in the rule
-        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        row_index <= 16'd0;
-        sim_clock <= sim_clock + 1'b1;
+    if(frame_toggle) begin
+        // Swap sending and recieving buffers
         even_major_evaluation = ~even_major_evaluation;
     end
 
+    if(pulse_new_row && sim_running) begin
+        row_running <= 1'b1;
+        lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
+        row_index <= 16'd0;
+        sim_clock <= sim_clock + 1'b1;
+    end
 
     for(i = sim_pkg::SimulationCoreCount-1; i >= 0; i = i + 1) begin : process_lane
 
         sim_pkg::neighbourhood_t neighbourhood;
-        logic[7:0] explo_mat, gol_mat, gravity_mat, fluid_mat;
+        logic [4:0] gravity_mat, fluid_mat; // uses a case handler to swap materials.
+        logic [7:0] explo_mat, gol_mat; // returns material directly
 
 
         // i * stride = base addr for sim core. base = round offset.
@@ -59,24 +67,16 @@ always @(posedge clk) begin
         if(x == sim_pkg::CellGridWidth - 1) begin
             base <= 0;
             row_running <= 1'b0;
-            pulse_row_done <= 1'b1;
             even_major_evaluation <= ~even_major_evaluation;
             row_index <= row_index + 1'b1;
+            if(!sending_row)
+                pulse_transaction_pair_done <= 1'b1;
         end
 
         neighbourhood = '{default: MatAir};
-
             neighbourhood.top         = buffers[0][curr +: sim_pkg::BitsPerPixel];
             neighbourhood.center      = buffers[1][curr +: sim_pkg::BitsPerPixel];
             neighbourhood.bottom      = buffers[2][curr +: sim_pkg::BitsPerPixel];
-
-        if(i + base >= config_pkg::ActiveWidth || !row_running) begin
-            if(row_running)
-                pulse_row_done <= 1'b1;
-            base <= 0;
-            row_running <= 1'b0;
-            continue;
-        end
 
         if(x > 0) begin
             neighbourhood.topLeft     = buffers[0][left +: sim_pkg::BitsPerPixel];
@@ -93,24 +93,44 @@ always @(posedge clk) begin
         // Priority based situation resolution. Evaluation is done in parallell
         // To avoid race conditions each frame will only translate pixels in
         // Either the left or right direction (in addition to vertical)
-
         explo_mat = explosion_rules(neighbourhood, sim_clock);
         gol_mat = gol_rules(neighbourhood, sim_clock);
-        gravity_mat = gravity_rules(neighbourhood, lfsr[0], sim_clock);
-        fluid_mat = fluid_rules(neighbourhood, lfsr[0], sim_clock);
 
-        if (explo_mat != 8'hFF) begin
-            res_buffer[curr +: sim_pkg::BitsPerPixel] <= explo_mat;
-        end else if (gol_mat != 8'hFF) begin
-            res_buffer[curr +: sim_pkg::BitsPerPixel] <= gol_mat;
-        end else if (gravity_mat != 8'hFF) begin
-            res_buffer[curr +: sim_pkg::BitsPerPixel] <= gravity_mat;
-        end else if (fluid_mat != 8'hFF) begin
-            res_buffer[curr +: sim_pkg::BitsPerPixel] <= fluid_mat;
-        end else begin
-            res_buffer[curr +: sim_pkg::BitsPerPixel] <= neighbourhood.center;
+        // Only eval transactions on recieving row of a transaction pair
+        if(sending_row) begin
+            gravity_mat = gravity_rules(neighbourhood, lfsr[0], curr, sim_clock);
+            fluid_mat = fluid_rules(neighbourhood, lfsr[0], sim_clock);
         end
 
+        // Write res_buffers
+        if (explo_mat != 8'hFF) begin
+            res_buffer[sending_row][curr +: sim_pkg::BitsPerPixel] <= explo_mat;
+        end else if (gol_mat != 8'hFF) begin
+            res_buffer[sending_row][curr +: sim_pkg::BitsPerPixel] <= gol_mat;
+        end else if (gravity_mat != 8'hFF) begin
+            if(gravity_mat == 4'd0) begin
+                res_buffer[!sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.topLeft;
+                res_buffer[sending_row][curr - 1 +: sim_pkg::BitsPerPixel] <= neighbourhood.center;
+            end else if(gravity_mat == 4'd1) begin
+                res_buffer[!sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.top;
+                res_buffer[sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.center;
+            end else if(gravity_mat == 4'd2) begin
+                res_buffer[!sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.topRight;
+                res_buffer[sending_row][curr + 1 +: sim_pkg::BitsPerPixel] <= neighbourhood.center;
+            end
+        end else if (fluid_mat[3:2] == 2'd0) begin
+            res_buffer[sending_row][curr - 1 +: sim_pkg::BitsPerPixel] <= neighbourhood.top;
+            res_buffer[sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.topLeft;
+        end else if (fluid_mat[3:2] == 2'd2) begin
+            res_buffer[sending_row][curr + 1 +: sim_pkg::BitsPerPixel] <= neighbourhood.top;
+            res_buffer[sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.topLeft;
+        end else if (fluid_mat[1:0] == 2'd0) begin
+            res_buffer[!sending_row][curr - 1 +: sim_pkg::BitsPerPixel] <= neighbourhood.top;
+            res_buffer[!sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.topLeft;
+        end else if (fluid_mat[1:0] == 2'd2) begin
+            res_buffer[!sending_row][curr + 1 +: sim_pkg::BitsPerPixel] <= neighbourhood.top;
+            res_buffer[!sending_row][curr +: sim_pkg::BitsPerPixel] <= neighbourhood.topLeft;
+        end
         // Update base index
         base <= base + 16'd1;
     end
@@ -133,6 +153,8 @@ function automatic logic [7:0] explosion_rules(
     automatic integer p4 =
         (stencil.right[7:4]       == sim_pkg::MatExplo ? stencil.right[3:0]       : 4'd0)-
         (stencil.left[7:4]        == sim_pkg::MatExplo ? stencil.left[3:0]        : 4'd0);
+    automatic integer center =
+        (stencil.center[7:4]      == sim_pkg::MatExplo ? stencil.center[3:0]      : 4'd0);
 
     automatic integer blast_resistance = props(stencil.center[7:4]).blast_resistance;
 
@@ -151,7 +173,8 @@ function automatic logic [7:0] explosion_rules(
         p4 = -p4;
     end
 
-    force_strength = p1 + p2 + p3 + p4 - blast_resistance;
+    force_strength = p1 + p2 + p3 + p4 + center - blast_resistance;
+    if(stencil.center)
 
     return force_strength > 0 && sim_clock % props(sim_pkg::MatExplo).delay == 4'b0
         ? {sim_pkg::MatExplo, force_strength}
@@ -179,14 +202,14 @@ function automatic logic [7:0] gol_rules(
     end
 endfunction
 
-function automatic logic [7:0] gravity_rules(
+function automatic logic [3:0] gravity_rules(
     input sim_pkg::neighbourhood_t stencil,
     input logic r,
+    input logic [15:0] curr,
     input logic[3:0] sim_clock
 );
 
     logic [3:0] center_density = props(stencil.center[7:4]).density;
-    logic incoming_row = row_index[0] != even_major_evaluation;
 
     logic c_0_0   = sim_clock % props(stencil.center[7:4]).delay == 4'd0;
     logic c_n1_n1 = sim_clock % props(stencil.topLeft[7:4]).delay == 4'd0;
@@ -210,6 +233,11 @@ function automatic logic [7:0] gravity_rules(
     logic d_0_1   = props(stencil.bottom[7:4]).density < center_density;
     logic d_1_1   = props(stencil.bottomRight[7:4]).density < center_density;
 
+    logic unchanged_n1_n1 = stencil.topLeft == res_buffer[0][curr - 1];
+    logic unchanged_0_n1 = stencil.top == res_buffer[0][curr];
+    logic unchanged_1_n1 = stencil.topRight == res_buffer[0][curr + 1];
+    logic unchanged_0_0   = stencil.center == res_buffer[1][curr];
+
     logic d_topLeft_lte_left = props(stencil.topLeft[7:4]).density
         <= props(stencil.left[7:4]).density;
     logic d_topRight_lte_right = props(stencil.topRight[7:4]).density
@@ -219,26 +247,31 @@ function automatic logic [7:0] gravity_rules(
     logic d_right_lte_bottomRight = props(stencil.right[7:4]).density
         <= props(stencil.bottomRight[7:4]).density;
 
-    // A pixel will "fall" if both its source and destination contians displaceable pixels
-    // And their density values dictate that they should swap
+    logic moveDown = unchanged_0_n1 && m_0_n1 && d_0_n1 && c_0_n1;
 
-    if (c_0_0 && m_0_0 && !incoming_row) begin
-        if (m_0_1 && d_0_1) begin
-            return stencil.bottom;
-        end else if (r && m_1_1 && d_1_1 && (!m_1_0 || d_right_lte_bottomRight)) begin
-            return stencil.bottomRight;
-        end else if (!r && m_n1_1 && d_n1_1 && (!m_n1_0 || d_left_lte_bottomLeft)) begin
-            return stencil.bottomLeft;
-        end
-    end else if(m_0_0 && incoming_row) begin // Top pixel decides movement timings
-        if (m_0_n1 && d_0_n1 && c_0_n1) begin
-            return stencil.top;
-        end else if (r && m_n1_n1 && d_n1_n1 && (!m_n1_0 || d_topLeft_lte_left) && c_n1_n1) begin
-            return stencil.topLeft;
-        end else if (!r && m_1_n1 && d_1_n1 && (!m_1_0 || d_topRight_lte_right) && c_1_n1) begin
-            return stencil.topRight;
-        end else return 8'hFF;
-    end else return 8'hFF;
+    logic moveRight = r &&
+        unchanged_n1_n1 &&
+        m_n1_n1 &&
+        d_n1_n1 &&
+        (!m_n1_0 || d_topLeft_lte_left) &&
+        c_n1_n1;
+
+    logic moveLeft = !r &&
+        unchanged_1_n1 &&
+        m_1_n1 &&
+        d_1_n1 &&
+        (!m_1_0 || d_topRight_lte_right) &&
+        c_1_n1;
+
+    if(m_0_0 && sending_row) begin // Top pixel decides movement timings
+        if (moveDown) begin
+            return 4'd1;
+        end else if (moveRight) begin
+            return 4'd0;
+        end else if (moveLeft) begin
+            return 4'd2;
+        end else return 4'hF;
+    end else return 4'hF;
 endfunction
 
 function automatic logic [7:0] fluid_rules(
@@ -247,39 +280,63 @@ function automatic logic [7:0] fluid_rules(
     input logic [3:0] sim_clock
 );
     // Relies on the fact that every gravity rule has been evaluated prior.
-    logic c = sim_clock % props(stencil.center[7:4]).delay == 4'd0;
-    logic c_l = sim_clock % props(stencil.left[7:4]).delay == 4'd0;
-    logic c_r = sim_clock % props(stencil.right[7:4]).delay == 4'd0;
-    logic incoming_row = row_index % 2 == 1'b0 && even_major_evaluation;
+    logic c_0_n1  = sim_clock % props(stencil.top[7:4]).delay == 4'd0;
+    logic c_n1_n1 = sim_clock % props(stencil.topLeft[7:4]).delay == 4'd0;
+    logic c_1_n1  = sim_clock % props(stencil.topRight[7:4]).delay == 4'd0;
+    logic c_0_0   = sim_clock % props(stencil.center[7:4]).delay == 4'd0;
+    logic c_n1_0  = sim_clock % props(stencil.left[7:4]).delay == 4'd0;
+    logic c_1_0   = sim_clock % props(stencil.right[7:4]).delay == 4'd0;
 
-    logic a_0_0 = stencil.center[7:4] == sim_pkg::MatAir;
-    logic a_n1_0 = stencil.left[7:4]  == sim_pkg::MatAir;
-    logic a_1_0 = stencil.right[7:4]  == sim_pkg::MatAir;
+    logic a_0_n1 = stencil.top[7:4]       == sim_pkg::MatAir;
+    logic a_n1_n1 = stencil.topLeft[7:4]  == sim_pkg::MatAir;
+    logic a_1_n1 = stencil.topRight[7:4]  == sim_pkg::MatAir;
+    logic a_0_0 = stencil.center[7:4]     == sim_pkg::MatAir;
+    logic a_n1_0 = stencil.left[7:4]      == sim_pkg::MatAir;
+    logic a_1_0 = stencil.right[7:4]      == sim_pkg::MatAir;
 
-    logic d_0_0   = props(stencil.center[7:4]).displaceable;
+    logic d_0_n1 = props(stencil.top[7:4]).displaceable;
+    logic d_0_0  = props(stencil.center[7:4]).displaceable;
 
-    // If we're not an incoming row, gravity rules guarantee we can't move downwards.
-    // Lateral movement is restrained from non-air to air to conserve diagonal translation uniqueness
-    // Whilst also mitigating lateral race conditions.
+    logic [3:0] res;
 
-    if (incoming_row) begin
+    // If we're a not a sending row, we know our sending row can't
+    // issue a transaction. So we can evaluate both rows safely.
+
+    if (sending_row) begin
         return 8'hFF;
     end
 
-    if (c && !a_0_0 && d_0_0) begin
+    // Top row
+    if (c_0_n1 && !a_0_n1 && d_0_n1) begin
+        // Incoming
+        if(r && a_1_n1) begin
+            res[3:2] = 2'd2;
+        end else if(!r && a_n1_n1) begin
+            res[3:2] = 2'd0;
+        end
+    end else if(a_0_n1) begin
+        if(r && !a_n1_n1 && c_n1_n1) begin
+            res[3:2] = 2'd0;
+        end else if(!r && ! a_1_n1 && c_1_n1) begin
+            res[3:2] = 2'd2;
+        end
+    end else res[3:2] = 2'd1;
+
+    // Bottom row
+    if (c_0_0 && !a_0_0 && d_0_0) begin
         // Incoming
         if(r && a_1_0) begin
-            return stencil.right;
+            res[1:0] = 2'd2;
         end else if(!r && a_n1_0) begin
-            return stencil.left;
+            res[1:0] = 2'd0;
         end
     end else if(a_0_0) begin
-        if(r && !a_n1_0 && c_l) begin
-            return stencil.left;
-        end else if(!r && ! a_1_0 && c_r) begin
-            return stencil.right;
+        if(r && !a_n1_0 && c_n1_0) begin
+            res[1:0] = 2'd0;
+        end else if(!r && ! a_1_0 && c_1_0) begin
+            res[1:0] = 2'd2;
         end
-    end
+    end else res[1:0] = 2'd1;
 
 endfunction
 

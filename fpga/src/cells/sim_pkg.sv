@@ -95,68 +95,76 @@ package sim_pkg;
     p.color = material_color(m);
     case (m)
       MatSand: begin
-        p.density      = 4'd8;
-        p.falls        = 1'b1;
-        p.spreads      = 1'b0;
-        p.solid        = 1'b1;
-        p.displaceable = 1'b1;
-        p.delay        = 4'd2;
+        p.density          = 4'd8;
+        p.falls            = 1'b1;
+        p.spreads          = 1'b0;
+        p.solid            = 1'b1;
+        p.displaceable     = 1'b1;
+        p.delay            = 4'd2;
+        p.blast_resistance = 4'd2;
       end
       MatWater: begin
-        p.density      = 4'd4;
-        p.falls        = 1'b1;
-        p.spreads      = 1'b1;
-        p.solid        = 1'b1;
-        p.displaceable = 1'b1;
-        p.delay        = 4'd2;
+        p.density          = 4'd4;
+        p.falls            = 1'b1;
+        p.spreads          = 1'b1;
+        p.solid            = 1'b1;
+        p.displaceable     = 1'b1;
+        p.delay            = 4'd2;
+        p.blast_resistance = 4'd2;
       end
       MatStone: begin
-        p.density      = 4'd15;
-        p.falls        = 1'b0;
-        p.spreads      = 1'b0;
-        p.solid        = 1'b1;
-        p.displaceable = 1'b0;
-        p.delay        = 4'd1;
+        p.density          = 4'd15;
+        p.falls            = 1'b0;
+        p.spreads          = 1'b0;
+        p.solid            = 1'b1;
+        p.displaceable     = 1'b0;
+        p.delay            = 4'd1;
+        p.blast_resistance = 4'd3;
       end
       MatGOL: begin
-        p.density      = 4'd15;
-        p.falls        = 1'b0;
-        p.spreads      = 1'b0;
-        p.solid        = 1'b1;
-        p.displaceable = 1'b0;
-        p.delay        = 4'd1;
+        p.density          = 4'd15;
+        p.falls            = 1'b0;
+        p.spreads          = 1'b0;
+        p.solid            = 1'b1;
+        p.displaceable     = 1'b0;
+        p.delay            = 4'd1;
+        p.blast_resistance = 4'd3;
       end
       MatExplo: begin
-        p.density      = 4'd15;
-        p.falls        = 1'b0;
-        p.spreads      = 1'b0;
-        p.solid        = 1'b0;
-        p.displaceable = 1'b0;
-        p.delay        = 4'd1;
+        p.density          = 4'd15;
+        p.falls            = 1'b0;
+        p.spreads          = 1'b0;
+        p.solid            = 1'b0;
+        p.displaceable     = 1'b0;
+        p.delay            = 4'd1;
+        p.blast_resistance = 4'd0;
       end
       MatLava: begin
-        p.density      = 4'd10;
-        p.falls        = 1'b1;
-        p.spreads      = 1'b1;
-        p.solid        = 1'b1;
-        p.displaceable = 1'b1;
-        p.delay        = 4'd1;
+        p.density          = 4'd10;
+        p.falls            = 1'b1;
+        p.spreads          = 1'b1;
+        p.solid            = 1'b1;
+        p.displaceable     = 1'b1;
+        p.delay            = 4'd1;
+        p.blast_resistance = 4'd3;
       end
       MatAcid: begin
-        p.density      = 4'd8;
-        p.falls        = 1'b1;
-        p.spreads      = 1'b1;
-        p.solid        = 1'b1;
-        p.displaceable = 1'b1;
-        p.delay        = 4'd1;
+        p.density          = 4'd8;
+        p.falls            = 1'b1;
+        p.spreads          = 1'b1;
+        p.solid            = 1'b1;
+        p.displaceable     = 1'b1;
+        p.delay            = 4'd1;
+        p.blast_resistance = 4'd2;
       end
       default: begin  // MatAir, and every unassigned id
-        p.density      = 4'd0;
-        p.falls        = 1'b0;
-        p.spreads      = 1'b0;
-        p.solid        = 1'b0;
-        p.displaceable = 1'b1;
-        p.delay        = 4'd1;
+        p.density          = 4'd0;
+        p.falls            = 1'b0;
+        p.spreads          = 1'b0;
+        p.solid            = 1'b0;
+        p.displaceable     = 1'b1;
+        p.delay            = 4'd1;
+        p.blast_resistance = 4'd0;
       end
     endcase
     return p;

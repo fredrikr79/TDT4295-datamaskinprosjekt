@@ -26,11 +26,6 @@ package mem_map_pkg;
   // Framebuffers
   localparam int unsigned FbBytes = GridCells;  // 230,400
 
-  // Color Palette
-  localparam int unsigned PaletteEntries = 256;
-  localparam int unsigned PaletteEntryBytes = 2;
-  localparam int unsigned PaletteBytes = PaletteEntries * PaletteEntryBytes;  // 512
-
   // HUD sprites
   // TODO
 
@@ -39,8 +34,7 @@ package mem_map_pkg;
   localparam int unsigned CellGridMemPointer = 0;
   localparam int unsigned Fb0MemPointer = align_to_next_page(CellGridMemPointer + CellGridBytes);
   localparam int unsigned Fb1MemPointer = align_to_next_page(Fb0MemPointer + FbBytes);
-  localparam int unsigned PaletteMemPointer = align_to_next_page(Fb1MemPointer + FbBytes);
-  localparam int unsigned SpritesMemPointer = align_to_next_page(PaletteMemPointer + PaletteBytes);
+  localparam int unsigned SpritesMemPointer = align_to_next_page(Fb1MemPointer + FbBytes);
 
   // Cell layer helper functions //
   function automatic memory_pkg::address_t cell_word_addr(input cell_pkg::grid_x_t x,
@@ -71,13 +65,5 @@ package mem_map_pkg;
     return fb_line_addr(buffer_sel, y) + memory_pkg::address_t'(int'(x));
   endfunction
 
-
-  // Palette helper functions //
-  localparam int unsigned PaletteIndexBits = $clog2(PaletteEntries);  // 8
-  typedef logic unsigned [PaletteIndexBits-1:0] palette_index_t;
-
-  function automatic memory_pkg::address_t palette_entry_addr(input palette_index_t index);
-    return memory_pkg::address_t'(PaletteMemPointer + int'(index) * PaletteEntryBytes);
-  endfunction
 
 endpackage

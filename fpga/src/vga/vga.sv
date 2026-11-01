@@ -16,7 +16,8 @@ module vga #(
     v_blank,
     h_blank,
     frame_start,
-    near_frame_end
+    near_frame_end,
+    line_end
 );
   import vga_sync_params::*;
   vga_clock_enable_pulse #(
@@ -54,7 +55,8 @@ module vga #(
       .v_blank(v_blank),
       .h_blank(h_blank),
       .frame_start(frame_start),
-      .near_frame_end(near_frame_end)
+      .near_frame_end(near_frame_end),
+      .line_end(line_end)
   );
 
   assign vga_r = color.red;

@@ -52,7 +52,7 @@ module main (
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
   logic [31:0] mem_addr;
-  logic [15:0]  mem_len;
+  logic [15:0] mem_len;
   logic [7:0] mem_in, mem_out;
   memory_pkg::transaction_e mem_transaction;
 
@@ -89,6 +89,8 @@ module main (
       .near_frame_end(near_frame_end)
   );
 
+
+  layer_pkg::layer_px_t cells_pixel_unused;
   cells cell_controller (
       .clk(clk),
       .sw(sw),
@@ -97,7 +99,39 @@ module main (
       .pixel_pulse(pixel_pulse),
       .coord_x(coord_x),
       .coord_y(coord_y),
-      .pixel(layers[LayerCells])
+      .pixel(cells_pixel_unused) // Temporary for implementing frame buffer
+  );
+
+  // Framebuffer
+  logic fb_sel;
+  assign fb_sel = 1'b0;
+
+  logic fb_underrun;
+  logic fb_mem_toggle;
+  memory_pkg::transaction_e fb_mem_transaction;
+  memory_pkg::address_t fb_mem_address;
+  memory_pkg::message_length_t fb_mem_length;
+
+  fb_scanout fb_display (
+      .clk(clk),
+      .reset(sw[3]),
+      .active_area(active_area),
+      .coord_x(coord_x),
+      .coord_y(coord_y),
+      .line_end(line_end),
+      .near_frame_end(near_frame_end),
+      .fb_sel(fb_sel),
+
+      .mem_toggle(fb_mem_toggle),
+      .mem_transaction(fb_mem_transaction),
+      .mem_address(fb_mem_address),
+      .mem_length(fb_mem_length),
+      .mem_busy(mem_client_busy[memory_pkg::MemClientScanoutID]),
+      .mem_data_on_cable(mem_client_data_on_cable[memory_pkg::MemClientScanoutID]),
+      .mem_read_data(mem_read_data),
+
+      .pixel(layers[LayerCells]),
+      .underrun(fb_underrun)
   );
 
   gol gol_controller (
@@ -171,12 +205,19 @@ module main (
       mem_client_length_burst[i]      = '0;
       mem_client_write_data[i]  = '0;
     end
-
+    
+    // SPI
     mem_client_toggle[memory_pkg::MemClientSpiID]      = mem_toggle;
     mem_client_transaction[memory_pkg::MemClientSpiID] = mem_transaction;
     mem_client_address[memory_pkg::MemClientSpiID]     = mem_addr;
-    mem_client_length_burst[memory_pkg::MemClientSpiID]      = mem_len_burst;
+    mem_client_length_burst[memory_pkg::MemClientSpiID]= mem_len_burst;
     mem_client_write_data[memory_pkg::MemClientSpiID]  = mem_in;
+
+    // Scan-out fb
+    mem_client_toggle[memory_pkg::MemClientScanoutID]       = fb_mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientScanoutID]  = fb_mem_transaction;
+    mem_client_address[memory_pkg::MemClientScanoutID]      = fb_mem_address;
+    mem_client_length_burst[memory_pkg::MemClientScanoutID] = fb_mem_length;
 
     // TODO: Add the other clients here when they implement the external SRAM
   end

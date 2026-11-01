@@ -34,8 +34,11 @@ module tb_mem_map #(
   // The sprite region is still a TODO in mem_map_pkg, pending the decision in
   // the roadmap (hud_pkg::SpriteMemDepth went 64 -> 1024 in the merge from
   // main, which turns a fixed-slot layout into a multi-MiB region). Everything
-  // below therefore checks the four regions that ARE defined, and treats
-  // SpritesMemPointer as the end of the defined map.
+  // below therefore checks the three regions that ARE sized -- CellGrid, Fb0
+  // and Fb1 -- and treats SpritesMemPointer as the end of the defined map.
+  //
+  // There is no palette region: the palette is a ROM built from cell_pkg
+  // colours, so it occupies no PSRAM at all.
   localparam int unsigned DefinedMapEnd = SpritesMemPointer;
 
   initial begin
@@ -47,22 +50,19 @@ module tb_mem_map #(
     $display("mem_map: CellGrid @%0d (%0d B)", CellGridMemPointer, CellGridBytes);
     $display("mem_map: Fb0      @%0d (%0d B)", Fb0MemPointer, FbBytes);
     $display("mem_map: Fb1      @%0d (%0d B)", Fb1MemPointer, FbBytes);
-    $display("mem_map: Palette  @%0d (%0d B)", PaletteMemPointer, PaletteBytes);
     $display("mem_map: Sprites  @%0d (size TBD)", SpritesMemPointer);
 
     // --- Region sizes derive from config_pkg, never hand-typed -------------
     check_eq("GridCells", GridCells, 230400);
     check_eq("CellGridBytes = 4 bits/cell", CellGridBytes, GridCells / 2);
     check_eq("FbBytes = 1 byte/pixel", FbBytes, GridCells);
-    check_eq("PaletteBytes", PaletteBytes, PaletteEntries * PaletteEntryBytes);
 
     // --- Regions are ordered and do not overlap ----------------------------
     // Guaranteed by construction (each base is align_to_next_page of the
     // previous end), so this checks the chain was written correctly.
     check("Fb0 starts after CellGrid", Fb0MemPointer >= CellGridMemPointer + CellGridBytes);
     check("Fb1 starts after Fb0", Fb1MemPointer >= Fb0MemPointer + FbBytes);
-    check("Palette starts after Fb1", PaletteMemPointer >= Fb1MemPointer + FbBytes);
-    check("Sprites start after Palette", SpritesMemPointer >= PaletteMemPointer + PaletteBytes);
+    check("Sprites start after Fb1", SpritesMemPointer >= Fb1MemPointer + FbBytes);
 
     // --- Every base is page aligned ----------------------------------------
     // PageBytes matches the 1 KiB array row. Alignment is an allocation
@@ -70,7 +70,6 @@ module tb_mem_map #(
     check("CellGrid page aligned", (CellGridMemPointer % PageBytes) == 0);
     check("Fb0 page aligned", (Fb0MemPointer % PageBytes) == 0);
     check("Fb1 page aligned", (Fb1MemPointer % PageBytes) == 0);
-    check("Palette page aligned", (PaletteMemPointer % PageBytes) == 0);
     check("Sprites page aligned", (SpritesMemPointer % PageBytes) == 0);
 
     // --- The map fits inside ONE die ---------------------------------------
@@ -120,13 +119,6 @@ module tb_mem_map #(
     check("last line fetch stays inside Fb1",
           fb_line_addr(1'b1, fb_y_t'(GridHeight - 1)) + GridWidth
           <= Fb1MemPointer + FbBytes);
-
-    // --- Palette helpers ----------------------------------------------------
-    check_eq("palette_entry_addr(0)", palette_entry_addr(0), PaletteMemPointer);
-    check_eq("palette_entry_addr(1)", palette_entry_addr(1),
-             PaletteMemPointer + PaletteEntryBytes);
-    check_eq("palette_entry_addr(255) is the last entry", palette_entry_addr(255),
-             PaletteMemPointer + PaletteBytes - PaletteEntryBytes);
 
     if (errors != 0) $fatal(1, "tb_mem_map: %0d check(s) failed", errors);
     $display("tb_mem_map: all checks passed");

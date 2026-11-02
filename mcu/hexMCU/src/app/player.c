@@ -46,6 +46,7 @@ void update_player_position(
         if (last_end_y > velocity_box.box.y2) last_end_y = velocity_box.box.y2;
     }
 
+    // Data for choosing the next axis
     float prio_x = 1;
     float prio_y = 1;
     float y_of_x = fabsf(player.velocity_y / player.velocity_x);
@@ -54,12 +55,28 @@ void update_player_position(
     if (current_axis_x) prio_y = y_of_x;
     else prio_x = x_of_y;
 
+    // Progression data
     int vertical_progress = 0;
     int horizontal_progress = 0;
-    bool vertical_done = false;
-    bool horizontal_done = false;
+    int vertical_end = (player.velocity_y < 0)
+        ? (int) floorf(player.velocity_y)
+        : (int) ceilf(player.velocity_y);
+    int vertical_max = (player.velocity_y < 0)
+        ? -velocity_box.rel_y
+        : velocity_box.box.y2 - velocity_box.rel_y - PLAYER_SIZE_Y;
+    if (abs(vertical_max) < abs(vertical_end)) vertical_end = vertical_max;
+    int horizontal_end = (player.velocity_x < 0)
+        ? (int) floorf(player.velocity_x)
+        : (int) ceilf(player.velocity_x);
+    int horizontal_max = (player.velocity_x < 0)
+        ? -velocity_box.rel_x
+        : velocity_box.box.x2 - velocity_box.rel_x - PLAYER_SIZE_X;
+    if (abs(horizontal_max) < abs(horizontal_end)) horizontal_end = horizontal_max;
+    bool vertical_done = vertical_end == 0;
+    bool horizontal_done = horizontal_done == 0;
     bool vertical_collision = false;
     bool horizontal_collision = false;
+
     uint8_t base_x = velocity_box.rel_x - 1;
     if (player.velocity_x > 0) base_x += PLAYER_SIZE_X + 1;
     uint8_t base_y = velocity_box.rel_y - 1;
@@ -86,6 +103,7 @@ void update_player_position(
                 }
             }
             vertical_progress += dir_y;
+            if (vertical_max <= vertical_progress) vertical_collision = true;
         }
 
         else
@@ -105,22 +123,25 @@ void update_player_position(
                 }
             }
             horizontal_progress += dir_x;
+            if (horizontal_max <= horizontal_progress) horizontal_collision = true;
         }
 
         float remainder_x = 1 - modff(prio_x, 1);
         float remainder_y = 1 - modff(prio_y, 1);
-        current_axis_x = remainder_x / x_of_y < remainder_y / y_of_x;
-        if (current_axis_x && !vertical_done)
+        vertical_done = abs(vertical_end) <= abs(vertical_progress);
+        horizontal_done = abs(horizontal_end) <= abs(horizontal_progress);
+        if (!vertical_done && !horizontal_done)
+            current_axis_x = remainder_x / x_of_y < remainder_y / y_of_x;
+        else current_axis_x = !vertical_done;
+        if (current_axis_x)
         {
             prio_x = ceilf(prio_x);
             prio_y += y_of_x * prio_x;
-            vertical_done = fabsf(player.velocity_y) <= abs(vertical_progress);
         }
         else
         {
             prio_y = ceilf(prio_y);
             prio_x += x_of_y * prio_y;
-            horizontal_done = fabsf(player.velocity_x) <= abs(horizontal_progress);
         }
     }
 

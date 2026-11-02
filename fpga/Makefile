@@ -23,10 +23,10 @@ sim-vga: $(VGA_SIM_BINARY)
 sim-vcd: $(TOP_VCD)
 	gtkwave $<
 generate-vcd: $(TOP_VCD)
-lint: $(SOURCES)
+lint: $(SOURCES) lint/spi_fifo_stubs.sv
 	verilator \
 		--lint-only --Wall \
-		$(SOURCES)
+		$(SOURCES) lint/spi_fifo_stubs.sv
 $(TOP_VCD): $(VCD_SIM_BINARY) $(VCD_DIR)
 	./$<
 $(VCD_SIM_BINARY): $(VCD_SIM_DIR) $(SOURCES)

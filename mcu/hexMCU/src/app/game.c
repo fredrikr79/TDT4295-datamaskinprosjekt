@@ -231,9 +231,9 @@ static void room_enter(void)
 }
 
 /* Set the next velocity box */
-void set_velocity_box(velocity_box_t vb)
+void set_velocity_box(velocity_box_t *vb)
 {
-    velocity_box = vb;
+    velocity_box = *vb;
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -245,7 +245,7 @@ static void run_frame(uint32_t n)
     fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
         velocity_box.box, box, velocity_box.length
     );
-    fgpa_submit(&player_box_cmd);
+    fpga_submit(&player_box_cmd);
     
     /* TODO: update + draw */
 

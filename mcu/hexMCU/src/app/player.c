@@ -305,7 +305,8 @@ void update_player(
     }
 
     // Create the next velocity box
-    set_next_velocity_box(next_velocity_box(player));
+    velocity_box_t nvb = next_velocity_box(player);
+    set_next_velocity_box(&nvb);
 }
 
 void move_left()

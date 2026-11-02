@@ -1,3 +1,5 @@
+#pragma once
+
 #include "fpga.h"
 #include "rooms.h"
 #include <stdint.h>

@@ -14,7 +14,7 @@ integer i;
 logic row_running = 1'b0;
 integer stride = sim_pkg::CellGridWidth / sim_pkg::SimulationCoreCount;
 logic [3:0] sim_clock = 4'b0;
-integer gol_refresh_clock = 4'b0;
+integer gol_refresh_clock = 32'd0;
 
 integer row_index = 32'd0;
 logic odd_major_evaluation = 1'b0;
@@ -126,7 +126,7 @@ always @(posedge clk) begin
         gol_mat = gol_rules(
             neighbourhood,
             sim_clock,
-            gol_refresh_clock % GOL_REFRESH_DELAY,
+            gol_refresh_clock % GolRefreshDelay == 0,
             lowbias32(lfsr_gol ^ curr)[0]
         );
 
@@ -196,7 +196,7 @@ always @(posedge clk) begin
                 row_index <= 0;
                 sim_clock <= sim_clock + 1'b1;
 
-                gol_refresh_clock <= gol_refresh-clock + 1'b1;
+                gol_refresh_clock <= gol_refresh_clock + 1'b1;
                 lfsr_gol <= {lfsr_gol[30:0], lfsr_gol[31] ^ lfsr_gol[21] ^ lfsr_gol[1] ^ lfsr_gol[0]};
 
                 odd_major_evaluation <= ~odd_major_evaluation;
@@ -277,22 +277,22 @@ function automatic logic [7:0] gol_rules(
     input logic refresh_state
 );
     automatic logic [3:0] neighbour_count =
-        (stencil.top[7:4]         == sim_pkg::MatGOL && stencil.top[3]) +
-        (stencil.bottom[7:4]      == sim_pkg::MatGOL && stencil.bottom[3]) +
-        (stencil.topLeft[7:4]     == sim_pkg::MatGOL && stencil.topLeft[3]) +
-        (stencil.left[7:4]        == sim_pkg::MatGOL && stencil.left[3]) +
-        (stencil.bottomLeft[7:4]  == sim_pkg::MatGOL && stencil.bottomLeft[3]) +
-        (stencil.topRight[7:4]    == sim_pkg::MatGOL && stencil.topRight[3]) +
-        (stencil.right[7:4]       == sim_pkg::MatGOL && stencil.right[3]) +
-        (stencil.bottomRight[7:4] == sim_pkg::MatGOL && stencil.bottomRight[3]) +
-        (stencil.center[7:4] == sim_pkg::MatGOL && stencil.center[3]);
+        4'(stencil.top[7:4]         == sim_pkg::MatGOL && stencil.top[3]) +
+        4'(stencil.bottom[7:4]      == sim_pkg::MatGOL && stencil.bottom[3]) +
+        4'(stencil.topLeft[7:4]     == sim_pkg::MatGOL && stencil.topLeft[3]) +
+        4'(stencil.left[7:4]        == sim_pkg::MatGOL && stencil.left[3]) +
+        4'(stencil.bottomLeft[7:4]  == sim_pkg::MatGOL && stencil.bottomLeft[3]) +
+        4'(stencil.topRight[7:4]    == sim_pkg::MatGOL && stencil.topRight[3]) +
+        4'(stencil.right[7:4]       == sim_pkg::MatGOL && stencil.right[3]) +
+        4'(stencil.bottomRight[7:4] == sim_pkg::MatGOL && stencil.bottomRight[3]) +
+        4'(stencil.center[7:4] == sim_pkg::MatGOL && stencil.center[3]);
 
 
 
     if(props(stencil.center[7:4]).solid &&
       !props(stencil.center[7:4]).displaceable &&
       sim_clock % props(sim_pkg::MatGOL).delay == 4'b0 &&
-      neighbor_count == 4'd3
+      neighbour_count  == 4'd3
     ) begin
         return {MatGOL, refresh ? refresh_state : 1'b1, 3'b000};
     end else if(stencil.center[7:4] == sim_pkg::MatGOL) begin

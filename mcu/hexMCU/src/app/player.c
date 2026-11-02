@@ -207,7 +207,12 @@ void update_player(
                 }
             }
             vertical_progress += dir_y;
-            if (vertical_max <= vertical_progress) vertical_collision = true;  // Change to only count as collision if outer walls are hit
+            if (vertical_max <= vertical_progress)
+            {
+                if (velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y)
+                    vertical_collision = true;
+                else break;
+            }
         }
 
         else
@@ -227,7 +232,12 @@ void update_player(
                 }
             }
             horizontal_progress += dir_x;
-            if (horizontal_max <= horizontal_progress) horizontal_collision = true;  // Change to only count as collision if outer walls are hit
+            if (horizontal_max <= horizontal_progress)
+            {
+                if (velocity_box.box.x1 + velocity_box.box.x2 == ROOM_X)
+                    horizontal_collision = true;
+                else break;
+            }
         }
 
         float one = 1;
@@ -251,7 +261,7 @@ void update_player(
         }
     }
 
-    // Stop player if collided, and apply attained movement
+    // Stop player if collided, and apply movement
     if (horizontal_collision)
     {
         player.velocity_x = 0;

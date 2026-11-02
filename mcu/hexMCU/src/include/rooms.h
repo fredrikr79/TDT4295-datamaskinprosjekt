@@ -10,6 +10,15 @@
 #define PORTAL_THICKNESS 2
 #define DATA_MAX_SIZE ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS
 
+#define AIR 0
+#define STONE 1
+#define SAND 2
+#define WATER 3
+#define LAVA 4
+#define ACID 5
+#define GOL 6
+#define EXPLOSION 7
+
 void read_room(int x, int y, uint8_t *tileIDs);
 void save_room(int x, int y, uint8_t *tileIDs);
 

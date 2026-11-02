@@ -8,6 +8,26 @@
 float move_force = 0;
 bool jump_next_frame = false;
 
+static bool tile_has_collision(uint8_t id)
+{
+    return id == STONE || id == SAND || id == GOL;
+}
+
+static bool tile_has_damage(uint8_t id)
+{
+    return id == LAVA || id == ACID || id == EXPLOSION;
+}
+
+static bool tile_has_raditation(uint8_t id)
+{
+    return id == GOL;
+}
+
+static bool tile_is_swimmable(uint8_t id)
+{
+    return id == WATER || id == LAVA || id == ACID;
+}
+
 static void perform_jump(
     player_t player,
     uint8_t *box,
@@ -21,7 +41,7 @@ static void perform_jump(
         uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
         for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
         {
-            if (box[x + y*velocity_box.box.x2] != 0)
+            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
             {
                 is_grounded = true;
                 break;
@@ -52,7 +72,7 @@ void update_player_position(
             x++
         )
         {
-            if (box[x + y*velocity_box.box.x2] != 0) apply_friction = true;
+            if (tile_has_collision(box[x + y*velocity_box.box.x2])) apply_friction = true;
         }
     }
     if (apply_friction)
@@ -138,7 +158,7 @@ void update_player_position(
                 x++
             )
             {
-                if (box[x + (base_y + vertical_progress)*velocity_box.box.x2] != 0)
+                if (tile_has_collision(box[x + (base_y + vertical_progress)*velocity_box.box.x2]))
                 {
                     vertical_done = true;
                     vertical_collision = true;
@@ -158,7 +178,7 @@ void update_player_position(
                 y++
             )
             {
-                if (box[base_x + horizontal_progress + y*velocity_box.box.x2] != 0)
+                if (tile_has_collision(box[base_x + horizontal_progress + y*velocity_box.box.x2]))
                 {
                     horizontal_done = true;
                     horizontal_collision = true;

@@ -167,7 +167,7 @@ package sim_pkg;
         p.solid            = 1'b0;
         p.displaceable     = 1'b1;
         p.delay            = 4'd1;
-        p.blast_resistance = 4'd0;
+        p.blast_resistance = 4'd1;
       end
     endcase
     return p;

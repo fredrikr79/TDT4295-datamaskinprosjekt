@@ -14,12 +14,14 @@ integer i;
 logic row_running = 1'b0;
 integer stride = sim_pkg::CellGridWidth / sim_pkg::SimulationCoreCount;
 logic [3:0] sim_clock = 4'b0;
+integer gol_refresh_clock = 32'd0;
 
 integer row_index = 32'd0;
 logic odd_major_evaluation = 1'b0;
 
 // Linear feedback shift register acting as a L/R decision selector.
 integer lfsr = 32'hACE1_2345;
+integer lfsr_gol = 32'hACE1_2345;
 
 // Write transaction sends to res_buffer 0 and recieves to 1
 logic sending_row;
@@ -120,7 +122,13 @@ always @(posedge clk) begin
         // To avoid race conditions each frame will only translate pixels in
         // Either the left or right direction (in addition to vertical)
         explo_mat = explosion_rules(neighbourhood, sim_clock);
-        gol_mat = gol_rules(neighbourhood, sim_clock);
+
+        gol_mat = gol_rules(
+            neighbourhood,
+            sim_clock,
+            gol_refresh_clock % GolRefreshDelay == 0,
+            lowbias32(lfsr_gol ^ curr)[0]
+        );
 
         // Only eval transactions on recieving row of a transaction pair
         if(!sending_row && !transaction_unmatched_row) begin
@@ -187,6 +195,10 @@ always @(posedge clk) begin
             if(row_index == sim_pkg::CellGridHeight - 1) begin
                 row_index <= 0;
                 sim_clock <= sim_clock + 1'b1;
+
+                gol_refresh_clock <= gol_refresh_clock + 1'b1;
+                lfsr_gol <= {lfsr_gol[30:0], lfsr_gol[31] ^ lfsr_gol[21] ^ lfsr_gol[1] ^ lfsr_gol[0]};
+
                 odd_major_evaluation <= ~odd_major_evaluation;
             end else begin
                 row_index <= row_index + 1'b1;
@@ -260,27 +272,34 @@ endfunction
 
 function automatic logic [7:0] gol_rules(
     input sim_pkg::neighbourhood_t stencil,
-    input logic [3:0] sim_clk
+    input logic [3:0] sim_clk,
+    input logic refresh,
+    input logic refresh_state
 );
     automatic logic [3:0] neighbour_count =
-        (stencil.top[7:4]         == sim_pkg::MatGOL) +
-        (stencil.bottom[7:4]      == sim_pkg::MatGOL) +
-        (stencil.topLeft[7:4]     == sim_pkg::MatGOL) +
-        (stencil.left[7:4]        == sim_pkg::MatGOL) +
-        (stencil.bottomLeft[7:4]  == sim_pkg::MatGOL) +
-        (stencil.topRight[7:4]    == sim_pkg::MatGOL) +
-        (stencil.right[7:4]       == sim_pkg::MatGOL) +
-        (stencil.bottomRight[7:4] == sim_pkg::MatGOL);
+        4'(stencil.top[7:4]         == sim_pkg::MatGOL && stencil.top[3]) +
+        4'(stencil.bottom[7:4]      == sim_pkg::MatGOL && stencil.bottom[3]) +
+        4'(stencil.topLeft[7:4]     == sim_pkg::MatGOL && stencil.topLeft[3]) +
+        4'(stencil.left[7:4]        == sim_pkg::MatGOL && stencil.left[3]) +
+        4'(stencil.bottomLeft[7:4]  == sim_pkg::MatGOL && stencil.bottomLeft[3]) +
+        4'(stencil.topRight[7:4]    == sim_pkg::MatGOL && stencil.topRight[3]) +
+        4'(stencil.right[7:4]       == sim_pkg::MatGOL && stencil.right[3]) +
+        4'(stencil.bottomRight[7:4] == sim_pkg::MatGOL && stencil.bottomRight[3]) +
+        4'(stencil.center[7:4] == sim_pkg::MatGOL && stencil.center[3]);
+
+
 
     if(props(stencil.center[7:4]).solid &&
       !props(stencil.center[7:4]).displaceable &&
-      sim_clk % props(sim_pkg::MatGOL).delay == 4'b0
+      sim_clock % props(sim_pkg::MatGOL).delay == 4'b0 &&
+      neighbour_count  == 4'd3
     ) begin
-        return (neighbour_count + (stencil.center[7:4] == sim_pkg::MatGOL)) == 4'd3
-            ? {MatGOL , 4'b0}
-            : 8'hFF;
+        return {MatGOL, refresh ? refresh_state : 1'b1, 3'b000};
+    end else if(stencil.center[7:4] == sim_pkg::MatGOL) begin
+        return {MatGOL, refresh ? refresh_state : 1'b0, 3'b000};
+    end else begin
+        return 'hFF;
     end
-    return 8'hFF;
 endfunction
 
 function automatic logic [3:0] gravity_rules(

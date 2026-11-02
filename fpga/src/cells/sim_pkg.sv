@@ -90,6 +90,8 @@ package sim_pkg;
     return color_pkg::color_t'(rgb);
   endfunction
 
+  localparam int GolRefreshDelay = 'd10000;
+
   // Lookup table for materials
   function automatic material_props_t props(material_t m);
     material_props_t p;
@@ -169,6 +171,18 @@ package sim_pkg;
       end
     endcase
     return p;
+  endfunction
+
+  // Credits to https://nullprogram.com/blog/2018/07/31/
+  function automatic logic [31:0] lowbias32(input logic [31:0] seed);
+    logic [31:0] random_value;
+
+    random_value = seed;
+    random_value = (random_value ^ (random_value >> 16)) * 32'h7feb_352d;
+    random_value = (random_value ^ (random_value >> 15)) * 32'h846c_a68b;
+    random_value = random_value ^ (random_value >> 16);
+
+    return random_value;
   endfunction
 
   // Check for if a cell can displace another cell. Used to put the cell with the most density on the bottom.

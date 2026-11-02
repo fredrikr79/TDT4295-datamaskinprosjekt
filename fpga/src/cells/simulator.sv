@@ -289,10 +289,16 @@ function automatic logic [7:0] gol_rules(
 
     automatic logic center_is_alive = stencil.center[7:4] == sim_pkg::MatGOL && stencil.center[3];
 
-    if (sim_clock % props(sim_pkg::MatGOL).delay == 4'b0) return 'hFF;
+    if (sim_clock % props(sim_pkg::MatGOL).delay != 4'b0) begin
+        if (refresh && stencil.center[7:4] == sim_pkg::MatGOL) begin
+            return {MatGOL, refresh_state, 3'b000};
+        end else begin
+            return 'hFF;
+        end
+    end;
 
     if(props(stencil.center[7:4]).solid &&
-      !props(stencil.center[7:4]).displaceable &&
+      !props(stencil.center[7:4]).spreads &&
       (neighbour_count  == 4'd3 || neighbour_count == 4'd2 && stencil.center_is_alive)
     ) begin
         return {MatGOL, refresh ? refresh_state : 1'b1, 3'b000};

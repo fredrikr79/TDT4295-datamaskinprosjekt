@@ -1,45 +1,62 @@
-/* verilator lint_off PINMISSING */
-/* verilator lint_off MULTITOP */
+`timescale 1ns/1ps
 
-module tb_sim;
+module tb;
   import sim_pkg::*;
 
   localparam int W = CellGridWidth;
   localparam int H = CellGridHeight;
-  localparam int PAIRS = (H + 1) / 2;
-  localparam int MAX_WAIT_CYCLES = 2_000_000;
+  localparam int MAX_ROW_WAIT_CYCLES  = 100_000;
+  localparam int MAX_PAIR_WAIT_CYCLES = 100_000;
+  localparam int NUM_GENERATIONS = 100;
 
   logic clk = 1'b0;
   logic pulse_new_row = 1'b0;
   logic sim_running = 1'b0;
-  row_buffer_t buffers [3];
-  row_buffer_t res_buffer [2];
+  logic pulse_row_done;
   logic pulse_transaction_pair_done;
 
-  // Framebuffers store the complete 8-bit cell (material[7:4], counter[3:0]).
+  row_buffer_t buffers [3];
+  row_buffer_t res_buffer [2];
+
+  // Full 8-bit cell values: material ID [7:4], counter/age [3:0].
   logic [7:0] current_grid [0:H-1][0:W-1];
   logic [7:0] next_grid    [0:H-1][0:W-1];
 
   integer frame_number = 0;
-  integer x, y, pair_y, wait_cycles;
+  integer x, y, phase;
   integer fd;
   string filename;
 
   always #5 clk = ~clk; // 100 MHz
 
-  // This is the intended transaction-pair interface. Rename the completion
-  // port here if your final DUT uses a different spelling.
+  // DUT contract:
+  // - pulse_new_row starts one local row evaluation.
+  // - pulse_row_done says that row's local candidate is ready and the
+  //   three-row input window may advance.
+  // - pulse_transaction_pair_done says the two candidate rows and their
+  //   inter-row interactions are resolved and both output rows are stable.
   simulator dut (
-    .clk                         (clk),
-    .pulse_new_row               (pulse_new_row),
-    .sim_running                 (sim_running),
-    .buffers                     (buffers),
-    .pulse_transaction_pair_done(pulse_transaction_pair_done),
-    .res_buffer                  (res_buffer)
+    .clk                          (clk),
+    .pulse_new_row                (pulse_new_row),
+    .sim_running                  (sim_running),
+    .buffers                      (buffers),
+    .pulse_row_done               (pulse_row_done),
+    .pulse_transaction_pair_done  (pulse_transaction_pair_done),
+    .res_buffer                   (res_buffer)
   );
 
-  // Build a three-row source window. Out-of-screen rows are air.
-  task automatic pack_source_row(input integer source_y, output row_buffer_t packed_row);
+  // Return the res_buffer index selected by the DUT's convention:
+  // sending_row = row_index[0] != even_major_evaluation.
+  // phase is 0 for even-major and 1 for odd-major evaluation.
+ function automatic integer row_output_slot(
+    input integer row_y,
+    input integer phase_value
+);
+    row_output_slot = (((row_y % 2) == phase_value) ? 1 : 0);
+endfunction
+
+  task automatic pack_source_row(input integer source_y,
+                                 output row_buffer_t packed_row);
     integer px;
     begin
       packed_row = '0;
@@ -47,19 +64,146 @@ module tb_sim;
         for (px = 0; px < W; px = px + 1)
           packed_row[px*BitsPerPixel +: BitsPerPixel] = current_grid[source_y][px];
       end
+      // Rows outside the visible grid are air (all-zero cell values).
     end
   endtask
 
-  task automatic load_transaction_window(input integer first_output_y);
+  task automatic load_initial_window;
     begin
-      pack_source_row(first_output_y - 1, buffers[0]);
-      pack_source_row(first_output_y,     buffers[1]);
-      pack_source_row(first_output_y + 1, buffers[2]);
+      pack_source_row(-1, buffers[0]);
+      pack_source_row( 0, buffers[1]);
+      pack_source_row( 1, buffers[2]);
     end
   endtask
 
-  // Small deterministic starting world. Replace this task with a file loader
-  // or randomized seed once the simulator's world loader is available.
+  // Advance [y-1, y, y+1] to [y, y+1, y+2] after row y completes.
+  task automatic rotate_input_window(input integer next_center_y);
+    begin
+      buffers[0] = buffers[1];
+      buffers[1] = buffers[2];
+      pack_source_row(next_center_y + 1, buffers[2]);
+    end
+  endtask
+
+  task automatic start_row(input integer row_y);
+    begin
+      // The current buffers must already contain rows row_y-1, row_y, row_y+1.
+      @(negedge clk);
+      pulse_new_row = 1'b1;
+      @(negedge clk);
+      pulse_new_row = 1'b0;
+      $display("Start local row %0d at time %0t", row_y, $time);
+    end
+  endtask
+
+  task automatic wait_for_row_done(input integer row_y);
+    integer cycles;
+    begin
+      cycles = 0;
+      while (pulse_row_done !== 1'b1 && cycles < MAX_ROW_WAIT_CYCLES) begin
+        @(negedge clk);
+        cycles = cycles + 1;
+      end
+      if (pulse_row_done !== 1'b1)
+        $fatal(1, "Timeout waiting for pulse_row_done at row %0d after %0d cycles",
+               row_y, cycles);
+      $display("Local row %0d done after %0d cycles", row_y, cycles);
+    end
+  endtask
+
+  task automatic wait_for_pair_done(input integer first_row_y,
+                                    input integer second_row_y);
+    integer cycles;
+    begin
+      cycles = 0;
+      while (pulse_transaction_pair_done !== 1'b1 &&
+             cycles < MAX_PAIR_WAIT_CYCLES) begin
+        @(negedge clk);
+        cycles = cycles + 1;
+      end
+      if (pulse_transaction_pair_done !== 1'b1)
+        $fatal(1,
+          "Timeout waiting for transaction pair rows %0d/%0d after %0d cycles",
+          first_row_y, second_row_y, cycles);
+      $display("Transaction pair %0d/%0d done after %0d cycles",
+               first_row_y, second_row_y, cycles);
+    end
+  endtask
+
+  // In a matched pair, the first row is in res_buffer[0] and the second
+  // row is in res_buffer[1]. This holds in both alternating pair alignments.
+task automatic capture_pair(input integer first_output_y);
+    integer px;
+    begin
+        for (px = 0; px < W; px = px + 1) begin
+            // Upper / first row
+            next_grid[first_output_y][px] =
+                res_buffer[1][px*BitsPerPixel +: BitsPerPixel];
+
+            // Lower / second row
+            next_grid[first_output_y+1][px] =
+                res_buffer[0][px*BitsPerPixel +: BitsPerPixel];
+        end
+    end
+endtask
+  // Odd-major alignment has unpaired top and bottom edge rows. Capture those
+  // single-row local results from whichever output slot the DUT selected.
+  task automatic capture_single_row(input integer row_y,
+                                    input integer phase_value);
+    integer px;
+    integer slot;
+    begin
+      slot = row_output_slot(row_y, phase_value);
+      for (px = 0; px < W; px = px + 1)
+        next_grid[row_y][px] =
+          res_buffer[slot][px*BitsPerPixel +: BitsPerPixel];
+      $display("Captured unpaired boundary row %0d from res_buffer[%0d]",
+               row_y, slot);
+    end
+  endtask
+
+  // A colourful renderer with subtle spatial and cell-age variation.
+  function automatic logic [23:0] pixel_rgb(input logic [7:0] cell_value,
+                                             input integer px,
+                                             input integer py);
+    logic [3:0] mat;
+    integer age;
+    integer shade;
+    integer rr, gg, bb;
+    begin
+      mat = cell_value[7:4];
+      age = cell_value[3:0];
+      shade = ((px*3 + py*5 + age*11) % 25) - 12;
+      rr = 0;
+      gg = 0;
+      bb = 0;
+
+      case (mat)
+        MatStone: begin rr=112; gg=123; bb=145; shade=shade/2; end
+        MatSand:  begin rr=238; gg=184; bb=75;  end
+        MatWater: begin rr=28;  gg=125; bb=238; shade=shade+5; end
+        MatLava:  begin rr=255; gg=76;  bb=18;  shade=shade+8; end
+        MatAcid:  begin rr=105; gg=225; bb=55;  shade=shade+4; end
+        MatGOL:   begin rr=age[3] ? 226 : 113; gg=age[3] ? 235 : 117; bb=age[3] ? 245 : 122; shade=shade/3; end
+        MatExplo: begin rr=60 + age*13; gg=age*11;  bb=age;  shade=0; end
+        default:  begin rr=5;   gg=9;   bb=19;  shade=shade/5; end
+      endcase
+
+      rr = rr + shade;
+      gg = gg + shade;
+      bb = bb + shade;
+
+      if (rr < 0)       rr = 0;
+      else if (rr > 255) rr = 255;
+      if (gg < 0)       gg = 0;
+      else if (gg > 255) gg = 255;
+      if (bb < 0)       bb = 0;
+      else if (bb > 255) bb = 255;
+
+      pixel_rgb = {rr[7:0], gg[7:0], bb[7:0]};
+    end
+  endfunction
+
   task automatic initialize_world;
     integer px, py;
     begin
@@ -90,41 +234,16 @@ module tb_sim;
         end
       end
 
-      // A small Game-of-Life seed, placed away from the material samples.
-      current_grid[90][270] = {MatGOL, 4'h0};
-      current_grid[90][271] = {MatGOL, 4'h0};
-      current_grid[90][272] = {MatGOL, 4'h0};
+      // A small Game-of-Life seed.
+      current_grid[H-40][150] = {MatGOL, 4'b1000};
+      current_grid[H-40][152] = {MatGOL, 4'b1000};
+      current_grid[H-39][151] = {MatGOL, 4'b1000};
+      current_grid[H-39][152] = {MatGOL, 4'b1000};
+      current_grid[H-38][151] = {MatGOL, 4'b1000};
+      // Explosion seed: maximum initial force, placed in open space.
+      current_grid[90][350] = {MatExplo, 4'hF};
     end
   endtask
-
-  // Vivid material palette with gentle per-pixel/counter variation.
-  // Returns 24-bit 0xRRGGBB. Air is near-black with a subtle blue tint.
-  function automatic logic [23:0] pixel_rgb(input logic [7:0] cell_val, input integer px, input integer py);
-    logic [3:0] mat, age;
-    integer shade;
-    integer rr, gg, bb;
-    begin
-      mat = cell_val[7:4];
-      age = cell_val[3:0];
-      shade = ((px*3 + py*5 + age*11) % 25) - 12;
-      rr = 0; gg = 0; bb = 0;
-      case (mat)
-        MatStone: begin rr=112; gg=123; bb=145; shade=shade/2; end
-        MatSand:  begin rr=238; gg=184; bb=75;  end
-        MatWater: begin rr=28;  gg=125; bb=238; shade=shade+5; end
-        MatLava:  begin rr=255; gg=76;  bb=18;  shade=shade+8; end
-        MatAcid:  begin rr=105; gg=225; bb=55;  shade=shade+4; end
-        MatGOL:   begin rr=226; gg=235; bb=245; shade=shade/3; end
-        MatExplo: begin rr=255; gg=45;  bb=65;  shade=shade+age*2; end
-        default:  begin rr=5;   gg=9;   bb=19;  shade=shade/5; end
-      endcase
-      rr = rr + shade; gg = gg + shade; bb = bb + shade;
-      if (rr < 0) rr=0; else if (rr > 255) rr=255;
-      if (gg < 0) gg=0; else if (gg > 255) gg=255;
-      if (bb < 0) bb=0; else if (bb > 255) bb=255;
-      pixel_rgb = {8'(rr), 8'(gg), 8'(bb)};
-    end
-  endfunction
 
   task automatic write_ppm(input integer frame_id);
     integer px, py;
@@ -145,66 +264,71 @@ module tb_sim;
     end
   endtask
 
-  task automatic capture_pair(input integer first_output_y);
+  task automatic run_one_generation(input integer phase_value);
+    integer row_y;
     integer px;
+    integer slot;
+    logic is_unpaired_boundary;
     begin
-      // Contract: res_buffer[0] is first_output_y and [1] is first_output_y+1.
-      for (px = 0; px < W; px = px + 1) begin
-        next_grid[first_output_y][px] = res_buffer[0][px*BitsPerPixel +: BitsPerPixel];
-        if (first_output_y + 1 < H)
-          next_grid[first_output_y+1][px] = res_buffer[1][px*BitsPerPixel +: BitsPerPixel];
-      end
-    end
-  endtask
+      // Preserve the existing grid until every row has been replaced.
+      for (row_y = 0; row_y < H; row_y = row_y + 1)
+        for (px = 0; px < W; px = px + 1)
+          next_grid[row_y][px] = current_grid[row_y][px];
 
-  task automatic run_one_generation;
-    integer py, cycles;
-    begin
-      for (py = 0; py < H; py = py + 1)
-        for (x = 0; x < W; x = x + 1)
-          next_grid[py][x] = {MatAir, 4'h0};
+      load_initial_window();
 
-      for (py = 0; py < H; py = py + 2) begin
-        load_transaction_window(py);
-        @(negedge clk);
-        pulse_new_row = 1'b1;
-        @(negedge clk);
-        pulse_new_row = 1'b0;
+      for (row_y = 0; row_y < H; row_y = row_y + 1) begin
+        start_row(row_y);
+        wait_for_row_done(row_y);
 
-        cycles = 0;
-        // Wait for the DUT's pair-level completion pulse.
-        while (pulse_transaction_pair_done !== 1'b1 && cycles < MAX_WAIT_CYCLES) begin
-          @(posedge clk);
-          cycles = cycles + 1;
+        is_unpaired_boundary = (phase_value != 0) &&
+                               ((row_y == 0) || (row_y == H-1));
+        slot = row_output_slot(row_y, phase_value);
+
+        if (is_unpaired_boundary) begin
+          // No vertical transaction partner exists at this edge in odd phase.
+          capture_single_row(row_y, phase_value);
+        end else if (slot == 0) begin
+          // This row closes the current pair. Pair completion may be asserted
+          // on the same cycle as row_done or in a later resolver cycle.
+          wait_for_pair_done(row_y-1, row_y);
+          capture_pair(row_y-1);
         end
-        if (cycles >= MAX_WAIT_CYCLES)
-          $fatal(1, "Timeout waiting for transaction pair at rows %0d/%0d", py, py+1);
+        // slot == 0 means this is the first row of a pair. Keep its candidate
+        // in res_buffer[0] while rotating the source window for its partner.
 
-        capture_pair(py);
-        // Move away from the completion edge before starting the next pair.
-        @(negedge clk);
+        if (row_y < H-1)
+          rotate_input_window(row_y + 1);
       end
 
-      for (py = 0; py < H; py = py + 1)
-        for (x = 0; x < W; x = x + 1)
-          current_grid[py][x] = next_grid[py][x];
+      for (row_y = 0; row_y < H; row_y = row_y + 1)
+        for (px = 0; px < W; px = px + 1)
+          current_grid[row_y][px] = next_grid[row_y][px];
     end
   endtask
 
   initial begin
     pulse_new_row = 1'b0;
     sim_running = 1'b0;
-    for (x = 0; x < 3; x = x + 1) buffers[x] = '0;
+    phase = 0; // Must match the DUT's initial even_major_evaluation value.
+
+    for (x = 0; x < 3; x = x + 1)
+      buffers[x] = '0;
+
     initialize_world();
     repeat (5) @(negedge clk);
     sim_running = 1'b1;
 
     write_ppm(0);
-    for (frame_number = 1; frame_number <= 10; frame_number = frame_number + 1) begin
-      run_one_generation();
+    for (frame_number = 1; frame_number <= NUM_GENERATIONS;
+         frame_number = frame_number + 1) begin
+      $display("Starting generation %0d (phase=%0d)", frame_number, phase);
+      run_one_generation(phase);
       write_ppm(frame_number);
       $display("Completed generation %0d", frame_number);
+      phase = !phase;
     end
+
     $finish;
   end
 endmodule

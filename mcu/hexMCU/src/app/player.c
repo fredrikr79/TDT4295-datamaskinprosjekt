@@ -68,6 +68,8 @@ void update_player_position(
     }
     else if (apply_friction && fabsf(player.velocity_x) < 0.4)
 
+    // TODO: Add liquid bouyancy
+
     player.velocity_x += force_x / 2;
     player.velocity_y += (force_y + GRAVITY) / 2;
 
@@ -145,7 +147,7 @@ void update_player_position(
                 }
             }
             vertical_progress += dir_y;
-            if (vertical_max <= vertical_progress) vertical_collision = true;
+            if (vertical_max <= vertical_progress) vertical_collision = true;  // Change to only count as collision if outer walls are hit
         }
 
         else
@@ -165,7 +167,7 @@ void update_player_position(
                 }
             }
             horizontal_progress += dir_x;
-            if (horizontal_max <= horizontal_progress) horizontal_collision = true;
+            if (horizontal_max <= horizontal_progress) horizontal_collision = true;  // Change to only count as collision if outer walls are hit
         }
 
         float one = 1;
@@ -249,19 +251,22 @@ void start_jump()
 
 velocity_box_t next_velocity_box(player_t player)
 {
-    // TODO: Change function to choose a 25x25 box that aims in the direction of the velocity
+    int dx = 20;
+    int dy = 30;
+    int rel_x = (dx - PLAYER_SIZE_X) / 2;
+    int rel_y = (dy - PLAYER_SIZE_Y) / 2;
 
-    float dx = player.velocity_x;
-    float dy = player.velocity_y + GRAVITY / 2;
+    int x = floorf(player.x + 0.5);
+    int y = floorf(player.y + 0.5);
 
-    float x = player.x;
-    float y = player.y;
-    if (dx < 0) {x -= dx; dx = -dx;}
-    if (dy < 0) {y -= dy; dy = -dy;}
+    if (x - rel_x < 0) rel_x = x;
+    else if (x - rel_x + dx >= ROOM_X) rel_x = x + dx - ROOM_X;
+    if (y - rel_y < 0) rel_y = y;
+    else if (y - rel_y + dy >= ROOM_Y) rel_y = y + dy - ROOM_Y;
 
     fpga_box_t box = {
-        floorf(x), floorf(y),
-        ceilf(dx), ceilf(dy)
+        x - rel_x, y - rel_y,
+        dx, dy
     };
-    return (velocity_box_t) {box, 12, 8, box.x2*box.y2};
+    return (velocity_box_t) {box, rel_x, rel_y, dx*dy};
 }

@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #define GRAVITY 0.4
+#define PLAYER_MAX_MOVE 5
 
 #define PLAYER_SIZE_X 8
 #define PLAYER_SIZE_Y 16

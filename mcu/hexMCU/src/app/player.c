@@ -17,14 +17,31 @@ void update_player_position(
 {
     if (jump_next_frame) perform_jump(player, box, velocity_box);
 
-    // TODO: Add horizontal friction
+    bool apply_friction = velocity_box.box.y1 + velocity_box.box.y2 + 1 == ROOM_Y;
+    if (!apply_friction)
+    {
+        uint16_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
+        for (
+            uint16_t x = velocity_box.rel_x;
+            x < velocity_box.rel_x + PLAYER_SIZE_X;
+            x++
+        )
+        {
+            if (box[x + y*velocity_box.box.x2] != 0) apply_friction = true;
+        }
+    }
+    if (apply_friction)
+    {
+        player.velocity_x *= 0.8;
+    }
 
     if (move_force)
     {
-        float move_force_from_max = copysignf(fmaxf(fabsf(player.velocity_x) - 5, 0), move_force);
+        float move_force_from_max = copysignf(fmaxf(fabsf(player.velocity_x) - PLAYER_MAX_MOVE, 0), move_force);
         if (move_force < move_force_from_max) player.velocity_x += move_force;
         else player.velocity_x += move_force_from_max;
     }
+    else if (apply_friction && fabsf(player.velocity_x) < 0.4)
 
     player.velocity_x += force_x / 2;
     player.velocity_y += (force_y + GRAVITY) / 2;

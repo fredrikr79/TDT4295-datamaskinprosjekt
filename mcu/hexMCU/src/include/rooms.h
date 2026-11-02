@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#pragma once
 #include "fpga.h"
 
 #define ROOM_X 40

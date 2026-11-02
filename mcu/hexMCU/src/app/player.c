@@ -1,6 +1,6 @@
 #include "player.h"
 #include "rooms.h"
-#include "fpga.h"
+#include "game.h"
 #include <stdlib.h>
 #include <math.h>
 #include <stdint.h>
@@ -45,14 +45,16 @@ static void perform_jump(
     else if (is_grounded && -JUMP_AIR < player.velocity_y) player.velocity_y = -JUMP_AIR;
 }
 
-void update_player_position(
-    float force_x,
-    float force_y,
+velocity_box_t update_player(
     player_t player,
     uint8_t *box,
-    velocity_box_t velocity_box
+    velocity_box_t velocity_box,
+    portal_t *portals
 )
 {
+    float force_x = 0;
+    float force_y = 0;
+
     // Check consistency of player box
     uint16_t in_air = 0;
     uint16_t in_stone = 0;
@@ -113,21 +115,21 @@ void update_player_position(
     if (move_force)
     {
         float move_force_from_max = copysignf(fmaxf(fabsf(player.velocity_x) - PLAYER_MAX_MOVE, 0), move_force);
-        if (move_force < move_force_from_max) player.velocity_x += move_force;
-        else player.velocity_x += move_force_from_max;
+        if (move_force < move_force_from_max) force_x = move_force;
+        else force_x = move_force_from_max;
     }
     // Stop if no input and low velocity
     else if (fabsf(player.velocity_x) < 0.3) player.velocity_x = 0;
 
     // Calculate gravity with bouyancy included
-    float effective_gravity = GRAVITY_AIR;
-    if (in_lava) effective_gravity = GRAVITY_LAVA;
-    else if (in_water) effective_gravity = GRAVITY_WATER;
-    else if (in_acid) effective_gravity = GRAVITY_ACID;
+    force_y = GRAVITY_AIR;
+    if (in_lava) force_y = GRAVITY_LAVA;
+    else if (in_water) force_y = GRAVITY_WATER;
+    else if (in_acid) force_y = GRAVITY_ACID;
 
-    // Apply first half of velocity
-    player.velocity_x += force_x / 2;
-    player.velocity_y += (force_y + GRAVITY_AIR) / 2;
+    // Apply first half of acceleration
+    player.velocity_y += force_x / 2;
+    player.velocity_y += force_y / 2;
 
     uint8_t last_end_x = velocity_box.rel_x;
     uint8_t last_start_x = last_end_x + (int) floorf(player.velocity_x);
@@ -287,7 +289,23 @@ void update_player_position(
 
     // Apply second half of velocity
     player.velocity_x += force_x / 2;
-    player.velocity_y += (force_y + GRAVITY_AIR) / 2;
+    player.velocity_y += force_y / 2;
+
+    // Check if player is overlapping with a portal
+    int overlap = pos_in_portal(player.x, player.y, portals);
+    if (overlap != -1)
+    {
+        portal_t portal = portals[overlap];
+        player.x = portal.dest_pos_x;
+        player.y = portal.dest_pos_y;
+        game_change_room(
+            portal.dest_pos_x,
+            portal.dest_pos_y
+        );
+    }
+
+    // Create the next velocity box
+    return next_velocity_box(player);
 }
 
 void move_left()

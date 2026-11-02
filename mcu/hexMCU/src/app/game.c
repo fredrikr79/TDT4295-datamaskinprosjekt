@@ -235,23 +235,10 @@ static void run_frame(uint32_t n)
 {
     (void)n;
 
-    update_player_position(0, 0, player, box, velocity_box);  // TODO: Change force
-    velocity_box = next_velocity_box(player);
+    velocity_box = update_player(player, box, velocity_box, portals);
     fpga_cmd_read_box(
         velocity_box.box, box, velocity_box.length
     );
-    
-    int overlap = pos_in_portal(player.x, player.y, portals);
-    if (overlap != -1)
-    {
-        portal_t portal = portals[overlap];
-        player.x = portal.dest_pos_x;
-        player.y = portal.dest_pos_y;
-        game_change_room(
-            portal.dest_pos_x,
-            portal.dest_pos_y
-        );
-    }
     
     /* TODO: update + draw */
 

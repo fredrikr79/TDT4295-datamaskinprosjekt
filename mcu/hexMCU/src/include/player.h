@@ -1,4 +1,5 @@
 #include "fpga.h"
+#include "rooms.h"
 #include <stdint.h>
 
 #define GRAVITY_AIR 0.4
@@ -32,10 +33,10 @@ typedef struct
     uint16_t length;
 } velocity_box_t;
 
-void update_player_position(
-    float force_x, float force_y,
+velocity_box_t update_player(
     player_t player,
-    uint8_t *box, velocity_box_t velocity_box
+    uint8_t *box, velocity_box_t velocity_box,
+    portal_t *portals
 );
 void move_left();
 void move_right();

@@ -117,7 +117,7 @@ void update_player_position(
         : velocity_box.box.x2 - velocity_box.rel_x - PLAYER_SIZE_X;
     if (abs(horizontal_max) < abs(horizontal_end)) horizontal_end = horizontal_max;
     bool vertical_done = vertical_end == 0;
-    bool horizontal_done = horizontal_done == 0;
+    bool horizontal_done = horizontal_end == 0;
     bool vertical_collision = false;
     bool horizontal_collision = false;
 

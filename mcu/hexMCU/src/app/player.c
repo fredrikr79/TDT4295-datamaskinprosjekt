@@ -31,25 +31,18 @@ static bool tile_is_swimmable(uint8_t id)
 static void perform_jump(
     player_t player,
     uint8_t *box,
-    velocity_box_t velocity_box
+    bool is_grounded,
+    uint16_t in_water,
+    uint16_t in_lava,
+    uint16_t in_acid
 )
 {
     jump_next_frame = false;
-    bool is_grounded = velocity_box.rel_y + PLAYER_SIZE_Y == velocity_box.box.y2;
-    if (!is_grounded)
-    {
-        uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
-        for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
-        {
-            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
-            {
-                is_grounded = true;
-                break;
-            }
-        }
-    }
 
-    if (is_grounded) player.velocity_y = -5;
+    if (in_water && -JUMP_WATER < player.velocity_y) player.velocity_y = -JUMP_WATER;
+    else if (in_lava && -JUMP_LAVA < player.velocity_y) player.velocity_y = -JUMP_LAVA;
+    else if (in_acid && -JUMP_ACID < player.velocity_y) player.velocity_y = -JUMP_ACID;
+    else if (is_grounded && -JUMP_AIR < player.velocity_y) player.velocity_y = -JUMP_AIR;
 }
 
 void update_player_position(
@@ -60,10 +53,32 @@ void update_player_position(
     velocity_box_t velocity_box
 )
 {
-    if (jump_next_frame) perform_jump(player, box, velocity_box);
+    // Check consistency of player box
+    uint16_t in_air = 0;
+    uint16_t in_stone = 0;
+    uint16_t in_sand = 0;
+    uint16_t in_water = 0;
+    uint16_t in_lava = 0;
+    uint16_t in_acid = 0;
+    uint16_t in_gol = 0;
+    uint16_t in_explosion = 0;
+    for (uint8_t y = velocity_box.rel_y; y < velocity_box.rel_y + PLAYER_SIZE_Y; y++)
+        for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
+        {
+            uint8_t id = box[x + y*velocity_box.box.x2];
+            if (id == AIR) in_air++;
+            else if (id == STONE) in_air++;
+            else if (id == SAND) in_air++;
+            else if (id == WATER) in_air++;
+            else if (id == LAVA) in_air++;
+            else if (id == ACID) in_air++;
+            else if (id == GOL) in_air++;
+            else if (id == EXPLOSION) in_air++;
+        }
 
-    bool apply_friction = velocity_box.box.y1 + velocity_box.box.y2 + 1 == ROOM_Y;
-    if (!apply_friction)
+    // Check if on ground
+    bool on_ground = velocity_box.box.y1 + velocity_box.box.y2 + 1 == ROOM_Y;
+    if (!on_ground)
     {
         uint16_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
         for (
@@ -72,13 +87,25 @@ void update_player_position(
             x++
         )
         {
-            if (tile_has_collision(box[x + y*velocity_box.box.x2])) apply_friction = true;
+            if (tile_has_collision(box[x + y*velocity_box.box.x2])) on_ground = true;
         }
     }
-    if (apply_friction)
+
+    // Apply friction
+    if (on_ground)
     {
         player.velocity_x *= 0.8;
     }
+
+    // Apply gravity
+    if (jump_next_frame) perform_jump(
+        player,
+        box,
+        on_ground,
+        in_water,
+        in_lava,
+        in_acid
+    );
 
     if (move_force)
     {
@@ -86,12 +113,12 @@ void update_player_position(
         if (move_force < move_force_from_max) player.velocity_x += move_force;
         else player.velocity_x += move_force_from_max;
     }
-    else if (apply_friction && fabsf(player.velocity_x) < 0.4)
+    else if (on_ground && fabsf(player.velocity_x) < 0.4)
 
     // TODO: Add liquid bouyancy
 
     player.velocity_x += force_x / 2;
-    player.velocity_y += (force_y + GRAVITY) / 2;
+    player.velocity_y += (force_y + GRAVITY_AIR) / 2;
 
     uint8_t last_end_x = velocity_box.rel_x;
     uint8_t last_start_x = last_end_x + (int) floorf(player.velocity_x);
@@ -246,7 +273,7 @@ void update_player_position(
     }
 
     player.velocity_x += force_x / 2;
-    player.velocity_y += (force_y + GRAVITY) / 2;
+    player.velocity_y += (force_y + GRAVITY_AIR) / 2;
 }
 
 void move_left()

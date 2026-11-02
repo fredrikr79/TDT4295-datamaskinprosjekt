@@ -1,7 +1,14 @@
 #include "fpga.h"
 #include <stdint.h>
 
-#define GRAVITY 0.4
+#define GRAVITY_AIR 0.4
+#define GRAVITY_WATER 0.2
+#define GRAVITY_LAVA 0.1
+#define GRAVITY_ACID GRAVITY_WATER
+#define JUMP_AIR 5
+#define JUMP_WATER 3
+#define JUMP_LAVA 1
+#define JUMP_ACID 2
 #define PLAYER_MAX_MOVE 5
 
 #define PLAYER_SIZE_X 8

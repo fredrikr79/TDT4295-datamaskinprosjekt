@@ -1,11 +1,36 @@
 #include "player.h"
 #include "rooms.h"
 #include "fpga.h"
+#include <stdlib.h>
 #include <math.h>
 #include <stdint.h>
 
 float move_force = 0;
 bool jump_next_frame = false;
+
+static void perform_jump(
+    player_t player,
+    uint8_t *box,
+    velocity_box_t velocity_box
+)
+{
+    jump_next_frame = false;
+    bool is_grounded = velocity_box.rel_y + PLAYER_SIZE_Y == velocity_box.box.y2;
+    if (!is_grounded)
+    {
+        uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
+        for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
+        {
+            if (box[x + y*velocity_box.box.x2] != 0)
+            {
+                is_grounded = true;
+                break;
+            }
+        }
+    }
+
+    if (is_grounded) player.velocity_y = -5;
+}
 
 void update_player_position(
     float force_x,
@@ -143,8 +168,10 @@ void update_player_position(
             if (horizontal_max <= horizontal_progress) horizontal_collision = true;
         }
 
-        float remainder_x = 1 - modff(prio_x, 1);
-        float remainder_y = 1 - modff(prio_y, 1);
+        float one = 1;
+        float remainder_x = 1 - modff(prio_x, &one);
+        one = 1;
+        float remainder_y = 1 - modff(prio_y, &one);
         vertical_done = abs(vertical_end) <= abs(vertical_progress);
         horizontal_done = abs(horizontal_end) <= abs(horizontal_progress);
         if (!vertical_done && !horizontal_done)
@@ -198,27 +225,6 @@ void update_player_position(
 
     player.velocity_x += force_x / 2;
     player.velocity_y += (force_y + GRAVITY) / 2;
-}
-
-static void perform_jump(
-    player_t player,
-    uint8_t *box,
-    velocity_box_t velocity_box
-)
-{
-    jump_next_frame = false;
-    bool is_grounded = false;
-    uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
-    for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
-    {
-        if (box[x + y*velocity_box.box.x2] != 0)
-        {
-            is_grounded = true;
-            break;
-        }
-    }
-
-    player.velocity_y = -5;
 }
 
 void move_left()

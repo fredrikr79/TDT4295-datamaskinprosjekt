@@ -72,6 +72,8 @@ static velocity_box_t velocity_box;
 static void run_enter(void);
 static void room_enter(void);
 
+static void handle_movement_keys(input_t in);
+
 static void go(state_t s)
 {
     if (s != state) LOG_INFO("%s -> %s", state_names[state], state_names[s]);

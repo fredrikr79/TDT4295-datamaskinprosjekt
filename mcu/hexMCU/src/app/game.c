@@ -231,7 +231,7 @@ static void room_enter(void)
 }
 
 /* Set the next velocity box */
-void set_velocity_box(velocity_box_t *vb)
+void set_next_velocity_box(velocity_box_t *vb)
 {
     velocity_box = *vb;
 }

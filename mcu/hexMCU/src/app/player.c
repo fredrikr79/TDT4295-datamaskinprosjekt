@@ -114,13 +114,13 @@ void update_player_position(
         {
             prio_x = ceilf(prio_x);
             prio_y += y_of_x * prio_x;
-            // TODO: Check vertical done
+            vertical_done = fabsf(player.velocity_y) <= abs(vertical_progress);
         }
         else
         {
             prio_y = ceilf(prio_y);
             prio_x += x_of_y * prio_y;
-            // TODO: Check horizontal done
+            horizontal_done = fabsf(player.velocity_x) <= abs(horizontal_progress);
         }
     }
 

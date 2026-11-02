@@ -123,7 +123,7 @@ always @(posedge clk) begin
         // Priority based situation resolution. Evaluation is done in parallell
         // To avoid race conditions each frame will only translate pixels in
         // Either the left or right direction (in addition to vertical)
-        explo_mat = explosion_rules(neighbourhood, sim_clock);
+        explo_mat = explosion_rules(neighbourhood, x, row_index, sim_clock);
 
         gol_mat = gol_rules(
             neighbourhood,
@@ -214,20 +214,113 @@ end
 
 function automatic logic [7:0] explosion_rules(
     input sim_pkg::neighbourhood_t stencil,
+    input integer x,
+    input integer row_index,
     input logic [3:0] sim_clk
 );
 
-    automatic integer full_force;
+    automatic integer decayed_center;
     automatic integer center = int'(stencil.center[7:4] == sim_pkg::MatExplo
         ? 32'(stencil.center[3:0])
         : 32'd0
     );
 
+    automatic integer diagonal_cost;
+    automatic integer grid_cost;
+    automatic integer proposed_val;
+
+    automatic logic is_exploding;
+    automatic integer full_force;
     automatic integer force_max = 32'd0;
+    logic [3:0] force_strength = 4'd0;
     automatic logic [3:0] blast_resistance = props(stencil.center[7:4]).blast_resistance;
 
 
-    logic is_exploding =
+    logic [31:0] temporal_noise;
+    logic [31:0] pos_noise;
+    logic can_move_free;
+
+    pos_noise =
+        32'(x) * 32'h9E3779B9 ^
+        32'(row_index) * 32'h85EBCA6B;
+
+    pos_noise ^= pos_noise >> 16;
+    pos_noise *= 32'h7FEB352D;
+    pos_noise ^= pos_noise >> 15;
+
+    temporal_noise =
+        pos_noise ^(32'(sim_clk) * 32'hC2B2AE35);
+
+    temporal_noise ^= temporal_noise >> 16;
+    temporal_noise *= 32'h7FEB352D;
+    temporal_noise ^= temporal_noise >> 15;
+
+    can_move_free = temporal_noise[7:0] < 8'd64;
+
+    diagonal_cost = can_move_free
+        ? 0
+        : (pos_noise[7:0] < 8'd64 ? 2 : 3);
+
+    grid_cost = can_move_free ? 0 : 2;
+
+    // Treat neighbourhood propegation differently to mimic a real explosion
+    if(stencil.top[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.top[3:0]) - 2 - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+    if(stencil.left[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.left[3:0]) - 2 - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+    if(stencil.right[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.right[3:0]) - 2 - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+    if(stencil.bottom[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.bottom[3:0]) - 2 - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+
+    if(stencil.topLeft[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.topLeft[3:0]) - diagonal_cost - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+    if(stencil.topRight[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.topRight[3:0]) - diagonal_cost - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+    if(stencil.bottomLeft[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.bottomLeft[3:0]) - diagonal_cost - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+    if(stencil.bottomRight[7:4] == sim_pkg::MatExplo) begin
+        proposed_val = int'(stencil.bottomRight[3:0]) - diagonal_cost - blast_resistance;
+        if(proposed_val > force_max) begin
+            force_max = proposed_val;
+        end
+    end
+
+    decayed_center = center > 0 ? center - 1 : 0;
+
+    full_force = force_max > decayed_center
+        ? force_max
+        : decayed_center;
+
+    is_exploding =
         stencil.topLeft[7:4]     == sim_pkg::MatExplo ||
         stencil.top[7:4]         == sim_pkg::MatExplo ||
         stencil.topRight[7:4]    == sim_pkg::MatExplo ||
@@ -237,39 +330,6 @@ function automatic logic [7:0] explosion_rules(
         stencil.bottomLeft[7:4]  == sim_pkg::MatExplo ||
         stencil.bottom[7:4]      == sim_pkg::MatExplo ||
         stencil.bottomRight[7:4] == sim_pkg::MatExplo;
-
-    logic [3:0] force_strength = 4'd0;
-
-    force_max = (stencil.topLeft[7:4]     == sim_pkg::MatExplo && 32'(stencil.topLeft[3:0]) > force_max)
-        ? stencil.topLeft[3:0]
-        : force_max;
-    force_max = (stencil.bottomRight[7:4] == sim_pkg::MatExplo && 32'(stencil.bottomRight[3:0]) > force_max)
-        ? stencil.bottomRight[3:0]
-        : force_max;
-    force_max = (stencil.top[7:4]         == sim_pkg::MatExplo && 32'(stencil.top[3:0]) > force_max)
-        ? stencil.top[3:0]
-        : force_max;
-    force_max = (stencil.bottom[7:4]      == sim_pkg::MatExplo && 32'(stencil.bottom[3:0]) > force_max)
-        ? stencil.bottom[3:0]
-        : force_max;
-    force_max = (stencil.topRight[7:4]    == sim_pkg::MatExplo && 32'(stencil.topRight[3:0]) > force_max)
-        ? stencil.topRight[3:0]
-        : force_max;
-    force_max = (stencil.bottomLeft[7:4]  == sim_pkg::MatExplo && 32'(stencil.bottomLeft[3:0]) > force_max)
-        ? stencil.bottomLeft[3:0]
-        : force_max;
-    force_max = (stencil.right[7:4]       == sim_pkg::MatExplo && 32'(stencil.right[3:0]) > force_max)
-        ? stencil.right[3:0]
-        : force_max;
-    force_max = (stencil.left[7:4]        == sim_pkg::MatExplo && 32'(stencil.left[3:0]) > force_max)
-        ? stencil.left[3:0]
-        : force_max;
-
-    if(force_max > center + blast_resistance) begin
-        full_force = force_max - blast_resistance < 32'd15 ? force_max - blast_resistance : 15;
-    end else begin
-        full_force = center - blast_resistance > 0 ? center - blast_resistance : 0;
-    end
 
     if(is_exploding && sim_clk % props(sim_pkg::MatExplo).delay == 4'b0) begin
         if(full_force > 0) begin
@@ -312,7 +372,7 @@ function automatic logic [7:0] gol_rules(
 
     if(props(stencil.center[7:4]).solid &&
       !props(stencil.center[7:4]).spreads &&
-      (neighbour_count  == 4'd3 || neighbour_count == 4'd2 && stencil.center_is_alive)
+      (neighbour_count  == 4'd3 || neighbour_count == 4'd2 && center_is_alive)
     ) begin
         return {MatGOL, refresh ? refresh_state : 1'b1, 3'b000};
     end else if(stencil.center[7:4] == sim_pkg::MatGOL) begin

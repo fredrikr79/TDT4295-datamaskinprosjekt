@@ -70,6 +70,7 @@ package sim_pkg;
     logic              solid;
     logic              displaceable;
     logic [3:0]        delay;
+    logic [3:0]        blast_resistance;
     color_pkg::color_t color;
   } material_props_t;
 
@@ -100,7 +101,7 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 4'd2;
+        p.delay            = 4'd1;
         p.blast_resistance = 4'd2;
       end
       MatWater: begin
@@ -109,7 +110,7 @@ package sim_pkg;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 4'd2;
+        p.delay            = 4'd1;
         p.blast_resistance = 4'd2;
       end
       MatStone: begin

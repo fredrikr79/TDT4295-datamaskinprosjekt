@@ -45,7 +45,7 @@ static void perform_jump(
     else if (is_grounded && -JUMP_AIR < player.velocity_y) player.velocity_y = -JUMP_AIR;
 }
 
-velocity_box_t update_player(
+void update_player(
     player_t player,
     uint8_t *box,
     velocity_box_t velocity_box,
@@ -305,7 +305,7 @@ velocity_box_t update_player(
     }
 
     // Create the next velocity box
-    return next_velocity_box(player);
+    set_next_velocity_box(next_velocity_box(player));
 }
 
 void move_left()

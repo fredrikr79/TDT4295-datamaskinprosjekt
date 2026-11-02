@@ -230,15 +230,22 @@ static void room_enter(void)
     player_init(100, 100);      /* start position for the room */
 }
 
+/* Set the next velocity box */
+void set_velocity_box(velocity_box_t vb)
+{
+    velocity_box = vb;
+}
+
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
 static void run_frame(uint32_t n)
 {
     (void)n;
 
-    velocity_box = update_player(player, box, velocity_box, portals);
-    fpga_cmd_read_box(
+    update_player(player, box, velocity_box, portals);
+    fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
         velocity_box.box, box, velocity_box.length
     );
+    fgpa_submit(&player_box_cmd);
     
     /* TODO: update + draw */
 

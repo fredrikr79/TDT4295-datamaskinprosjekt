@@ -33,7 +33,7 @@ typedef struct
     uint16_t length;
 } velocity_box_t;
 
-velocity_box_t update_player(
+void update_player(
     player_t player,
     uint8_t *box, velocity_box_t velocity_box,
     portal_t *portals

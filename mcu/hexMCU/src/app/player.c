@@ -114,7 +114,10 @@ void update_player(
     // Accelerate from input
     if (move_force)
     {
-        float move_force_from_max = copysignf(fmaxf(fabsf(player.velocity_x) - PLAYER_MAX_MOVE, 0), move_force);
+        float move_force_from_max = copysignf(
+            fmaxf(PLAYER_MAX_MOVE - fabsf(player.velocity_x), 0),
+            move_force
+        );
         if (move_force < move_force_from_max) force_x = move_force;
         else force_x = move_force_from_max;
     }
@@ -122,10 +125,13 @@ void update_player(
     else if (fabsf(player.velocity_x) < 0.3) player.velocity_x = 0;
 
     // Calculate gravity with bouyancy included
-    force_y = GRAVITY_AIR;
-    if (in_lava) force_y = GRAVITY_LAVA;
-    else if (in_water) force_y = GRAVITY_WATER;
-    else if (in_acid) force_y = GRAVITY_ACID;
+    float gravity_force = GRAVITY_AIR;
+    if (in_lava) gravity_force = GRAVITY_LAVA;
+    else if (in_water) gravity_force = GRAVITY_WATER;
+    else if (in_acid) gravity_force = GRAVITY_ACID;
+    float gravity_force_from_max = PLAYER_MAX_GRAVITY - player.velocity_y;
+    if (gravity_force < gravity_force_from_max) force_y = gravity_force;
+    else force_y = gravity_force_from_max;
 
     // Apply first half of acceleration
     player.velocity_y += force_x / 2;

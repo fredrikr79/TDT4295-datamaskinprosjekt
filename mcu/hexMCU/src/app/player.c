@@ -92,10 +92,12 @@ void update_player_position(
     }
 
     // Apply friction
-    if (on_ground)
-    {
-        player.velocity_x *= 0.8;
-    }
+    if (on_ground || in_water || in_acid)
+        player.velocity_x *= 0.7;
+    else if (in_lava)
+        player.velocity_x *= 0.4;
+    else
+        player.velocity_x *= 0.9;
 
     // Apply gravity
     if (jump_next_frame) perform_jump(
@@ -107,16 +109,23 @@ void update_player_position(
         in_acid
     );
 
+    // Accelerate from input
     if (move_force)
     {
         float move_force_from_max = copysignf(fmaxf(fabsf(player.velocity_x) - PLAYER_MAX_MOVE, 0), move_force);
         if (move_force < move_force_from_max) player.velocity_x += move_force;
         else player.velocity_x += move_force_from_max;
     }
-    else if (on_ground && fabsf(player.velocity_x) < 0.4)
+    // Stop if no input and low velocity
+    else if (fabsf(player.velocity_x) < 0.3) player.velocity_x = 0;
 
-    // TODO: Add liquid bouyancy
+    // Calculate gravity with bouyancy included
+    float effective_gravity = GRAVITY_AIR;
+    if (in_lava) effective_gravity = GRAVITY_LAVA;
+    else if (in_water) effective_gravity = GRAVITY_WATER;
+    else if (in_acid) effective_gravity = GRAVITY_ACID;
 
+    // Apply first half of velocity
     player.velocity_x += force_x / 2;
     player.velocity_y += (force_y + GRAVITY_AIR) / 2;
 
@@ -168,6 +177,7 @@ void update_player_position(
     bool vertical_collision = false;
     bool horizontal_collision = false;
 
+    // Set up read direction and origins
     uint8_t base_x = velocity_box.rel_x - 1;
     if (player.velocity_x > 0) base_x += PLAYER_SIZE_X + 1;
     uint8_t base_y = velocity_box.rel_y - 1;
@@ -175,6 +185,7 @@ void update_player_position(
     int dir_x = (player.velocity_x < 0) ? -1 : 1;
     int dir_y = (player.velocity_y < 0) ? -1 : 1;
 
+    // Perform step wise checking for collision
     while (vertical_done && horizontal_done)
     {
         if (current_axis_x)
@@ -238,6 +249,7 @@ void update_player_position(
         }
     }
 
+    // Stop player if collided, and apply attained movement
     if (horizontal_collision)
     {
         player.velocity_x = 0;
@@ -250,7 +262,8 @@ void update_player_position(
         player.y += vertical_progress;
     }
     else player.y += player.velocity_y;
-        
+
+    // Ensure the player is within bounds
     if (player.x <= 0)
     {
         player.x = 0;
@@ -272,6 +285,7 @@ void update_player_position(
         player.velocity_y = 0;
     }
 
+    // Apply second half of velocity
     player.velocity_x += force_x / 2;
     player.velocity_y += (force_y + GRAVITY_AIR) / 2;
 }

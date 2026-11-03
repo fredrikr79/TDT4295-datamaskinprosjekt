@@ -75,6 +75,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     src/port/stm32/usb/usb_backend_tinyusb.c
     src/port/stm32/usb/usb_port_stm32u5.c
 )
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -Wl,--wrap=hcd_setup_send)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${TINYUSB_INCLUDES}
     src/port/stm32/usb          # tusb_config.h lives here
@@ -94,6 +95,7 @@ else()
     message(FATAL_ERROR "USB_IP must be fsdev or dwc2, got '${USB_IP}'")
 endif()
 
+
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
@@ -109,3 +111,5 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Add user defined libraries
 )
+
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE CFG_TUH_MAX_SPEED=OPT_MODE_HIGH_SPEED)

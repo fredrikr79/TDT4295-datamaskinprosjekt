@@ -14,7 +14,9 @@
 
 #define LOG_TAG "usbtest"
 
-#include "main.h"               /* HAL + BSP (BSP_LED_*) */
+#include <stdbool.h>
+
+#include "main.h"               /* HAL + BSP (BSP_LED_*, BSP_PB_*) */
 #include "fault.h"
 #include "io.h"
 #include "log.h"
@@ -22,6 +24,7 @@
 #include "usb_input.h"
 
 void usbtest_run(void);
+void usb_debug_dump(void);      /* usb_backend_tinyusb.c */
 
 #define FRAME_MS 10u            /* how often input is taken and logged */
 #define BLINK_MS 500u
@@ -37,9 +40,18 @@ void usbtest_run(void)
 
     usb_init();
 
+    LOG_INFO("press the blue button (B1) to log the USB state");
+
     uint32_t frame = 0, blink = 0, stack_check = 0, stack_logged = 0;
+    bool     button_was = false;
     for (;;) {
         usb_poll();
+
+        /* B1: dump the USB state. Polled, so it works whatever the button's
+         * interrupt is wired to; 10 ms per frame is plenty of debounce. */
+        bool button = BSP_PB_GetState(BUTTON_USER) != 0;
+        if (button && !button_was) usb_debug_dump();
+        button_was = button;
 
         uint32_t now = plat_millis();
         if (now - frame >= FRAME_MS) {

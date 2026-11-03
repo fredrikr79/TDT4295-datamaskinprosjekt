@@ -1,7 +1,10 @@
 /* MCU backend: TinyUSB host HID -> usb_input.c
  *
- * Devices are put in boot protocol, so reports have the fixed layout
- * usb_input.c expects and no report descriptor has to be parsed.
+ * Keyboards stay in boot protocol: a fixed 8-byte report, no descriptor to
+ * read. Mice start in boot protocol too, which has no wheel, so a mouse
+ * whose report descriptor we can read (hid_mouse.c) is switched to report
+ * protocol right after it's mounted. Controllers (DualShock 4 and clones)
+ * are recognised by VID:PID and their reports translated here.
  *
  * This file doesn't know the chip. Clocks, pins, the IRQ handler and VBUS
  * are in usb_port_<chip>.c; the TinyUSB settings in tusb_config.h.
@@ -15,13 +18,16 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cmsis_compiler.h"     /* __get_PRIMASK(), __disable_irq() */
 #include "tusb.h"
-#include "host/hcd.h"           /* hcd_setup_send(), wrapped below */
+#include "host/hcd.h"           /* hcd_setup_send(), hcd_edpt_xfer(): wrapped below */
 
 #include "io.h"
 #include "log.h"
 #include "platform.h"
+#include "hid_mouse.h"
 #include "usb_backend.h"
+#include "usb_input.h"          /* PAD_*, INPUT_PADS */
 #include "usb_port.h"
 
 #if CFG_TUSB_DEBUG
@@ -52,12 +58,34 @@ static struct {
     bool              used;
     uint8_t           addr, inst;
     usb_device_kind_t kind;
-    uint32_t          last_report;  /* plat_millis() of the last report, for usb_debug_dump() */
+    uint32_t          last_report;  /* plat_millis() of the last report                      */
     uint32_t          reports;      /* how many so far                                       */
+    uint32_t          restarts;     /* how often the watchdog had to restart it              */
+    enum { IDLE_NONE, IDLE_TO_SEND, IDLE_SENT, IDLE_ON, IDLE_REFUSED } idle;
+    enum { PROTO_BOOT, PROTO_TO_SEND, PROTO_SENT, PROTO_REPORT } proto;  /* mice */
+    hid_mouse_layout_t layout;      /* mice: where the report protocol puts what  */
+    uint8_t           pad;          /* controllers: 0 .. INPUT_PADS-1             */
 } hid[MAX_HID];
+
+/* Keyboard watchdog. Keyboards are asked (HID Set Idle) to repeat their
+ * report every KBD_IDLE_MS even when nothing changes. Then:
+ *   - a keyboard silent for KBD_SILENT_MS with a request outstanding has
+ *     lost its transfer in the controller driver: abort it, ask again;
+ *   - a lost report (a key-up, say) is corrected by the next repeat.
+ * Repeats change nothing in usb_input.c: same keys, no events. Mice don't
+ * need it and many don't support it. */
+#define KBD_IDLE_MS     500u    /* Set Idle duration, in 4 ms units on the wire */
+#define KBD_SILENT_MS   1500u
+#ifndef USB_KBD_WATCHDOG
+#define USB_KBD_WATCHDOG 1      /* -DUSB_KBD_WATCHDOG=0: log a lost transfer, don't fix it
+                                   (to inspect the stuck state in the debugger) */
+#endif
 
 static void hubs_poll(void);
 static void hid_keep_polling(void);
+static void hid_control_poll(void);
+static void kbd_watchdog(void);
+void usb_debug_dump(void);
 
 /* ---- TinyUSB fix: Get Hub Descriptor ------------------------------------------
  * TinyUSB's hub driver (hub.c, config_get_hub_descriptor) sends Get Hub
@@ -92,6 +120,36 @@ bool __wrap_hcd_setup_send(uint8_t rhport, uint8_t daddr, uint8_t const setup_pa
     return __real_hcd_setup_send(rhport, daddr, setup_packet);
 }
 
+/* ---- TinyUSB fix: lost periodic transfer (dwc2) ---------------------------------
+ * hcd_dwc2.c, edpt_xfer_kickoff(): starts the channel with
+ * channel_xfer_start(), and only afterwards marks the endpoint "no transfer
+ * pending" (edpt->xfer_pending = 0). Called from the main loop (usbh, when
+ * a HID report is asked for), the USB interrupt can run in between: for a
+ * low-speed device behind a high-speed hub a NAK on the split transaction
+ * makes it defer the transfer to the next interval (xfer_pending = 1) and
+ * free the channel. The main loop then overwrites xfer_pending with 0: no
+ * channel, nothing pending, and usbh still waits for the transfer. That
+ * device goes silent until replugged. It takes a busy interrupt (a second
+ * device streaming reports, SOF every 125 us) to land in that window, so it
+ * happens now and then, with two devices.
+ *
+ * Fix without patching TinyUSB: run hcd_edpt_xfer() with interrupts
+ * masked, so the interrupt's deferral can only come after kickoff is done.
+ * It doesn't wait on the interrupt, so this is safe; the window is a few
+ * microseconds. PRIMASK is saved and restored, so a caller that already
+ * masked interrupts keeps them masked. Needs -Wl,--wrap=hcd_edpt_xfer. */
+bool __real_hcd_edpt_xfer(uint8_t rhport, uint8_t daddr, uint8_t ep_addr, uint8_t *buffer, uint16_t buflen);
+bool __wrap_hcd_edpt_xfer(uint8_t rhport, uint8_t daddr, uint8_t ep_addr, uint8_t *buffer, uint16_t buflen);
+
+bool __wrap_hcd_edpt_xfer(uint8_t rhport, uint8_t daddr, uint8_t ep_addr, uint8_t *buffer, uint16_t buflen)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    bool ok = __real_hcd_edpt_xfer(rhport, daddr, ep_addr, buffer, buflen);
+    __set_PRIMASK(primask);
+    return ok;
+}
+
 static int hid_find(uint8_t addr, uint8_t inst)
 {
     for (int i = 0; i < MAX_HID; i++)
@@ -112,10 +170,13 @@ void usb_backend_init(void)
         .speed = TUSB_SPEED_AUTO,
     };
 
-    /* Makes the link fail if -Wl,--wrap=hcd_setup_send is missing, instead
-     * of the hub fix above silently not being used. */
-    bool (*volatile need_wrap)(uint8_t, uint8_t, uint8_t const *) = __real_hcd_setup_send;
-    (void)need_wrap;
+    /* Makes the link fail if -Wl,--wrap=hcd_setup_send or
+     * -Wl,--wrap=hcd_edpt_xfer is missing, instead of the fixes above
+     * silently not being used. */
+    bool (*volatile need_wrap1)(uint8_t, uint8_t, uint8_t const *) = __real_hcd_setup_send;
+    bool (*volatile need_wrap2)(uint8_t, uint8_t, uint8_t, uint8_t *, uint16_t) = __real_hcd_edpt_xfer;
+    (void)need_wrap1;
+    (void)need_wrap2;
 
     usb_port_init();
     tuh_hid_set_default_protocol(HID_PROTOCOL_BOOT);   /* before init */
@@ -127,8 +188,114 @@ void usb_backend_poll(void)
 {
     usb_port_poll();            /* VBUS */
     tuh_task();                 /* the callbacks below run from in here */
+    hid_control_poll();
+    kbd_watchdog();
     hid_keep_polling();
     hubs_poll();
+}
+
+/* ---- keyboard Set Idle ----------------------------------------------------------
+ * Sent once per keyboard, by hid_control_poll() below. */
+static void set_idle_done(tuh_xfer_t *xfer)
+{
+    int i = (int)xfer->user_data;
+    if (i < 0 || i >= MAX_HID || !hid[i].used || hid[i].addr != xfer->daddr) return;
+
+    if (xfer->result == XFER_RESULT_SUCCESS) {
+        hid[i].idle = IDLE_ON;
+        hid[i].last_report = plat_millis();   /* the watchdog's clock starts now */
+        LOG_INFO("hid %u.%u: repeats its report every %u ms (watchdog on)",
+                 hid[i].addr, hid[i].inst, (unsigned)KBD_IDLE_MS);
+    } else {
+        hid[i].idle = IDLE_REFUSED;
+        LOG_WARN("hid %u.%u: refused Set Idle (result %u): no keyboard watchdog",
+                 hid[i].addr, hid[i].inst, (unsigned)xfer->result);
+    }
+}
+
+/* ---- mouse Set Protocol ---------------------------------------------------------
+ * Report protocol for a mouse whose layout we know, for the wheel. Until
+ * TinyUSB confirms the switch, reports are still read as boot reports. */
+void tuh_hid_set_protocol_complete_cb(uint8_t dev_addr, uint8_t idx, uint8_t protocol)
+{
+    int i = hid_find(dev_addr, idx);
+    if (i < 0 || hid[i].kind != USB_MOUSE) return;
+
+    if (protocol == HID_PROTOCOL_REPORT) {
+        hid[i].proto = PROTO_REPORT;
+        LOG_INFO("hid %u.%u: report protocol%s", dev_addr, idx,
+                 hid[i].layout.wheel.size ? ", wheel on" : " (no wheel in its report)");
+    } else {
+        hid[i].proto = PROTO_BOOT;
+        LOG_WARN("hid %u.%u: refused report protocol, staying in boot (no wheel)", dev_addr, idx);
+    }
+}
+
+/* One control transfer at a time, from the main loop rather than from
+ * tuh_hid_mount_cb(): during enumeration the control pipe may still be in
+ * use, and tuh_control_xfer() then just refuses. */
+static void hid_control_poll(void)
+{
+    for (int i = 0; i < MAX_HID; i++) {
+        if (!hid[i].used) continue;
+
+        if (hid[i].proto == PROTO_TO_SEND) {
+            if (tuh_hid_set_protocol(hid[i].addr, hid[i].inst, HID_PROTOCOL_REPORT))
+                hid[i].proto = PROTO_SENT;
+            return;                       /* false: control pipe busy, try again next poll */
+        }
+        if (hid[i].idle != IDLE_TO_SEND) continue;
+
+        tuh_itf_info_t info;
+        if (!tuh_hid_itf_get_info(hid[i].addr, hid[i].inst, &info)) continue;
+
+        const tusb_control_request_t req = {
+            .bmRequestType_bit = { .recipient = TUSB_REQ_RCPT_INTERFACE,
+                                   .type      = TUSB_REQ_TYPE_CLASS,
+                                   .direction = TUSB_DIR_OUT },
+            .bRequest = HID_REQ_CONTROL_SET_IDLE,
+            .wValue   = tu_htole16((uint16_t)((KBD_IDLE_MS / 4u) << 8)),  /* duration; report id 0 = all */
+            .wIndex   = tu_htole16(info.desc.bInterfaceNumber),
+            .wLength  = 0,
+        };
+        tuh_xfer_t xfer = {
+            .daddr = hid[i].addr, .ep_addr = 0, .setup = &req, .buffer = NULL,
+            .complete_cb = set_idle_done, .user_data = (uintptr_t)i,
+        };
+        if (tuh_control_xfer(&xfer))      /* false: control pipe busy, try again next poll */
+            hid[i].idle = IDLE_SENT;
+        return;
+    }
+}
+
+/* ---- keyboard / controller watchdog ---------------------------------------------
+ * Keyboards with Set Idle on, and controllers (a DualShock 4 reports every
+ * few ms whether anything changed or not): both should never be silent. */
+static void kbd_watchdog(void)
+{
+    uint32_t now = plat_millis();
+
+    for (int i = 0; i < MAX_HID; i++) {
+        if (!hid[i].used || (hid[i].idle != IDLE_ON && hid[i].kind != USB_GAMEPAD)) continue;
+        if (now - hid[i].last_report < KBD_SILENT_MS) continue;
+        if (tuh_hid_receive_ready(hid[i].addr, hid[i].inst)) continue;  /* hid_keep_polling's job */
+
+        /* Silent, yet a request is outstanding: the transfer is lost.
+         * Aborting clears TinyUSB's busy flag even when the controller
+         * driver has nothing left of it; hid_keep_polling() then asks again. */
+        hid[i].restarts++;
+        LOG_WARN("hid %u.%u: no report for %lu ms, transfer lost: %s (%lu so far)",
+                 hid[i].addr, hid[i].inst, (unsigned long)(now - hid[i].last_report),
+                 USB_KBD_WATCHDOG ? "restarting it" : "left stuck (USB_KBD_WATCHDOG=0)",
+                 (unsigned long)hid[i].restarts);
+        /* Log the state on the first two restarts, so the event counters in
+         * the second dump cover exactly the 1.5 s the keyboard was dead. */
+        if (hid[i].restarts <= 2u) usb_debug_dump();
+#if USB_KBD_WATCHDOG
+        tuh_hid_receive_abort(hid[i].addr, hid[i].inst);
+#endif
+        hid[i].last_report = now;         /* give the new request a full period */
+    }
 }
 
 /* Safety net: every keyboard and mouse must always have a report request
@@ -224,38 +391,118 @@ void tuh_umount_cb(uint8_t dev_addr)
     LOG_INFO("dev %u: unmounted", dev_addr);
 }
 
+/* ---- controllers -------------------------------------------------------------
+ * DualShock 4 and controllers that copy its USB report. Over USB it sends
+ * report 0x01 by itself every few ms, no setup needed:
+ *   [0] 0x01  [1..4] left x, left y, right x, right y (0..255, 128 = centre)
+ *   [5] d-pad hat (low 4 bits, 0 = up, clockwise, 8 = none), square, cross,
+ *       circle, triangle  [6] L1 R1 L2 R2 share options L3 R3
+ *   [7] PS, touchpad click, counter  [8] L2 analog  [9] R2 analog
+ * (https://www.psdevwiki.com/ps4/DS4-USB, TinyUSB's hid_controller example) */
+static bool is_ds4(uint16_t vid, uint16_t pid)
+{
+    return (vid == 0x054c && (pid == 0x05c4 || pid == 0x09cc || pid == 0x0ba0))  /* Sony DS4 v1, v2, USB dongle */
+        || (vid == 0x0f0d && (pid == 0x005e || pid == 0x00ee));                   /* Hori FC4, Hori PS4 Mini */
+}
+
+static void ds4_report(uint8_t pad, const uint8_t *r, uint16_t len)
+{
+    static const uint32_t hat[8] = {
+        PAD_UP, PAD_UP | PAD_RIGHT, PAD_RIGHT, PAD_DOWN | PAD_RIGHT,
+        PAD_DOWN, PAD_DOWN | PAD_LEFT, PAD_LEFT, PAD_UP | PAD_LEFT,
+    };
+    if (len < 10 || r[0] != 0x01) return;       /* other reports: nothing for us */
+
+    usb_gamepad_t g = {
+        .lx = (int8_t)(r[1] - 128), .ly = (int8_t)(r[2] - 128),
+        .rx = (int8_t)(r[3] - 128), .ry = (int8_t)(r[4] - 128),
+        .lt = r[8], .rt = r[9],
+    };
+    if ((r[5] & 0x0F) < 8) g.buttons |= hat[r[5] & 0x0F];
+    if (r[5] & 0x10) g.buttons |= PAD_WEST;     /* square   */
+    if (r[5] & 0x20) g.buttons |= PAD_SOUTH;    /* cross    */
+    if (r[5] & 0x40) g.buttons |= PAD_EAST;     /* circle   */
+    if (r[5] & 0x80) g.buttons |= PAD_NORTH;    /* triangle */
+    static const uint32_t b6[8] = { PAD_L1, PAD_R1, PAD_L2, PAD_R2, PAD_SELECT, PAD_START, PAD_L3, PAD_R3 };
+    for (unsigned b = 0; b < 8; b++)
+        if (r[6] & (1u << b)) g.buttons |= b6[b];
+    if (r[7] & 0x01) g.buttons |= PAD_HOME;
+    if (r[7] & 0x02) g.buttons |= PAD_TOUCH;
+
+    usb_input_gamepad(pad, &g);
+}
+
+/* lowest controller number not in use, or -1 */
+static int pad_alloc(void)
+{
+    for (uint8_t p = 0; p < INPUT_PADS; p++) {
+        bool taken = false;
+        for (int i = 0; i < MAX_HID; i++)
+            if (hid[i].used && hid[i].kind == USB_GAMEPAD && hid[i].pad == p) taken = true;
+        if (!taken) return p;
+    }
+    return -1;
+}
+
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                       uint8_t const *desc_report, uint16_t desc_len)
 {
-    (void)desc_report;
-    (void)desc_len;
+    uint16_t vid = 0, pid = 0;
+    tuh_vid_pid_get(dev_addr, &vid, &pid);
 
     usb_device_kind_t kind;
-    switch (tuh_hid_interface_protocol(dev_addr, instance)) {
-    case HID_ITF_PROTOCOL_KEYBOARD: kind = USB_KEYBOARD; break;
-    case HID_ITF_PROTOCOL_MOUSE:    kind = USB_MOUSE;    break;
-    default:
-        LOG_INFO("hid %u.%u: not a keyboard or mouse, ignored", dev_addr, instance);
-        return;
+    if (is_ds4(vid, pid)) {
+        kind = USB_GAMEPAD;
+    } else {
+        switch (tuh_hid_interface_protocol(dev_addr, instance)) {
+        case HID_ITF_PROTOCOL_KEYBOARD: kind = USB_KEYBOARD; break;
+        case HID_ITF_PROTOCOL_MOUSE:    kind = USB_MOUSE;    break;
+        default:
+            LOG_INFO("hid %u.%u: %04x:%04x is not a keyboard, mouse or known controller, ignored",
+                     dev_addr, instance, vid, pid);
+            return;
+        }
     }
 
     int slot = -1;
     for (int i = 0; i < MAX_HID; i++)
         if (!hid[i].used) { slot = i; break; }
-    if (slot < 0) {
+    int pad = kind == USB_GAMEPAD ? pad_alloc() : 0;
+    if (slot < 0 || pad < 0) {
         LOG_WARN("hid %u.%u: too many devices, ignored", dev_addr, instance);
         return;
     }
+    memset(&hid[slot], 0, sizeof hid[slot]);
     hid[slot].used = true;
     hid[slot].addr = dev_addr;
     hid[slot].inst = instance;
     hid[slot].kind = kind;
     hid[slot].last_report = plat_millis();
-    hid[slot].reports = 0;
+    hid[slot].idle = (kind == USB_KEYBOARD) ? IDLE_TO_SEND : IDLE_NONE;
+    hid[slot].pad  = (uint8_t)pad;
 
-    LOG_INFO("hid %u.%u: %s connected", dev_addr, instance,
-             kind == USB_KEYBOARD ? "keyboard" : "mouse");
-    usb_input_connected(kind, true);
+    switch (kind) {
+    case USB_KEYBOARD:
+        LOG_INFO("hid %u.%u: keyboard connected", dev_addr, instance);
+        usb_input_connected(kind, true);
+        break;
+    case USB_MOUSE:
+        /* boot protocol has no wheel: switch to report protocol if we can
+         * read this mouse's layout (hid_control_poll sends the request) */
+        if (hid_mouse_parse(desc_report, desc_len, &hid[slot].layout)) {
+            hid[slot].proto = PROTO_TO_SEND;
+            LOG_INFO("hid %u.%u: mouse connected", dev_addr, instance);
+        } else {
+            LOG_INFO("hid %u.%u: mouse connected (report layout %s: boot protocol, no wheel)",
+                     dev_addr, instance, desc_report ? "not understood" : "too long to read");
+        }
+        usb_input_connected(kind, true);
+        break;
+    case USB_GAMEPAD:
+        LOG_INFO("hid %u.%u: controller %04x:%04x connected as pad %d", dev_addr, instance, vid, pid, pad);
+        usb_input_gamepad_connected((uint8_t)pad, true);
+        break;
+    }
 
     if (!tuh_hid_receive_report(dev_addr, instance))
         LOG_WARN("hid %u.%u: can't request reports", dev_addr, instance);
@@ -267,7 +514,8 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
     if (slot < 0) return;
     hid[slot].used = false;
     LOG_INFO("hid %u.%u: disconnected", dev_addr, instance);
-    usb_input_connected(hid[slot].kind, false);
+    if (hid[slot].kind == USB_GAMEPAD) usb_input_gamepad_connected(hid[slot].pad, false);
+    else                               usb_input_connected(hid[slot].kind, false);
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
@@ -279,8 +527,23 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
     hid[slot].last_report = plat_millis();
     hid[slot].reports++;
 
-    if (hid[slot].kind == USB_KEYBOARD) usb_input_keyboard_report(report, len);
-    else                                usb_input_mouse_report(report, len);
+    switch (hid[slot].kind) {
+    case USB_KEYBOARD:
+        usb_input_keyboard_report(report, len);
+        break;
+    case USB_MOUSE: {
+        hid_mouse_motion_t m;
+        if (hid[slot].proto != PROTO_REPORT)
+            usb_input_mouse_report(report, len);                /* boot layout */
+        else if (hid_mouse_decode(&hid[slot].layout, report, len, &m))
+            usb_input_mouse_motion(m.buttons, m.dx, m.dy, m.wheel, m.pan);
+        /* else: another report of this mouse (media keys, say): skip */
+        break;
+    }
+    case USB_GAMEPAD:
+        ds4_report(hid[slot].pad, report, len);
+        break;
+    }
 
     /* Each request gets one report: ask again, or this was the last. */
     if (!tuh_hid_receive_report(dev_addr, instance))
@@ -329,9 +592,10 @@ void usb_debug_dump(void)
     LOG_INFO("---- USB state ----");
     for (int i = 0; i < MAX_HID; i++) {
         if (!hid[i].used) continue;
-        LOG_INFO("hid %u.%u %s: %lu reports, last %lu ms ago, %s", hid[i].addr, hid[i].inst,
-                 hid[i].kind == USB_KEYBOARD ? "keyboard" : "mouse",
+        LOG_INFO("hid %u.%u %s: %lu reports, last %lu ms ago, %lu restarts, %s", hid[i].addr, hid[i].inst,
+                 hid[i].kind == USB_KEYBOARD ? "keyboard" : hid[i].kind == USB_MOUSE ? "mouse" : "controller",
                  (unsigned long)hid[i].reports, (unsigned long)(now - hid[i].last_report),
+                 (unsigned long)hid[i].restarts,
                  tuh_hid_receive_ready(hid[i].addr, hid[i].inst) ? "NO request outstanding"
                                                                 : "request outstanding");
     }

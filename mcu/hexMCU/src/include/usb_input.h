@@ -42,6 +42,39 @@ enum {
     MOUSE_FORWARD = 0x10,
 };
 
+/* controller buttons, PlayStation names in brackets */
+enum {
+    PAD_SOUTH  = 1u << 0,       /* (cross)     A on Xbox layouts */
+    PAD_EAST   = 1u << 1,       /* (circle)    B */
+    PAD_WEST   = 1u << 2,       /* (square)    X */
+    PAD_NORTH  = 1u << 3,       /* (triangle)  Y */
+    PAD_L1     = 1u << 4,
+    PAD_R1     = 1u << 5,
+    PAD_L2     = 1u << 6,       /* trigger pressed past its click point; lt/rt have the analog value */
+    PAD_R2     = 1u << 7,
+    PAD_SELECT = 1u << 8,       /* (share) */
+    PAD_START  = 1u << 9,       /* (options) */
+    PAD_L3     = 1u << 10,      /* stick pressed in */
+    PAD_R3     = 1u << 11,
+    PAD_HOME   = 1u << 12,      /* (PS button) */
+    PAD_TOUCH  = 1u << 13,      /* (touchpad click) */
+    PAD_UP     = 1u << 14,      /* d-pad */
+    PAD_DOWN   = 1u << 15,
+    PAD_LEFT   = 1u << 16,
+    PAD_RIGHT  = 1u << 17,
+};
+
+#define INPUT_PADS 2            /* controllers tracked at once */
+
+/* One controller. Sticks rest a few counts off 0 on real controllers, so
+ * ignore small values (a dead zone of about 16 works for a DualShock 4). */
+typedef struct {
+    bool     connected;
+    uint32_t held, pressed, released;   /* PAD_* bits, like the keys      */
+    int8_t   lx, ly, rx, ry;            /* -128..127, 0 = centre, +y = down */
+    uint8_t  lt, rt;                    /* triggers, 0 released .. 255 full */
+} pad_t;
+
 /* One frame's worth of input. "pressed"/"released" collect everything since
  * the previous input_take(), so a tap shorter than a frame still shows up
  * as pressed (and released) even though it is no longer held. */
@@ -54,7 +87,9 @@ typedef struct {
     uint8_t mouse_pressed;
     uint8_t mouse_released;
     int32_t mouse_dx, mouse_dy; /* movement since the last take; +y = down */
-    int32_t wheel, pan;         /* +wheel = scrolled up/away          */
+    int32_t wheel, pan;         /* +wheel = scrolled up/away, +pan = right */
+
+    pad_t   pad[INPUT_PADS];    /* controllers, in the order they were plugged in */
 
     bool    keyboard, mouse;    /* at least one is connected          */
 } input_t;
@@ -64,8 +99,9 @@ void usb_poll(void);            /* runs the backend; call it often    */
 void input_take(input_t *out);  /* snapshot + reset the per-frame parts */
 
 /* Debug: log what changed in a snapshot (keys and buttons down/up, wheel,
- * connect/disconnect). Mouse movement is added up and logged at most
- * 10 times a second. Call it with each snapshot you take. */
+ * controller buttons, connect/disconnect). Mouse movement and controller
+ * sticks are logged at most 10 times a second. Call it with each snapshot
+ * you take. */
 void input_log(const input_t *in);
 const char *key_name(uint8_t key);  /* "W", "SPACE", "LSHIFT", "0x47" ... */
 
@@ -80,5 +116,10 @@ static inline bool key_released(const input_t *in, uint8_t key) { return input_b
 static inline bool mouse_held(const input_t *in, uint8_t b)     { return (in->mouse_held & b) != 0; }
 static inline bool mouse_pressed(const input_t *in, uint8_t b)  { return (in->mouse_pressed & b) != 0; }
 static inline bool mouse_released(const input_t *in, uint8_t b) { return (in->mouse_released & b) != 0; }
+
+/* pad_held(&in, 0, PAD_SOUTH): is cross / A held on the first controller */
+static inline bool pad_held(const input_t *in, unsigned p, uint32_t b)     { return p < INPUT_PADS && (in->pad[p].held & b); }
+static inline bool pad_pressed(const input_t *in, unsigned p, uint32_t b)  { return p < INPUT_PADS && (in->pad[p].pressed & b); }
+static inline bool pad_released(const input_t *in, unsigned p, uint32_t b) { return p < INPUT_PADS && (in->pad[p].released & b); }
 
 #endif

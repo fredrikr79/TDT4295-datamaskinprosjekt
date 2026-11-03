@@ -30,13 +30,13 @@ function(hexmcu_add_n6_usbtest target)
         ${APP_ROOT}/src/port/stm32/usb/usb_backend_tinyusb.c
         ${APP_ROOT}/src/port/stm32/usb/hid_mouse.c        # mouse report layout (wheel)
         ${APP_ROOT}/src/port/stm32/usb/usb_port_stm32n6.c
+        ${APP_ROOT}/src/port/stm32/usb/usb_dwc2_debug.c   # event counters + register dump
     )
     target_include_directories(${target} PRIVATE
         ${APP_INCLUDES}
         ${TINYUSB_INCLUDES}
         ${HEXMCU_HCD_DWC2_INCLUDE}
         ${APP_ROOT}/src/port/stm32/usb      # tusb_config.h, usb_port.h, usb_backend.h
-        ${APP_ROOT}/src/port/stm32/
     )
     # TinyUSB fixes in usb_backend_tinyusb.c, instead of patching third_party/:
     #   hcd_setup_send  hub descriptor request (hub.c)

@@ -101,6 +101,7 @@ elseif(USB_IP STREQUAL "dwc2")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         ${HCD_DWC2}
         ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/dwc2_common.c
+        src/port/stm32/usb/usb_dwc2_debug.c     # event counters + register dump (usb_debug_dump)
     )
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${HEXMCU_HCD_DWC2_INCLUDE}  # the copy includes dwc2_common.h etc. from here
@@ -108,6 +109,9 @@ elseif(USB_IP STREQUAL "dwc2")
     # OTG_HS with the built-in high-speed PHY: without this TinyUSB sets the
     # core up for an external full-speed PHY and the port stays dead
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE CFG_TUH_MAX_SPEED=OPT_MODE_HIGH_SPEED)
+    # J8's CC1/CC2 go straight to UCPD1 (PA15/PB15): VBUS only comes on once
+    # a device is plugged in. 0 = VBUS on from start (CC not wired to UCPD).
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USB_USE_UCPD=1)
 else()
     message(FATAL_ERROR "USB_IP must be fsdev or dwc2, got '${USB_IP}'")
 endif()

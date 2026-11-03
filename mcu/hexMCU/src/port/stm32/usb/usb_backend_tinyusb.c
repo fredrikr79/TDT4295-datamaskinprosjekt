@@ -63,6 +63,9 @@ static struct {
     uint32_t          restarts;     /* how often the watchdog had to restart it              */
     enum { IDLE_NONE, IDLE_TO_SEND, IDLE_SENT, IDLE_ON, IDLE_REFUSED } idle;
     enum { PROTO_BOOT, PROTO_TO_SEND, PROTO_SENT, PROTO_REPORT } proto;  /* mice */
+    enum { PAD_INIT_NONE, PAD_INIT_CALIB, PAD_INIT_CALIB_SENT,
+           PAD_INIT_LED, PAD_INIT_LED_SENT, PAD_INIT_DONE } pad_init;     /* controllers */
+    uint8_t           pad_feature;  /* controllers: which start-up feature report is next */
     hid_mouse_layout_t layout;      /* mice: where the report protocol puts what  */
     uint8_t           pad;          /* controllers: 0 .. INPUT_PADS-1             */
 } hid[MAX_HID];
@@ -84,6 +87,7 @@ static struct {
 static void hubs_poll(void);
 static void hid_keep_polling(void);
 static void hid_control_poll(void);
+static void ds4_init_step(int i);
 static void kbd_watchdog(void);
 void usb_debug_dump(void);
 
@@ -239,6 +243,10 @@ static void hid_control_poll(void)
     for (int i = 0; i < MAX_HID; i++) {
         if (!hid[i].used) continue;
 
+        if (hid[i].pad_init == PAD_INIT_CALIB || hid[i].pad_init == PAD_INIT_LED) {
+            ds4_init_step(i);
+            return;
+        }
         if (hid[i].proto == PROTO_TO_SEND) {
             if (tuh_hid_set_protocol(hid[i].addr, hid[i].inst, HID_PROTOCOL_REPORT))
                 hid[i].proto = PROTO_SENT;
@@ -393,12 +401,15 @@ void tuh_umount_cb(uint8_t dev_addr)
 
 /* ---- controllers -------------------------------------------------------------
  * DualShock 4 and controllers that copy its USB report. Over USB it sends
- * report 0x01 by itself every few ms, no setup needed:
+ * report 0x01 every few ms, 64 bytes:
  *   [0] 0x01  [1..4] left x, left y, right x, right y (0..255, 128 = centre)
  *   [5] d-pad hat (low 4 bits, 0 = up, clockwise, 8 = none), square, cross,
  *       circle, triangle  [6] L1 R1 L2 R2 share options L3 R3
  *   [7] PS, touchpad click, counter  [8] L2 analog  [9] R2 analog
- * (https://www.psdevwiki.com/ps4/DS4-USB, TinyUSB's hid_controller example) */
+ *   [13..24] gyro, accelerometer  [30] battery  [33..] touchpad
+ * (Linux hid-playstation.c, https://www.psdevwiki.com/ps4/DS4-USB)
+ * It only starts sending once the host has read its report descriptor, as
+ * every PC does: hence CFG_TUH_ENUMERATION_BUFSIZE >= 507 in tusb_config.h. */
 static bool is_ds4(uint16_t vid, uint16_t pid)
 {
     return (vid == 0x054c && (pid == 0x05c4 || pid == 0x09cc || pid == 0x0ba0))  /* Sony DS4 v1, v2, USB dongle */
@@ -429,7 +440,98 @@ static void ds4_report(uint8_t pad, const uint8_t *r, uint16_t len)
     if (r[7] & 0x01) g.buttons |= PAD_HOME;
     if (r[7] & 0x02) g.buttons |= PAD_TOUCH;
 
+    /* Touchpad: [33] how many touch records follow (0..3, oldest first),
+     * each 9 bytes from [34]: a timestamp, then two fingers of 4 bytes:
+     * id (bit 7 set = not touching), x 12 bits, y 12 bits. */
+    uint8_t n = len >= 34 ? r[33] : 0;
+    if (n > 3) n = 3;
+    if (n && len >= 34u + 9u * n) {
+        const uint8_t *t = &r[34 + 9 * (n - 1)] + 1;  /* newest record, past its timestamp */
+        g.touch_valid = true;
+        for (unsigned f = 0; f < 2; f++, t += 4) {
+            g.touch[f].down = !(t[0] & 0x80);
+            g.touch[f].x = (uint16_t)(t[1] | ((t[2] & 0x0F) << 8));
+            g.touch[f].y = (uint16_t)((t[2] >> 4) | (t[3] << 4));
+        }
+    }
+
     usb_input_gamepad(pad, &g);
+}
+
+/* Start-up sequence, as Linux's driver does it over USB (hid-playstation.c,
+ * dualshock4_create): read the pairing info (0x81), firmware info (0xa3)
+ * and calibration (0x02) feature reports, then send an output report that
+ * sets the light bar. The light bar shows the controller number: blue =
+ * pad 0, red = pad 1. Runs from hid_control_poll(), one step per control
+ * transfer. A refused feature report is logged and skipped. */
+static const struct { uint8_t id, len; const char *name; } ds4_features[] = {
+    { 0x81, 16, "pairing info" },       /* lengths include the report ID byte */
+    { 0xa3, 49, "firmware info" },
+    { 0x02, 37, "calibration" },
+};
+#define DS4_OUT_REPORT   0x05
+#define DS4_OUT_LEN      32u           /* USB: report ID + 31 bytes */
+
+static TU_ATTR_ALIGNED(4) uint8_t ds4_buf[64];   /* one control transfer at a time */
+
+static void ds4_init_step(int i)
+{
+    if (hid[i].pad_init == PAD_INIT_CALIB) {
+        unsigned f = hid[i].pad_feature;
+        if (tuh_hid_get_report(hid[i].addr, hid[i].inst, ds4_features[f].id, HID_REPORT_TYPE_FEATURE,
+                               ds4_buf, ds4_features[f].len))
+            hid[i].pad_init = PAD_INIT_CALIB_SENT;
+        return;                         /* false: control pipe busy, next poll */
+    }
+
+    static const uint8_t colour[INPUT_PADS][3] = { { 0, 0, 64 }, { 64, 0, 0 } };
+    memset(ds4_buf, 0, sizeof ds4_buf);
+    ds4_buf[0] = DS4_OUT_REPORT;
+    ds4_buf[1] = 0x03;                  /* valid: rumble (both off), light bar */
+    memcpy(&ds4_buf[6], colour[hid[i].pad % INPUT_PADS], 3);
+
+    /* interrupt OUT endpoint if it has one (takes the data without the ID
+     * byte), otherwise Set Report over the control pipe */
+    if (tuh_hid_send_report(hid[i].addr, hid[i].inst, DS4_OUT_REPORT, &ds4_buf[1], DS4_OUT_LEN - 1u) ||
+        tuh_hid_set_report(hid[i].addr, hid[i].inst, DS4_OUT_REPORT, HID_REPORT_TYPE_OUTPUT,
+                           ds4_buf, DS4_OUT_LEN))
+        hid[i].pad_init = PAD_INIT_LED_SENT;
+}
+
+void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t idx, uint8_t report_id,
+                                    uint8_t report_type, uint16_t len)
+{
+    int i = hid_find(dev_addr, idx);
+    if (i < 0 || hid[i].pad_init != PAD_INIT_CALIB_SENT) return;
+    (void)report_type;
+    unsigned f = hid[i].pad_feature;
+    LOG_INFO("hid %u.%u: %s (feature report 0x%02x): %s", dev_addr, idx, ds4_features[f].name,
+             report_id, len ? "ok" : "refused");
+    hid[i].pad_feature = (uint8_t)(f + 1u);
+    hid[i].pad_init = (hid[i].pad_feature < sizeof ds4_features / sizeof ds4_features[0])
+                      ? PAD_INIT_CALIB : PAD_INIT_LED;
+}
+
+static void ds4_led_done(uint8_t dev_addr, uint8_t idx, bool ok)
+{
+    int i = hid_find(dev_addr, idx);
+    if (i < 0 || hid[i].pad_init != PAD_INIT_LED_SENT) return;
+    LOG_INFO("hid %u.%u: light bar %s", dev_addr, idx, ok ? "set" : "refused");
+    hid[i].pad_init = PAD_INIT_DONE;
+}
+
+void tuh_hid_report_sent_cb(uint8_t dev_addr, uint8_t idx, const uint8_t *report, uint16_t len)
+{
+    (void)report;
+    ds4_led_done(dev_addr, idx, len != 0);
+}
+
+void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t idx, uint8_t report_id,
+                                    uint8_t report_type, uint16_t len)
+{
+    (void)report_id;
+    (void)report_type;
+    ds4_led_done(dev_addr, idx, len != 0);
 }
 
 /* lowest controller number not in use, or -1 */
@@ -480,6 +582,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
     hid[slot].last_report = plat_millis();
     hid[slot].idle = (kind == USB_KEYBOARD) ? IDLE_TO_SEND : IDLE_NONE;
     hid[slot].pad  = (uint8_t)pad;
+    hid[slot].pad_init = (kind == USB_GAMEPAD) ? PAD_INIT_CALIB : PAD_INIT_NONE;
 
     switch (kind) {
     case USB_KEYBOARD:
@@ -499,7 +602,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
         usb_input_connected(kind, true);
         break;
     case USB_GAMEPAD:
-        LOG_INFO("hid %u.%u: controller %04x:%04x connected as pad %d", dev_addr, instance, vid, pid, pad);
+        LOG_INFO("hid %u.%u: controller %04x:%04x connected as pad %d (report descriptor %s, %u bytes)",
+                 dev_addr, instance, vid, pid, pad, desc_report ? "read" : "skipped", desc_len);
         usb_input_gamepad_connected((uint8_t)pad, true);
         break;
     }

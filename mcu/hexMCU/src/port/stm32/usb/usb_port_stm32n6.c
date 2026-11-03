@@ -122,6 +122,7 @@ static void count_channel_events(void)
                 uint32_t uf = OTG(0x408) & 7u;                      /* HFNUM: microframe now */
                 ss_uf[dev][uf]++;
                 last_ss_uf[dev] = (uint8_t)uf;
+                nyet_run[dev] = 0;                          /* a new poll starts its own count */
             }
         }
         if (hcint & (1u << 4))  c[C_NAK]++;
@@ -324,7 +325,21 @@ void usb_port_poll(void)
         break;
 
     case VB_FAULT:
-        if (now - vb_since >= FAULT_RETRY_MS) vb = VB_OFF;
+        if (now - vb_since < FAULT_RETRY_MS) break;
+        /* Start the TCPP03 from scratch before trying again: an unplug under
+         * load (a charging controller) can leave it latched, and then every
+         * retry trips at once. Power-cycle it with EN, read the flags to
+         * clear them, and only then switch VBUS back on. */
+        HAL_GPIO_WritePin(TCPP_EN_PORT, TCPP_EN_PIN, GPIO_PIN_RESET);
+        HAL_Delay(2);
+        HAL_GPIO_WritePin(TCPP_EN_PORT, TCPP_EN_PIN, GPIO_PIN_SET);
+        HAL_Delay(5);
+        {
+            uint8_t left = tcpp_flags();
+            if (left) LOG_WARN("TCPP03 flags after reset 0x%02X", (unsigned)left);
+        }
+        vb = vbus_set(false) ? VB_OFF : VB_FAULT;
+        vb_since = now;
         break;
     }
 }

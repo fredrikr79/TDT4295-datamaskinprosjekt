@@ -15,6 +15,11 @@ typedef struct {
     uint32_t buttons;           /* PAD_* bits (usb_input.h) */
     int8_t   lx, ly, rx, ry;    /* sticks, 0 = centre, +x = right, +y = down */
     uint8_t  lt, rt;            /* analog triggers, 0 = released */
+    bool     touch_valid;       /* false: this report has no touch data, keep the last */
+    struct {
+        bool     down;          /* finger on the pad */
+        uint16_t x, y;          /* 0..PAD_TOUCH_W-1, 0..PAD_TOUCH_H-1, origin top left */
+    } touch[2];                 /* up to two fingers */
 } usb_gamepad_t;
 
 /* ---- backend -> usb_input.c ---------------------------------------------

@@ -38,6 +38,8 @@ message("Filesystem backend: " ${FS_BACKEND})
 
 # Include sources.cmake
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sources.cmake)
+# TinyUSB dwc2 fixes (low-speed devices behind a hub), applied to a copy
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tinyusb_patches.cmake)
 
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
@@ -70,15 +72,22 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 
+# ---------------------------------------------------------------------
+# USB host: TinyUSB + our backend
+# ---------------------------------------------------------------------
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${TINYUSB_SOURCES}
     src/port/stm32/usb/usb_backend_tinyusb.c
+    src/port/stm32/usb/hid_mouse.c          # mouse report layout (wheel)
     src/port/stm32/usb/usb_port_stm32u5.c
 )
+# TinyUSB fixes in usb_backend_tinyusb.c, instead of patching third_party/:
+#   hcd_setup_send  hub descriptor request (hub.c)
+#   hcd_edpt_xfer   lost periodic transfer race (hcd_dwc2.c)
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -Wl,--wrap=hcd_setup_send -Wl,--wrap=hcd_edpt_xfer)
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${TINYUSB_INCLUDES}
-    src/port/stm32/usb          # tusb_config.h lives here
+    src/port/stm32/usb          # tusb_config.h, usb_backend.h, hid_mouse.h
 )
 
 if(USB_IP STREQUAL "fsdev")
@@ -87,10 +96,18 @@ if(USB_IP STREQUAL "fsdev")
         ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/fsdev_common.c
     )
 elseif(USB_IP STREQUAL "dwc2")
+    # patched copy of hcd_dwc2.c in the build folder, see cmake/tinyusb_patches.cmake
+    hexmcu_tinyusb_hcd_dwc2(HCD_DWC2)
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/hcd_dwc2.c
+        ${HCD_DWC2}
         ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/dwc2_common.c
     )
+    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        ${HEXMCU_HCD_DWC2_INCLUDE}  # the copy includes dwc2_common.h etc. from here
+    )
+    # OTG_HS with the built-in high-speed PHY: without this TinyUSB sets the
+    # core up for an external full-speed PHY and the port stays dead
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE CFG_TUH_MAX_SPEED=OPT_MODE_HIGH_SPEED)
 else()
     message(FATAL_ERROR "USB_IP must be fsdev or dwc2, got '${USB_IP}'")
 endif()
@@ -111,5 +128,3 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Add user defined libraries
 )
-
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE CFG_TUH_MAX_SPEED=OPT_MODE_HIGH_SPEED)

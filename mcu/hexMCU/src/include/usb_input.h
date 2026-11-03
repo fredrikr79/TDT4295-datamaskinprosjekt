@@ -65,14 +65,23 @@ enum {
 };
 
 #define INPUT_PADS 2            /* controllers tracked at once */
+#define PAD_TOUCH_W 1920        /* touchpad size (DualShock 4), in its own units */
+#define PAD_TOUCH_H 942
 
-/* One controller. Sticks rest a few counts off 0 on real controllers, so
- * ignore small values (a dead zone of about 16 works for a DualShock 4). */
 typedef struct {
-    bool     connected;
-    uint32_t held, pressed, released;   /* PAD_* bits, like the keys      */
-    int8_t   lx, ly, rx, ry;            /* -128..127, 0 = centre, +y = down */
-    uint8_t  lt, rt;                    /* triggers, 0 released .. 255 full */
+    bool     down;              /* finger on the pad */
+    uint16_t x, y;              /* 0..PAD_TOUCH_W-1, 0..PAD_TOUCH_H-1, origin top left;
+                                   the last position stays after the finger lifts */
+} pad_touch_t;
+
+/* One controller. Sticks don't spring back to exactly 0 (a few counts, more
+ * on a worn controller), so read them through pad_deadzone(). */
+typedef struct {
+    bool        connected;
+    uint32_t    held, pressed, released;   /* PAD_* bits, like the keys      */
+    int8_t      lx, ly, rx, ry;            /* -128..127, 0 = centre, +y = down */
+    uint8_t     lt, rt;                    /* triggers, 0 released .. 255 full */
+    pad_touch_t touch[2];                  /* touchpad, up to two fingers   */
 } pad_t;
 
 /* One frame's worth of input. "pressed"/"released" collect everything since
@@ -116,6 +125,16 @@ static inline bool key_released(const input_t *in, uint8_t key) { return input_b
 static inline bool mouse_held(const input_t *in, uint8_t b)     { return (in->mouse_held & b) != 0; }
 static inline bool mouse_pressed(const input_t *in, uint8_t b)  { return (in->mouse_pressed & b) != 0; }
 static inline bool mouse_released(const input_t *in, uint8_t b) { return (in->mouse_released & b) != 0; }
+
+/* A stick axis with the dead zone cut out and the rest stretched back to
+ * the full range: pad_deadzone(in.pad[0].lx, 16) is 0 while the stick is
+ * within 16 of centre, then runs smoothly from 0 to +-127. */
+static inline int pad_deadzone(int v, int dz)
+{
+    if (v >  dz) return (v - dz) * 127 / (127 - dz);
+    if (v < -dz) return (v + dz) * 128 / (128 - dz);
+    return 0;
+}
 
 /* pad_held(&in, 0, PAD_SOUTH): is cross / A held on the first controller */
 static inline bool pad_held(const input_t *in, unsigned p, uint32_t b)     { return p < INPUT_PADS && (in->pad[p].held & b); }

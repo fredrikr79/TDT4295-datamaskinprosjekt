@@ -36,7 +36,7 @@ int tusb_log_printf(const char *fmt, ...);
 #define CFG_TUH_DWC2_SLAVE_ENABLE 1
 #define CFG_TUH_DWC2_DMA_ENABLE   0
 
-#define CFG_TUH_ENUMERATION_BUFSIZE 256
+#define CFG_TUH_ENUMERATION_BUFSIZE 512   /* also holds HID report descriptors: a DualShock 4's is 507 bytes */
 
 #define CFG_TUH_HUB           1                     // 0 if no hub
 #define CFG_TUH_DEVICE_MAX    (CFG_TUH_HUB ? 4 : 1)

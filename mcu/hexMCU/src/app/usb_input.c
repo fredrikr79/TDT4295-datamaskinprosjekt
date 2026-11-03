@@ -136,13 +136,22 @@ void usb_input_gamepad(uint8_t p, const usb_gamepad_t *g)
     c->held = g->buttons;
     c->lx = g->lx; c->ly = g->ly; c->rx = g->rx; c->ry = g->ry;
     c->lt = g->lt; c->rt = g->rt;
+    if (g->touch_valid) {
+        for (unsigned f = 0; f < 2; f++) {
+            c->touch[f].down = g->touch[f].down;
+            if (g->touch[f].down) {             /* keep the last position after lifting */
+                c->touch[f].x = g->touch[f].x;
+                c->touch[f].y = g->touch[f].y;
+            }
+        }
+    }
 }
 
 void usb_input_gamepad_connected(uint8_t p, bool connected)
 {
     if (p >= INPUT_PADS) return;
     if (!connected && cur.pad[p].connected) {
-        const usb_gamepad_t idle = { 0 };
+        const usb_gamepad_t idle = { .touch_valid = true };
         usb_input_gamepad(p, &idle);            /* release everything */
     }
     cur.pad[p].connected = connected;
@@ -241,16 +250,36 @@ static void pad_log(unsigned p, const pad_t *pad)
     if (list_pad(pad->pressed, list, sizeof list))  LOG_INFO("pad %u down: %s", p, list);
     if (list_pad(pad->released, list, sizeof list)) LOG_INFO("pad %u up:   %s", p, list);
 
+    for (unsigned f = 0; f < 2; f++) {
+        const pad_touch_t *t = &pad->touch[f], *was_t = &shown[p].touch[f];
+        if (t->down != was_t->down) {
+            LOG_INFO("pad %u finger %u %s at %u,%u", p, f, t->down ? "down" : "up", t->x, t->y);
+            shown[p].touch[f] = *t;                     /* don't log it again as a slide */
+        }
+    }
+
     const pad_t *s = &shown[p];
     bool moved = absdiff(pad->lx, s->lx) > 8 || absdiff(pad->ly, s->ly) > 8 ||
                  absdiff(pad->rx, s->rx) > 8 || absdiff(pad->ry, s->ry) > 8 ||
                  absdiff(pad->lt, s->lt) > 8 || absdiff(pad->rt, s->rt) > 8;
+    bool slid = false;
+    for (unsigned f = 0; f < 2; f++)
+        if (pad->touch[f].down && (absdiff(pad->touch[f].x, s->touch[f].x) > 32 ||
+                                   absdiff(pad->touch[f].y, s->touch[f].y) > 32))
+            slid = true;
     uint32_t now = plat_millis();
-    if (moved && now - last[p] >= MOVE_LOG_MS) {
-        LOG_INFO("pad %u sticks L %+4d,%+4d  R %+4d,%+4d  triggers %3u %3u", p,
-                 pad->lx, pad->ly, pad->rx, pad->ry, pad->lt, pad->rt);
+    if ((moved || slid) && now - last[p] >= MOVE_LOG_MS) {
+        if (moved)
+            LOG_INFO("pad %u sticks L %+4d,%+4d  R %+4d,%+4d  triggers %3u %3u", p,
+                     pad->lx, pad->ly, pad->rx, pad->ry, pad->lt, pad->rt);
+        for (unsigned f = 0; f < 2; f++)
+            if (slid && pad->touch[f].down)
+                LOG_INFO("pad %u finger %u at %u,%u", p, f, pad->touch[f].x, pad->touch[f].y);
         shown[p] = *pad;
         last[p] = now;
+    } else {
+        for (unsigned f = 0; f < 2; f++)                /* finger up/down is logged at once above */
+            shown[p].touch[f].down = pad->touch[f].down;
     }
 }
 

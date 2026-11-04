@@ -73,20 +73,55 @@ static int16_t clamp16(int32_t v, int32_t lo, int32_t hi)
     return (int16_t)(v < lo ? lo : v > hi ? hi : v);
 }
 
-void player_frame(const input_t *keys, uint32_t n)
+/* Movement input as -127..127 per axis. Keys and the d-pad push full
+ * speed; a controller's left stick anything in between. Every connected
+ * controller counts, so either of two pads can steer. */
+#define STICK_DEADZONE 16       /* sticks don't rest at exactly 0 */
+
+static int32_t clamp127(int32_t v) { return v < -127 ? -127 : v > 127 ? 127 : v; }
+
+void player_frame(const input_t *in, uint32_t n)
 {
-    int32_t dx = 0, dy = 0;
-    if (key_held(keys, KEY_A) || key_held(keys, KEY_LEFT))  dx--;
-    if (key_held(keys, KEY_D) || key_held(keys, KEY_RIGHT)) dx++;
-    if (key_held(keys, KEY_W) || key_held(keys, KEY_UP))    dy--;
-    if (key_held(keys, KEY_S) || key_held(keys, KEY_DOWN))  dy++;
-    if (!dx && !dy) return;
+    static int32_t fx, fy;      /* sub-pixel movement left over, in 1/127 px */
+    int32_t ax = 0, ay = 0;
+
+    if (key_held(in, KEY_A) || key_held(in, KEY_LEFT))  ax -= 127;
+    if (key_held(in, KEY_D) || key_held(in, KEY_RIGHT)) ax += 127;
+    if (key_held(in, KEY_W) || key_held(in, KEY_UP))    ay -= 127;
+    if (key_held(in, KEY_S) || key_held(in, KEY_DOWN))  ay += 127;
+
+    for (unsigned p = 0; p < INPUT_PADS; p++) {
+        const pad_t *pad = &in->pad[p];
+        if (!pad->connected) continue;
+        if (pad->held & PAD_LEFT)  ax -= 127;
+        if (pad->held & PAD_RIGHT) ax += 127;
+        if (pad->held & PAD_UP)    ay -= 127;
+        if (pad->held & PAD_DOWN)  ay += 127;
+        ax += pad_deadzone(pad->lx, STICK_DEADZONE);
+        ay += pad_deadzone(pad->ly, STICK_DEADZONE);
+    }
+    ax = clamp127(ax);
+    ay = clamp127(ay);
+    if (!ax && !ay) {
+        fx = fy = 0;
+        return;
+    }
 
     if (n > 4) n = 4;           /* after a long stall, don't jump far */
     int32_t step = PLAYER_SPEED * (int32_t)n;
+
+    /* a stick pushed a little moves slowly: keep the fraction of a pixel
+     * for the next frame instead of rounding it away */
+    fx += ax * step;
+    fy += ay * step;
+    int32_t dx = fx / 127, dy = fy / 127;
+    fx -= dx * 127;
+    fy -= dy * 127;
+    if (!dx && !dy) return;
+
     const fpga_info_t *scr = fpga_link_info();
-    x = clamp16(x + dx * step, 0, (int32_t)scr->width  - (int32_t)PLAYER_SIZE);
-    y = clamp16(y + dy * step, 0, (int32_t)scr->height - (int32_t)PLAYER_SIZE);
+    x = clamp16(x + dx, 0, (int32_t)scr->width  - (int32_t)PLAYER_SIZE);
+    y = clamp16(y + dy, 0, (int32_t)scr->height - (int32_t)PLAYER_SIZE);
     sprite_move(spr, x, y);                 /* sprite_poll() sends it */
 }
 

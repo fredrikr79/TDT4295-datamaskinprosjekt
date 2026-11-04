@@ -14,15 +14,25 @@
  *                macros this file looks for:
  *                  USB_VBUS_EN   GPIO output, initial level low  (TPS2051C EN,
  *                                high = VBUS on; it must never float)
- *                  USB_VBUS_FLT  GPIO input, pull-up unless the board has one
- *                                (TPS2051C /FLT: open drain, low = overcurrent)
+ *                  USB_VBUS_FLT  GPIO input (TPS2051C /FLT: open drain,
+ *                                low = overcurrent)
+ *                The schematic's names Drive_VBUS / fault_signal work too.
+ *                usb_port_init() sets both pins up itself: EN low, /FLT
+ *                with the internal pull-up (our board's R60 is not fitted;
+ *                if it ever is, it pulls to 5 V, so the pin must be FT).
  *                No labels (e.g. the Nucleo): no switch, VBUS is not ours.
  *   USB_USE_UCPD=1        CC1/CC2 are wired to PA15/PB15 (UCPD1): VBUS only
  *                         turns on once a device is plugged in. Otherwise
  *                         VBUS is turned on at start and stays on.
- *   USB_HS_PHY_REFCLK     U595/U5A5: SYSCFG_OTG_HS_PHY_CLK_SELECT_x that
- *                         matches the HSE crystal (default _1 = 16 MHz).
- * Set the last two with target_compile_definitions() in CMake. */
+ *   USB_HS_PHY_REFCLK     U595/U5A5: the PHY runs from the HSE crystal, and
+ *                         the PHY must be told its frequency. Picked from
+ *                         HSE_VALUE (16, 19.2, 20, 24, 26, 32 MHz directly;
+ *                         twice those through HSE/2). Set it, as a
+ *                         SYSCFG_OTG_HS_PHY_CLK_SELECT_x, only to override.
+ * Set the last two with target_compile_definitions() in CMake.
+ *
+ * U595/U5A5 bring-up: B1-style dumps of the controller are in
+ * usb_dwc2_debug.c, through usb_debug_dump() (usb_backend_tinyusb.c). */
 
 #define LOG_TAG "usb-port"
 
@@ -34,6 +44,19 @@
 #include "log.h"
 #include "platform.h"
 #include "usb_port.h"
+#if defined(USB_OTG_HS)
+#include "usb_dwc2_debug.h"
+#endif
+
+/* Our board's schematic names (J8 / U7 TPS2051C), if CubeMX got those */
+#if !defined(USB_VBUS_EN_Pin) && defined(Drive_VBUS_Pin)
+#define USB_VBUS_EN_Pin        Drive_VBUS_Pin
+#define USB_VBUS_EN_GPIO_Port  Drive_VBUS_GPIO_Port
+#endif
+#if !defined(USB_VBUS_FLT_Pin) && defined(fault_signal_Pin)
+#define USB_VBUS_FLT_Pin       fault_signal_Pin
+#define USB_VBUS_FLT_GPIO_Port fault_signal_GPIO_Port
+#endif
 
 #if defined(USB_VBUS_EN_Pin) && defined(USB_VBUS_FLT_Pin)
 #define HAVE_VBUS_SWITCH 1
@@ -51,8 +74,42 @@
 #error "USB_USE_UCPD: attach detection needs the VBUS switch pins (USB_VBUS_EN / USB_VBUS_FLT)"
 #endif
 
-#ifndef USB_HS_PHY_REFCLK
-#define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_1   /* 16 MHz HSE */
+#if defined(USB_OTG_HS)
+/* PHY reference clock: HSE or HSE/2, which must land on a frequency the
+ * PHY knows. A wrong one here and the PHY never locks: no device is ever
+ * seen, with no other error. */
+#  ifndef USB_HS_PHY_REFCLK
+#    if   HSE_VALUE == 16000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_1
+#    elif HSE_VALUE == 19200000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_2
+#    elif HSE_VALUE == 20000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_3
+#    elif HSE_VALUE == 24000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_4
+#    elif HSE_VALUE == 26000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_5
+#    elif HSE_VALUE == 32000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_6
+#    elif HSE_VALUE == 38400000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_2
+#      define USB_HS_PHY_HSE_DIV2 1
+#    elif HSE_VALUE == 40000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_3
+#      define USB_HS_PHY_HSE_DIV2 1
+#    elif HSE_VALUE == 48000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_4
+#      define USB_HS_PHY_HSE_DIV2 1
+#    elif HSE_VALUE == 52000000u
+#      define USB_HS_PHY_REFCLK SYSCFG_OTG_HS_PHY_CLK_SELECT_5
+#      define USB_HS_PHY_HSE_DIV2 1
+#    else
+#      error "HSE_VALUE can't clock the USB HS PHY: it needs 16/19.2/20/24/26/32 MHz (or twice that)"
+#    endif
+#  endif
+#  ifndef USB_HS_PHY_HSE_DIV2
+#    define USB_HS_PHY_HSE_DIV2 0
+#  endif
 #endif
 
 #define ATTACH_DEBOUNCE_MS  150u    /* USB-C tCCDebounce: 100-200 ms */
@@ -63,14 +120,22 @@
  * The startup file's handlers are weak aliases of Default_Handler, so this
  * one replaces it. TinyUSB enables the IRQ in the NVIC itself (in tusb_init). */
 #if defined(USB_DRD_FS)
+void USB_IRQHandler(void);
 void USB_IRQHandler(void)
 {
     tusb_int_handler(0, true);
 }
 #elif defined(USB_OTG_HS)
+void OTG_HS_IRQHandler(void);
 void OTG_HS_IRQHandler(void)
 {
+    dwc2_debug_irq(USB_OTG_HS_BASE);    /* event counters for usb_debug_dump() */
     tusb_int_handler(0, true);
+}
+
+void usb_port_dump(void)
+{
+    dwc2_debug_dump(USB_OTG_HS_BASE);
 }
 #else
 #error "no USB block known on this chip"
@@ -137,6 +202,35 @@ static uint32_t cc_since;       /* ...and since when            */
 static uint32_t fault_at;
 #endif
 
+/* ---- HS PHY clock ------------------------------------------------------------
+ * The PHY runs straight from the HSE crystal (or HSE/2). CubeMX only sets
+ * this up when USB is enabled there, which it isn't for us (this file
+ * replaces MX_USB_OTG_HS_Init), so it's done here: HSE running, the PHY
+ * clock mux on HSE. Same as TinyUSB's own U5A5 board code. */
+#if defined(USB_OTG_HS)
+static void hs_phy_clock(void)
+{
+    if (!__HAL_RCC_GET_FLAG(RCC_FLAG_HSERDY)) {
+        RCC_OscInitTypeDef osc = { 0 };
+        osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+        osc.HSEState       = RCC_HSE_ON;            /* a crystal; RCC_HSE_BYPASS for an oscillator */
+        osc.PLL.PLLState   = RCC_PLL_NONE;
+        if (HAL_RCC_OscConfig(&osc) != HAL_OK)
+            LOG_ERR("HSE didn't start: the USB HS PHY has no clock");
+    }
+
+    RCC_PeriphCLKInitTypeDef clk = { 0 };
+    clk.PeriphClockSelection = RCC_PERIPHCLK_USBPHY;
+    clk.UsbPhyClockSelection = USB_HS_PHY_HSE_DIV2 ? RCC_USBPHYCLKSOURCE_HSE_DIV2 : RCC_USBPHYCLKSOURCE_HSE;
+    if (HAL_RCCEx_PeriphCLKConfig(&clk) != HAL_OK)
+        LOG_ERR("USB PHY clock mux refused");
+
+    LOG_INFO("USB HS: PHY clock %lu Hz (HSE%s)",
+             (unsigned long)(USB_HS_PHY_HSE_DIV2 ? HSE_VALUE / 2u : HSE_VALUE),
+             USB_HS_PHY_HSE_DIV2 ? "/2" : "");
+}
+#endif
+
 /* ---- init ----------------------------------------------------------------- */
 void usb_port_init(void)
 {
@@ -158,10 +252,13 @@ void usb_port_init(void)
 #if defined(USB_DRD_FS)
     __HAL_RCC_USB_FS_CLK_ENABLE();
 #elif defined(USB_OTG_HS)
+    hs_phy_clock();
     __HAL_RCC_SYSCFG_CLK_ENABLE();
     __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
     __HAL_RCC_USBPHYC_CLK_ENABLE();
-    HAL_PWREx_EnableUSBHSTranceiverSupply();
+    if (HAL_PWREx_EnableUSBHSTranceiverSupply() != HAL_OK)
+        LOG_ERR("USB HS transceiver supply refused: needs voltage range 1 or 2 "
+                "(CubeMX: Power, voltage scaling)");
     HAL_SYSCFG_SetOTGPHYReferenceClockSelection(USB_HS_PHY_REFCLK);
     HAL_SYSCFG_EnableOTGPHY(SYSCFG_OTG_HS_PHY_ENABLE);
 #endif
@@ -176,6 +273,23 @@ void usb_port_init(void)
 #endif
 
 #if HAVE_VBUS_SWITCH
+    /* Set both pins up here too, so they're right whatever CubeMX has:
+     * EN driven low (VBUS off), /FLT with the internal pull-up, because
+     * /FLT is open drain and our board's R60 is not fitted. (CubeMX has
+     * already enabled these ports' clocks, as the pins are labelled.) */
+    HAL_GPIO_WritePin(USB_VBUS_EN_GPIO_Port, USB_VBUS_EN_Pin, GPIO_PIN_RESET);
+    g.Pin       = USB_VBUS_EN_Pin;
+    g.Mode      = GPIO_MODE_OUTPUT_PP;
+    g.Pull      = GPIO_NOPULL;
+    g.Speed     = GPIO_SPEED_FREQ_LOW;
+    g.Alternate = 0;
+    HAL_GPIO_Init(USB_VBUS_EN_GPIO_Port, &g);
+
+    g.Pin  = USB_VBUS_FLT_Pin;
+    g.Mode = GPIO_MODE_INPUT;
+    g.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(USB_VBUS_FLT_GPIO_Port, &g);
+
     vbus_set(false);
     vb       = VB_OFF;
     cc_seen  = sink_attached();

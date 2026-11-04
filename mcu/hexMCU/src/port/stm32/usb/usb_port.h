@@ -7,5 +7,6 @@
  
 void usb_port_init(void);   /* before tusb_init(): clocks, power domain, pins */
 void usb_port_poll(void);   /* every loop: VBUS on/off, attach and fault handling */
+void usb_port_dump(void);   /* debug: log the controller's state (optional, see usb_debug_dump) */
  
 #endif

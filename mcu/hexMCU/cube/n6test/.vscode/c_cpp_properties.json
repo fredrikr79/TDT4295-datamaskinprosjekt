@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name": "STM32_AppliNonSecure",
+            "compileCommands": "${workspaceFolder}/AppliNonSecure/build/compile_commands.json"
+        },
+        {
+            "name": "STM32_AppliSecure",
+            "compileCommands": "${workspaceFolder}/AppliSecure/build/compile_commands.json"
+        },
+        {
+            "name": "STM32_FSBL",
+            "compileCommands": "${workspaceFolder}/FSBL/build/compile_commands.json"
+        }
+    ]
+}

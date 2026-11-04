@@ -2,10 +2,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdio.h>
 
 #include "fpga.h"
-#include "transport.h"
 #include "rooms.h"
 #include "player.h"
 #include "platform.h"
@@ -17,41 +15,33 @@
 #include "assets.h"
 #include "funny_man.h"
 #include "demo.h"
-#include "cli.h"
+#include "probe.h"
 
 /* tuning */
-#define PROBE_LEN       100u
-#define PROBE_RETRY_MS  200u
-#define READY_QUIET_MS  10u     /* PROBE: READY high and no stray edges this long */
-#define STATUS_EVERY_MS 100u    /* status line redrawn at most this often    */
-#define READY_LOW_SHOW_MS 100u  /* READY low this long: say so in the status */
 #define FIRST_ROOM_X    0u
 #define FIRST_ROOM_Y    0u
 
 /* ======================================================================
  * The state machine
  *
- *   PROBE -> INFO -> LOAD -> RUN
- *                     ^       |
- *                     |       v  (door)
- *                     +---- SAVE
+ *   PROBE -> LOAD -> RUN
+ *             ^       |
+ *             |       v  (door)
+ *             +---- SAVE
  *
- * Any failed command -> resync -> PROBE -> INFO. If the FPGA still has
+ * PROBE is the handshake (probe.c: steady READY, ECHO, INFO).
+ * Any failed command -> resync -> PROBE. If the FPGA still has
  * the same session (its memory survived), we go back to the state that
  * was interrupted. If not, everything on it is gone and the current
  * room is loaded again.
  * ====================================================================== */
  
 /* This is the higher state machine that is responsible for error recovery and switching of scenes */
-typedef enum { S_PROBE, S_PROBING, S_INFO, S_INFO_WAIT, S_SAVE, S_LOAD, S_RUN } state_t;
-static const char *const state_names[] =
-    { "probe", "probing", "info", "info-wait", "save", "load", "run" };
+typedef enum { S_PROBE, S_SAVE, S_LOAD, S_RUN } state_t;
+static const char *const state_names[] = { "probe", "save", "load", "run" };
 
 static state_t  state = S_PROBE;
 static state_t  resume_to = S_LOAD; /* where a resync goes back to (same session) */
-static uint32_t retry_at;           /* S_PROBE: don't probe before this */
-static uint32_t probe_tries;        /* failed probes in a row (one status line) */
-static fpga_err_t probe_err;        /* why the last one failed              */
 static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
 static uint32_t session;            /* the FPGA session we drew into    */
@@ -72,122 +62,10 @@ static void room_enter(void);
 
 static void go(state_t s)
 {
-    /* PROBE <-> PROBING repeats every 200 ms while the FPGA doesn't answer:
-     * that shows as one status line instead (probe_done). */
-    bool probe_loop = (s == S_PROBE && state == S_PROBING) || (s == S_PROBING && state == S_PROBE);
-    if (s != state && !probe_loop) LOG_INFO("%s -> %s", state_names[state], state_names[s]);
+    if (s != state) LOG_INFO("%s -> %s", state_names[state], state_names[s]);
     state = s;
     if (s == S_RUN) run_enter();
 }
-
-/* ---- PROBE: wait for a steady READY before the handshake ----------------
- * Before the first byte of the ECHO goes out, READY must have been high,
- * with no stray edges, for READY_QUIET_MS. Otherwise an FPGA still booting
- * (or a noisy line) could catch the command halfway through and take some
- * byte in the middle as the opcode.
- *
- * Edges taken by commands (fpga_ready_used()) don't count, only stray ones.
- * Two stray edges less than READY_QUIET_MS apart is a READY storm: logged
- * once when it starts and once when it ends, and shown on the status line.
- * Only checked in PROBE (startup, and after a resync); normal commands
- * don't wait for it. */
-static struct {
-    bool     init;          /* the fields below are set up          */
-    uint32_t spare;         /* stray edges counted so far           */
-    uint32_t edge_at;       /* when a stray edge was last seen      */
-    uint32_t low_at;        /* when READY was last seen low         */
-    uint32_t high_at;       /* when READY was last seen high        */
-    bool     storm;
-    uint32_t storm_edges, storm_from;
-} rdy;
-
-static uint32_t stray_ready_count(void)
-{
-    return transport_ready_count() - fpga_ready_used();
-}
-
-/* true: READY has been high, with no stray edges, for READY_QUIET_MS. */
-static bool ready_quiet(uint32_t now)
-{
-    uint32_t c = stray_ready_count();
-    bool high = plat_fpga_ready_pin();
-    if (!rdy.init) {                    /* watch it for READY_QUIET_MS first */
-        rdy.init = true;
-        rdy.spare = c;
-        rdy.edge_at = rdy.low_at = rdy.high_at = now;
-    }
-    if (c != rdy.spare) {
-        uint32_t n = c - rdy.spare;
-        rdy.spare = c;
-        if (n > 1 || now - rdy.edge_at < READY_QUIET_MS) {
-            if (!rdy.storm) {
-                rdy.storm = true;
-                rdy.storm_edges = 0;
-                rdy.storm_from = now;
-                LOG_WARN("READY storm (edges < %u ms apart): waiting for it to stop",
-                         READY_QUIET_MS);
-            }
-            rdy.storm_edges += n;
-        }
-        rdy.edge_at = now;
-    }
-    if (high) rdy.high_at = now;
-    else      rdy.low_at  = now;
-
-    bool quiet = high && now - rdy.edge_at >= READY_QUIET_MS && now - rdy.low_at >= READY_QUIET_MS;
-    if (quiet && rdy.storm) {
-        rdy.storm = false;
-        LOG_INFO("READY storm over: %lu edges in %lu ms", (unsigned long)rdy.storm_edges,
-                 (unsigned long)(rdy.edge_at - rdy.storm_from));
-    }
-    return quiet;
-}
-
-/* The one status line in front of the console prompt while in PROBE. */
-static void probe_status(uint32_t now, bool now_please)
-{
-    static uint32_t shown_at;
-    if (!now_please && now - shown_at < STATUS_EVERY_MS) return;
-    shown_at = now;
-
-    char msg[64];
-    if (rdy.storm)
-        snprintf(msg, sizeof msg, "READY storm: %lu edges, waiting", (unsigned long)rdy.storm_edges);
-    else if (rdy.init && now - rdy.high_at >= READY_LOW_SHOW_MS)
-        snprintf(msg, sizeof msg, "waiting for FPGA READY high (%lu ms)",
-                 (unsigned long)(now - rdy.high_at));
-    else if (probe_tries)
-        snprintf(msg, sizeof msg, "probing FPGA: x%lu (%s)", (unsigned long)probe_tries,
-                 fpga_err_str(probe_err));
-    else
-        msg[0] = '\0';
-    cli_status(msg);
-}
-
-/* PROBE / INFO */
-static uint8_t probe_tx[PROBE_LEN], probe_rx[PROBE_LEN];
-
-static void probe_done(const fpga_cmd_t *cmd, fpga_err_t err)
-{
-    (void)cmd;
-    if (err == FPGA_ERR_NONE) {
-        cli_status(NULL);
-        if (probe_tries) {
-            LOG_INFO("FPGA answered after %lu failed probe%s", (unsigned long)probe_tries,
-                     probe_tries == 1 ? "" : "s");
-        }
-        probe_tries = 0;
-        go(S_INFO);
-    } else {
-        probe_tries++;
-        probe_err = err;
-        retry_at  = plat_millis() + PROBE_RETRY_MS;
-        probe_status(plat_millis(), true);      /* one line, updated in place */
-        go(S_PROBE);
-    }
-}
-
-static void info_done(const fpga_cmd_t *cmd, fpga_err_t err);
 
 /* SAVE: the current room, FPGA -> card (rooms.c reads it back row by row,
  * then writes the file).
@@ -394,16 +272,10 @@ void game_change_room(int to_x, int to_y)
     save_start();
 }
 
-/* ---- INFO callback: same session -> resume, new session -> reload ------- */
-static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
+/* ---- the handshake is done: same session -> resume, new -> reload ------ */
+static void connected(void)
 {
-    (void)cmd;
-    if (err != FPGA_ERR_NONE) { failed = true; return; }
-
     const fpga_info_t *in = fpga_link_info();
-    LOG_INFO("fpga: %ux%u, N=%u, session 0x%08lX",
-             in->width, in->height, in->max_cmd, (unsigned long)in->session);
-
     if (have_session && in->session == session) {
         /* same FPGA memory: what was sent is still there */
         switch (resume_to) {
@@ -429,9 +301,8 @@ static void resync(void)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */
     sprite_lost();               /* ...so this comes after them      */
-    failed   = false;
-    retry_at = plat_millis();
-    rdy.init = false;            /* READY must be steady again first */
+    failed = false;
+    probe_start();
     go(S_PROBE);
 }
 
@@ -447,27 +318,9 @@ void game_poll(void)
     if (failed) { resync(); return; }
 
     switch (state) {
-    case S_PROBE: {
-        uint32_t now = plat_millis();
-        bool quiet = ready_quiet(now);  /* tracked while waiting for retry_at too */
-        probe_status(now, false);
-        if (!quiet || (int32_t)(now - retry_at) < 0) break;
-        for (unsigned i = 0; i < PROBE_LEN; i++)
-            probe_tx[i] = (uint8_t)(i * 37u + retry_at);   /* new pattern each try */
-        fpga_cmd_t c = fpga_cmd_echo(probe_tx, probe_rx, PROBE_LEN);
-        c.done = probe_done;
-        if (fpga_submit(&c) == FPGA_OK) go(S_PROBING);
+    case S_PROBE:
+        if (probe_poll() == PROBE_DONE) connected();
         break;
-    }
-    case S_INFO: {
-        fpga_cmd_t c = fpga_cmd_info();
-        c.done = info_done;
-        if (fpga_submit(&c) == FPGA_OK) go(S_INFO_WAIT);
-        break;
-    }
-    case S_PROBING:
-    case S_INFO_WAIT:
-        break;                   /* the done callback moves us on */
     case S_SAVE:
         switch (room_poll()) {
         case ROOM_FAILED: failed = true; break;

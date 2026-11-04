@@ -12,6 +12,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/player.c
     ${APP_ROOT}/src/app/usb_input.c
     ${APP_ROOT}/src/app/rooms.c
+    ${APP_ROOT}/src/app/probe.c
     ${APP_ROOT}/src/app/render/font.c
     ${APP_ROOT}/src/app/render/funny_man.c
     ${APP_ROOT}/src/app/render/sprite.c

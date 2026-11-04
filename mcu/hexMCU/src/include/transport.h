@@ -10,7 +10,7 @@
 
 /* Clock cycles between the header and the data phase of a read, so the
  * bus can be handed over to the FPGA. */
-#define TRANSPORT_TURNAROUND_CYCLES  4u
+#define TRANSPORT_TURNAROUND_CYCLES  3u
 
 typedef enum {
     TRANSPORT_OK = 0,

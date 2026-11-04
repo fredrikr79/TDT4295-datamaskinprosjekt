@@ -26,6 +26,11 @@
  * known), after the FPGA queue has emptied. While one runs, game_poll() leaves the
  * FPGA to it (demo_busy()).
  *
+ * Sizes and positions come from the screen size INFO reports, so the
+ * tests work on any screen (tried from 32x24 to 640x360): boxes shrink to
+ * fit, the sprite's path and the scene scale, and game of life patterns
+ * that don't fit are left out.
+ *
  * Patterns depend on where a cell is (x, y) and on a number that changes
  * every run, so a write that silently did nothing can't pass by reading
  * back what an earlier run left there.
@@ -478,69 +483,116 @@ static uint8_t pat_box(uint32_t x, uint32_t y)
     return (uint8_t)((x / 2u + (y / 2u) * 3u + d.salt) % MAT_COUNT);
 }
 
-static const struct { uint16_t x, y, w, h; } boxes[] = {
-    {  8, 8,  1,  1 },
-    { 16, 8,  8,  8 },
-    { 32, 8, 40,  4 },              /* wide: read through with READ_CONS too */
-    { 80, 8,  3, 40 },              /* tall */
-    { 96, 8, 32,  0 },              /* as many rows as N allows              */
+/* Box sizes. They shrink to fit the screen, and are laid out left to right
+ * (on to the next line when one is full) from the top-left corner. */
+static const struct { uint16_t w, h; } boxes[] = {
+    {  1,  1 },
+    {  8,  8 },
+    { 40,  4 },                     /* wide: one row read with READ_CONS too */
+    {  3, 40 },                     /* tall */
+    { 32,  0 },                     /* as many rows as N allows              */
 };
-#define NBOX      (sizeof boxes / sizeof boxes[0])
-#define CROSS_BOX 2u
+#define NBOX       (sizeof boxes / sizeof boxes[0])
+#define CROSS_BOX  2u
+#define BOX_MARGIN 2u               /* from the screen's edges, and between boxes */
 
-static bool box_geo(unsigned b, uint16_t *x, uint16_t *y, uint16_t *w, uint16_t *h)
+/* Size of box b, shrunk to the screen and to N. */
+static void box_size(unsigned b, uint16_t *w, uint16_t *h)
 {
-    *x = boxes[b].x; *y = boxes[b].y; *w = boxes[b].w; *h = boxes[b].h;
-    if (*h == 0) {
+    uint32_t sw = scr()->width, sh = scr()->height;
+    uint32_t maxw = sw > 2u * BOX_MARGIN ? sw - 2u * BOX_MARGIN : 1u;
+    uint32_t maxh = sh > 2u * BOX_MARGIN ? sh - 2u * BOX_MARGIN : 1u;
+    uint32_t bw = boxes[b].w < maxw ? boxes[b].w : maxw, bh = boxes[b].h;
+    if (bh == 0) {
         uint32_t cells = max_cells(WRITE_BOX_OPCODE);
         if (max_cells(READ_BOX_OPCODE) < cells) cells = max_cells(READ_BOX_OPCODE);
-        *h = (uint16_t)(cells / *w);
-        while (*h && fpga_sim_bytes((uint32_t)*w * *h) > max_bytes(WRITE_BOX_OPCODE)) (*h)--;
+        bh = cells / bw;
+        while (bh && fpga_sim_bytes(bw * bh) > max_bytes(WRITE_BOX_OPCODE)) bh--;
     }
-    if (FPGA_SIM_IDS_PER_BYTE == 2 && ((uint32_t)*w * *h) % 2u) (*h)++;   /* whole bytes */
-    return *h && *x + *w <= scr()->width && *y + *h <= scr()->height;
+    if (bh > maxh) bh = maxh;
+    if (FPGA_SIM_IDS_PER_BYTE == 2 && (bw * bh) % 2u) bh += bh < maxh ? 1u : -1u;  /* whole bytes */
+    *w = (uint16_t)bw;
+    *h = (uint16_t)bh;
+}
+
+/* Where box b goes, and its size. Boxes that don't fit beside the earlier
+ * ones go to the top-left corner on top of them; that's fine, since each
+ * box is read back right after it's written. false: no room at all. */
+static bool box_geo(unsigned b, uint16_t *x, uint16_t *y, uint16_t *w, uint16_t *h)
+{
+    uint32_t sw = scr()->width, sh = scr()->height;
+    uint32_t cx = BOX_MARGIN, cy = BOX_MARGIN, line_h = 0;
+    for (unsigned k = 0; k <= b; k++) {
+        box_size(k, w, h);
+        if (cx + *w + BOX_MARGIN > sw) { cx = BOX_MARGIN; cy += line_h + BOX_MARGIN; line_h = 0; }
+        *x = (uint16_t)cx;
+        *y = (uint16_t)cy;
+        if (cy + *h + BOX_MARGIN > sh) { *x = BOX_MARGIN; *y = BOX_MARGIN; }   /* no room left */
+        cx += *w + BOX_MARGIN;
+        if (*h > line_h) line_h = *h;
+    }
+    return *h && *x + *w <= sw && *y + *h <= sh;
+}
+
+/* After STOP_SIM: write box 0, read it, write box 1, read it..., with the
+ * READ_CONS through the wide box straight after that box is read (later
+ * boxes may land on top of it). */
+enum { BOX_WRITE, BOX_READ, BOX_CROSS };
+#define BOX_OPS (2u * NBOX + 1u)
+
+static void box_op(unsigned k, unsigned *b, unsigned *op)
+{
+    const unsigned cross = 2u * (CROSS_BOX + 1u);
+    if (k == cross) { *b = CROSS_BOX; *op = BOX_CROSS; return; }
+    if (k > cross) k--;
+    *b = k / 2u;
+    *op = k % 2u ? BOX_READ : BOX_WRITE;
 }
 
 static step_t box_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
 {
     uint16_t x, y, w, h;
+    unsigned b, op;
     if (i == 0) { *c = fpga_cmd_sim_run(false); return STEP_CMD; }
-    if (i <= 2u * NBOX) {
-        unsigned b = (i - 1u) / 2u;
-        bool write = (i - 1u) % 2u == 0;
-        if (!box_geo(b, &x, &y, &w, &h)) {
-            if (write) LOG_INFO("  box %ux%u at (%u,%u) doesn't fit the screen: skipped",
-                                w, h, x, y);
-            *ms = 0;
-            return STEP_WAIT;
-        }
-        uint16_t bytes = (uint16_t)fpga_sim_bytes((uint32_t)w * h);
-        if (write) *c = fpga_cmd_write_box(fpga_box(x, y, w, h), tx,
-                                           fill_cells(tx, (uint32_t)w * h, x, y, w, pat_box));
-        else       *c = fpga_cmd_read_box(fpga_box(x, y, w, h), rx, bytes);
-        return STEP_CMD;
+    if (i == BOX_OPS + 1u) { *c = fpga_cmd_sim_run(true); return STEP_CMD; }
+    if (i > BOX_OPS + 1u) return STEP_END;
+
+    box_op(i - 1u, &b, &op);
+    if (!box_geo(b, &x, &y, &w, &h)) {
+        if (op == BOX_WRITE) LOG_INFO("  box %u doesn't fit the screen: skipped", b);
+        *ms = 0;
+        return STEP_WAIT;
     }
-    if (i == 2u * NBOX + 1u) {          /* row 1 of the wide box, with READ_CONS */
-        if (!box_geo(CROSS_BOX, &x, &y, &w, &h)) { *ms = 0; return STEP_WAIT; }
-        *c = fpga_cmd_read_cons(x, (uint16_t)(y + 1u), rx, (uint16_t)fpga_sim_bytes(w));
-        return STEP_CMD;
+    switch (op) {
+    case BOX_WRITE:
+        *c = fpga_cmd_write_box(fpga_box(x, y, w, h), tx,
+                                fill_cells(tx, (uint32_t)w * h, x, y, w, pat_box));
+        break;
+    case BOX_READ:
+        *c = fpga_cmd_read_box(fpga_box(x, y, w, h), rx,
+                               (uint16_t)fpga_sim_bytes((uint32_t)w * h));
+        break;
+    default:                            /* row 1 (or 0) of the wide box, with READ_CONS */
+        *c = fpga_cmd_read_cons(x, (uint16_t)(y + (h > 1u)), rx, (uint16_t)fpga_sim_bytes(w));
+        break;
     }
-    if (i == 2u * NBOX + 2u) { *c = fpga_cmd_sim_run(true); return STEP_CMD; }
-    return STEP_END;
+    return STEP_CMD;
 }
 
 static void box_check(unsigned i, const fpga_cmd_t *c)
 {
     (void)c;
     uint16_t x, y, w, h;
+    unsigned b, op;
     char what[48];
-    if (i >= 2u && i <= 2u * NBOX && i % 2u == 0) {
-        box_geo((i - 1u) / 2u, &x, &y, &w, &h);
+    if (i == 0 || i > BOX_OPS) return;
+    box_op(i - 1u, &b, &op);
+    box_geo(b, &x, &y, &w, &h);
+    if (op == BOX_READ) {
         snprintf(what, sizeof what, "box %ux%u at (%u,%u)", w, h, x, y);
         check_cells(what, rx, (uint32_t)w * h, x, y, w, pat_box);
-    } else if (i == 2u * NBOX + 1u) {
-        box_geo(CROSS_BOX, &x, &y, &w, &h);
-        check_cells("box row 1 read with READ_CONS", rx, w, x, (uint16_t)(y + 1u), 0, pat_box);
+    } else if (op == BOX_CROSS) {
+        check_cells("a box row read with READ_CONS", rx, w, x, (uint16_t)(y + (h > 1u)), 0, pat_box);
     }
 }
 
@@ -566,12 +618,20 @@ static uint16_t smiley_px(uint32_t x, uint32_t y)
     return PX565(255, 210, 0);
 }
 
+/* Position j of the path: left to right across the middle three quarters
+ * of the screen, bouncing up and down (at most 40 rows) on the way. */
 static void sprite_pos(unsigned j, uint16_t *x, uint16_t *y)
 {
-    uint32_t w = scr()->width, h = scr()->height;
-    uint32_t tri = (j * 8u) % 80u;
-    *x = (uint16_t)(w / 4u + j * ((w / 2u) / SPRITE_MOVES));
-    *y = (uint16_t)(h / 3u + (tri < 40u ? tri : 80u - tri));
+    int32_t w = scr()->width, h = scr()->height;
+    int32_t x0 = w / 8, x1 = w - w / 8 - (int32_t)SMILEY;
+    int32_t y0 = h / 4, amp = h - (int32_t)SMILEY - y0 - 1;
+    if (x1 < x0) x1 = x0;
+    if (amp > 40) amp = 40;
+    if (amp < 0)  amp = 0;
+    int32_t ph  = (int32_t)((j * 8u) % 80u);
+    int32_t tri = ph < 40 ? ph : 80 - ph;               /* 0 .. 40 .. 0 */
+    *x = (uint16_t)(x0 + (x1 - x0) * (int32_t)j / (int32_t)(SPRITE_MOVES - 1u));
+    *y = (uint16_t)(y0 + tri * amp / 40);
 }
 
 static step_t sprite_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
@@ -670,11 +730,35 @@ static bool life_at(const char *const *pat, uint32_t rows, uint32_t ox, uint32_t
     return cx < strlen(row) && row[cx] == 'O';
 }
 
-/* inside [x0, x1) x [y0, y1)? (in % of the screen) */
+/* inside [x0, x1) x [y0, y1)? (in % of the screen; at least 1 cell each
+ * way, so thin shelves don't vanish on a small screen) */
 static bool in_pct(uint32_t x, uint32_t y, uint32_t x0, uint32_t x1, uint32_t y0, uint32_t y1)
 {
     uint32_t w = scr()->width, h = scr()->height;
-    return x >= w * x0 / 100u && x < w * x1 / 100u && y >= h * y0 / 100u && y < h * y1 / 100u;
+    uint32_t xa = w * x0 / 100u, xb = w * x1 / 100u, ya = h * y0 / 100u, yb = h * y1 / 100u;
+    if (xb <= xa) xb = xa + 1u;
+    if (yb <= ya) yb = ya + 1u;
+    return x >= xa && x < xb && y >= ya && y < yb;
+}
+
+/* Where the game of life patterns go. On a small screen the gun moves to
+ * the left edge; a pattern that doesn't fit is left out (-1). */
+#define GUN_W     36u
+#define GUN_H     9u
+#define PULSAR_W  13u
+
+static void life_places(int32_t *gx, int32_t *gy, int32_t *px, int32_t *py)
+{
+    int32_t w = scr()->width, h = scr()->height;
+    *gy = h >= 120 ? 6 : 2;
+    *gx = w >= 128 ? w * 30 / 100 : 4;
+    if (*gx + (int32_t)GUN_W > w - 4 || *gy + (int32_t)GUN_H > h - 5) *gx = -1;
+
+    *py = h >= 120 ? 8 : 2;
+    *px = w * 82 / 100;
+    if (*px + (int32_t)PULSAR_W > w - 4) *px = w - 4 - (int32_t)PULSAR_W;
+    int32_t left = *gx >= 0 ? *gx + (int32_t)GUN_W + 2 : 4;          /* right of the gun */
+    if (*px < left || *py + (int32_t)PULSAR_W > h - 5) *px = -1;
 }
 
 /* A small world with every material. Later rules win over earlier ones. */
@@ -686,8 +770,10 @@ static uint8_t pat_scene(uint32_t x, uint32_t y)
     if (x < 3 || x >= w - 3u || y >= h - 4u) return MAT_STONE;
 
     /* game of life: a glider gun at the top, a pulsar top right */
-    if (life_at(gosper_gun, 9, w * 30u / 100u, 6, x, y)) return MAT_LIFE;
-    if (life_at(pulsar, 13, w * 82u / 100u, 8, x, y))    return MAT_LIFE;
+    int32_t gx, gy, px, py;
+    life_places(&gx, &gy, &px, &py);
+    if (gx >= 0 && life_at(gosper_gun, GUN_H, (uint32_t)gx, (uint32_t)gy, x, y)) return MAT_LIFE;
+    if (px >= 0 && life_at(pulsar, PULSAR_W, (uint32_t)px, (uint32_t)py, x, y)) return MAT_LIFE;
 
     /* left: a block of sand above a ledge */
     if (in_pct(x, y,  0, 30, 45, 47)) return MAT_STONE;
@@ -700,7 +786,7 @@ static uint8_t pat_scene(uint32_t x, uint32_t y)
     /* middle: a stone basin of water, and more water above it that pours in */
     if (in_pct(x, y, 35, 37, 68, 100) || in_pct(x, y, 58, 60, 68, 100)) return MAT_STONE;
     if (in_pct(x, y, 37, 58, 76, 100)) return MAT_WATER;
-    if (in_pct(x, y, 52, 64, 10, 22))  return MAT_WATER;
+    if (in_pct(x, y, 52, 64, 18, 26))  return MAT_WATER;
 
     /* right: a lava pool behind a stone lip, explosive on a shelf above */
     if (in_pct(x, y, 70, 72, 76, 100)) return MAT_STONE;

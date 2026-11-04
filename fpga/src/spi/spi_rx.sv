@@ -26,6 +26,7 @@ module spi_rx #(
   // RX signals
   wire in_w_en;
   wire in_almost_empty;
+  wire in_almost_full;
   wire in_wr_rst_busy;
   wire in_rd_rst_busy;
   wire in_wr_ack;

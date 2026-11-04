@@ -353,6 +353,11 @@ uint8_t       fpga_ready_status(void);  /* ACK status at the last READY used */
 /* The error code that came with the last NACK; 0 if it couldn't be read. */
 uint8_t       fpga_fail_code(void);
 const char   *fpga_fail_str(uint8_t code);
+
+/* The last command that failed (not aborted or cancelled), in words, for
+ * logs: "WRITE_CONS (0x30) at wait-irq: no FPGA ready irq (timeout)", with
+ * the NACK code if there was one. "none" if nothing has failed. */
+const char   *fpga_last_failure(void);
 uint32_t      fpga_ready_used(void);    /* READY edges consumed by commands */
 
 const char   *fpga_err_str(fpga_err_t err);

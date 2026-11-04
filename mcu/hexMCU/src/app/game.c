@@ -296,7 +296,7 @@ static void connected(void)
 /* the state machine */
 static void resync(void)
 {
-    LOG_WARN("command failed in '%s' -> resync", state_names[state]);
+    LOG_WARN("command failed in '%s' -> resync: %s", state_names[state], fpga_last_failure());
     if (state == S_SAVE || state == S_LOAD || state == S_RUN)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */

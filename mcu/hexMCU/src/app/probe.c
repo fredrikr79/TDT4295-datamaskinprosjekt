@@ -2,8 +2,13 @@
  * probe.c - the handshake with the FPGA (see probe.h).
  *
  *   WAIT --(READY steady, retry time reached)--> ECHO --ok--> INFO --ok--> DONE
- *    ^                                            |             |
- *    +------------------ failed ------------------+-------------+
+ *    ^  |                                         |             |
+ *    |  +- READY not steady within 100 ms -+      |             |
+ *    +------------------ failed -----------+------+-------------+
+ *
+ * Every wait has a timeout, and each one that runs out is a failed try:
+ * counted, and shown on the status line ("probing FPGA: x7 (...)"). The
+ * first failure of a series is also logged once, with its reason.
  *
  * Why wait for READY first: before the first byte of the ECHO goes out,
  * READY must have been high, with no stray edges, for READY_QUIET_MS.
@@ -32,7 +37,7 @@
 #define PROBE_RETRY_MS    200u  /* between tries                              */
 #define READY_QUIET_MS    10u   /* READY high and no stray edges this long    */
 #define STATUS_EVERY_MS   100u  /* status line redrawn at most this often     */
-#define READY_LOW_SHOW_MS 100u  /* READY low this long: say so in the status  */
+#define READY_WAIT_MS     100u  /* READY not steady this long: a failed try   */
 
 typedef enum { P_WAIT, P_ECHO, P_INFO, P_INFO_WAIT, P_DONE } phase_t;
 
@@ -40,6 +45,8 @@ static struct {
     phase_t    ph;              /* starts as P_WAIT                       */
     uint32_t   retry_at;        /* P_WAIT: don't send before this         */
     bool       retry_wait;      /* retry_at is in use                     */
+    bool       ready_wait;      /* waiting for a steady READY, since ...  */
+    uint32_t   ready_from;      /* ... this                               */
     uint32_t   tries;           /* failed tries in a row                  */
     fpga_err_t err;             /* why the last one failed                */
     const char *what;           /* "probe" or "INFO": which one failed    */
@@ -54,7 +61,6 @@ static struct {
     uint32_t spare;             /* stray edges counted so far            */
     uint32_t edge_at;           /* when a stray edge was last seen       */
     uint32_t low_at;            /* when READY was last seen low          */
-    uint32_t high_at;           /* when READY was last seen high         */
     bool     storm;
     uint32_t storm_edges, storm_from;
 } rdy;
@@ -72,7 +78,7 @@ static bool ready_quiet(uint32_t now)
     if (!rdy.init) {                    /* watch it for READY_QUIET_MS first */
         rdy.init = true;
         rdy.spare = c;
-        rdy.edge_at = rdy.low_at = rdy.high_at = now;
+        rdy.edge_at = rdy.low_at = now;
     }
     if (c != rdy.spare) {
         uint32_t n = c - rdy.spare;
@@ -89,8 +95,7 @@ static bool ready_quiet(uint32_t now)
         }
         rdy.edge_at = now;
     }
-    if (high) rdy.high_at = now;
-    else      rdy.low_at  = now;
+    if (!high) rdy.low_at = now;
 
     bool quiet = high && now - rdy.edge_at >= READY_QUIET_MS && now - rdy.low_at >= READY_QUIET_MS;
     if (quiet && rdy.storm) {
@@ -111,9 +116,9 @@ static void show_status(uint32_t now, bool at_once)
     char msg[64];
     if (rdy.storm)
         snprintf(msg, sizeof msg, "READY storm: %lu edges, waiting", (unsigned long)rdy.storm_edges);
-    else if (rdy.init && now - rdy.high_at >= READY_LOW_SHOW_MS)
-        snprintf(msg, sizeof msg, "waiting for FPGA READY high (%lu ms)",
-                 (unsigned long)(now - rdy.high_at));
+    else if (p.tries && p.err == FPGA_ERR_NOT_READY)
+        snprintf(msg, sizeof msg, "probing FPGA: x%lu (READY not high and steady)",
+                 (unsigned long)p.tries);
     else if (p.tries)
         snprintf(msg, sizeof msg, "probing FPGA: x%lu (%s: %s)", (unsigned long)p.tries,
                  p.what, fpga_err_str(p.err));
@@ -123,13 +128,20 @@ static void show_status(uint32_t now, bool at_once)
 }
 
 /* ---- the commands ---------------------------------------------------- */
-static void try_failed(const char *what, fpga_err_t err)
+/* A try failed: count it, wait retry_ms, then start again from the READY
+ * check. Only the first failure of a series goes to the log. */
+static void try_failed(const char *what, fpga_err_t err, uint32_t retry_ms)
 {
+    if (p.tries == 0 && err == FPGA_ERR_NOT_READY)
+        LOG_WARN("FPGA not answering (READY not high and steady), trying again");
+    else if (p.tries == 0)
+        LOG_WARN("FPGA not answering (%s: %s), trying again", what, fpga_err_str(err));
     p.tries++;
     p.what = what;
     p.err  = err;
-    p.retry_at   = plat_millis() + PROBE_RETRY_MS;
+    p.retry_at   = plat_millis() + retry_ms;
     p.retry_wait = true;
+    p.ready_wait = false;
     p.ph = P_WAIT;
     show_status(plat_millis(), true);   /* one line, updated in place */
 }
@@ -138,7 +150,7 @@ static void echo_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
     (void)cmd;
     if (p.ph != P_ECHO) return;         /* probe_start() came in between */
-    if (err != FPGA_ERR_NONE) { try_failed("echo", err); return; }
+    if (err != FPGA_ERR_NONE) { try_failed("echo", err, PROBE_RETRY_MS); return; }
     p.ph = P_INFO;
 }
 
@@ -146,7 +158,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
     (void)cmd;
     if (p.ph != P_INFO_WAIT) return;
-    if (err != FPGA_ERR_NONE) { try_failed("INFO", err); return; }
+    if (err != FPGA_ERR_NONE) { try_failed("INFO", err, PROBE_RETRY_MS); return; }
 
     cli_status(NULL);
     if (p.tries)
@@ -164,6 +176,7 @@ void probe_start(void)
 {
     p.ph = P_WAIT;
     p.retry_wait = false;
+    p.ready_wait = false;
     rdy.init = false;                   /* READY must be steady again first */
 }
 
@@ -175,7 +188,17 @@ probe_status_t probe_poll(void)
     case P_WAIT: {
         bool quiet = ready_quiet(now);  /* tracked while waiting for retry_at too */
         show_status(now, false);
-        if (!quiet || (p.retry_wait && (int32_t)(now - p.retry_at) < 0)) break;
+        if (p.retry_wait && (int32_t)(now - p.retry_at) < 0) break;
+        if (!quiet) {
+            /* READY must be steady within READY_WAIT_MS of when we could
+             * send, or that's a failed try (and the wait starts over). A
+             * storm has its own status line and is just waited out. */
+            if (!p.ready_wait || rdy.storm) { p.ready_wait = true; p.ready_from = now; }
+            else if (now - p.ready_from >= READY_WAIT_MS)
+                try_failed("READY", FPGA_ERR_NOT_READY, 0);
+            break;
+        }
+        p.ready_wait = false;
         p.pattern++;
         for (unsigned i = 0; i < PROBE_LEN; i++)
             probe_tx[i] = (uint8_t)(i * 37u + p.pattern * 101u);   /* new pattern each try */

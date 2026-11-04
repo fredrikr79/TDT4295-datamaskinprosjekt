@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "log.h"
@@ -65,6 +66,7 @@ static bool        abort_pending;   /* fpga_abort_all() called from a callback *
 static uint8_t     last_status;     /* ACK line at the last READY used      */
 static uint8_t     fail_rx[1];      /* error code after a NACK              */
 static uint8_t     last_fail;       /* ...as fpga_fail_code() reports it    */
+static char        last_failure[80] = "none";  /* fpga_last_failure()       */
 static uint32_t    ready_used;      /* READY edges consumed by WAIT_IRQ     */
 
 static fpga_info_t info;
@@ -140,6 +142,36 @@ static void pop_and_report(fpga_err_t err)
     if (c.done) c.done(&c, err);
 }
 
+static const char *op_name(uint8_t op)
+{
+    switch (op) {
+    case ECHO_OPCODE:          return "ECHO";
+    case INFO_OPCODE:          return "INFO";
+    case WRITE_CONS_OPCODE:    return "WRITE_CONS";
+    case READ_CONS_OPCODE:     return "READ_CONS";
+    case WRITE_BOX_OPCODE:     return "WRITE_BOX";
+    case READ_BOX_OPCODE:      return "READ_BOX";
+    case WRITE_SPRITE_OPCODE:  return "WRITE_SPRITE";
+    case SPRITE_WRITE_OPCODE:  return "SPRITE_WRITE";
+    case SPRITE_UPDATE_OPCODE: return "SPRITE_UPDATE";
+    case SPRITE_DELETE_OPCODE: return "SPRITE_DELETE";
+    case START_SIM_OPCODE:     return "START_SIM";
+    case STOP_SIM_OPCODE:      return "STOP_SIM";
+    default:                   return "op";
+    }
+}
+
+static void note_failure(uint8_t op, const char *step, fpga_err_t err)
+{
+    int n = snprintf(last_failure, sizeof last_failure, "%s (0x%02X) at %s: %s",
+                     op_name(op), op, step, fpga_err_str(err));
+    if (err == FPGA_ERR_STATUS && n > 0 && (size_t)n < sizeof last_failure)
+        snprintf(last_failure + n, sizeof last_failure - (size_t)n, ", %s (0x%02X)",
+                 fpga_fail_str(last_fail), last_fail);
+}
+
+const char *fpga_last_failure(void) { return last_failure; }
+
 /* The running command has ended. On failure the commands queued behind it
  * are cancelled too -- but not ones its callbacks submit. */
 static void finish(fpga_err_t err)
@@ -151,6 +183,8 @@ static void finish(fpga_err_t err)
     if (err != FPGA_ERR_NONE)
         LOG_DBG("op 0x%02X failed at step %u/%u: %s", q[q_head].hdr.opcode,
                 run.idx + 1, run.n, fpga_err_str(err));
+    if (err != FPGA_ERR_NONE && err != FPGA_ERR_ABORTED)
+        note_failure(q[q_head].hdr.opcode, step_names[run.steps[run.idx]], err);
 
     pop_and_report(err);
     if (err != FPGA_ERR_NONE)

@@ -38,6 +38,7 @@
 #include "fpga.h"
 
 #define BACKEND_READY_TIMEOUT_MS  100   /* waiting for backend to be free   */
+#define READY_HIGH_TIMEOUT_MS     100   /* waiting for the READY line high  */
 #define XFER_DONE_TIMEOUT_MS      100   /* waiting for transfer to finish   */
 #define FPGA_IRQ_TIMEOUT_MS       100   /* waiting for FPGA_READY interrupt */
 
@@ -285,6 +286,16 @@ static bool step(void)
             return true;
         }
 
+        /* Never start a transfer while the FPGA holds READY low (busy,
+         * booting, being reset): it could pick the command up halfway
+         * through and read some byte in the middle as the opcode. Normally
+         * READY is already high here, since the last step waited for it. */
+        if (!plat_fpga_ready_pin()) {
+            if (elapsed < READY_HIGH_TIMEOUT_MS) return false;
+            finish(FPGA_ERR_NOT_READY);
+            return true;
+        }
+
         /* Take the mark BEFORE starting: a READY that fires during the
          * transfer then still counts for the WAIT_IRQ step after it. */
         run.irq_mark = transport_ready_count();
@@ -418,6 +429,7 @@ const char *fpga_err_str(fpga_err_t err)
         "transfer error", "transfer never completed",
         "no FPGA ready irq (timeout)", "FPGA answered NACK",
         "echo data mismatch", "bad INFO answer", "aborted", "cancelled",
+        "READY stayed low (FPGA busy?)",
     };
     return (unsigned)err < sizeof names / sizeof names[0] ? names[err] : "?";
 }

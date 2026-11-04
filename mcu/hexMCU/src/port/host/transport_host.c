@@ -108,7 +108,7 @@ static transport_status_t host_init(void)
     memset(&link, 0, sizeof link);
     host_backend.done  = 1;
     host_backend.error = 0;
-    host_ready_pin = false;
+    host_ready_pin = true;      /* an idle FPGA holds READY high */
     fake_fpga_reset();
     LOG_INFO("link up: %.1f MHz x%u lanes", cfg_clock_mhz, cfg_lanes);
     return TRANSPORT_OK;
@@ -189,6 +189,7 @@ static void host_poll(void)
                 int32_t us = fake_fpga_write(&link.hdr, link.tx,
                                              &link.status_next);
                 link.ready_at_ns = us < 0 ? 0 : t + (uint64_t)us * 1000ull;
+                if (us >= 0) host_ready_pin = false;   /* busy until READY rises */
             }
             host_backend.done = 1;
         }

@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "fpga.h"
+#include "transport.h"
 #include "rooms.h"
 #include "player.h"
 #include "platform.h"
@@ -21,6 +22,9 @@
 /* tuning */
 #define PROBE_LEN       100u
 #define PROBE_RETRY_MS  200u
+#define READY_QUIET_MS  10u     /* PROBE: READY high and no stray edges this long */
+#define STATUS_EVERY_MS 100u    /* status line redrawn at most this often    */
+#define READY_LOW_SHOW_MS 100u  /* READY low this long: say so in the status */
 #define FIRST_ROOM_X    0u
 #define FIRST_ROOM_Y    0u
 
@@ -47,6 +51,7 @@ static state_t  state = S_PROBE;
 static state_t  resume_to = S_LOAD; /* where a resync goes back to (same session) */
 static uint32_t retry_at;           /* S_PROBE: don't probe before this */
 static uint32_t probe_tries;        /* failed probes in a row (one status line) */
+static fpga_err_t probe_err;        /* why the last one failed              */
 static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
 static uint32_t session;            /* the FPGA session we drew into    */
@@ -75,6 +80,90 @@ static void go(state_t s)
     if (s == S_RUN) run_enter();
 }
 
+/* ---- PROBE: wait for a steady READY before the handshake ----------------
+ * Before the first byte of the ECHO goes out, READY must have been high,
+ * with no stray edges, for READY_QUIET_MS. Otherwise an FPGA still booting
+ * (or a noisy line) could catch the command halfway through and take some
+ * byte in the middle as the opcode.
+ *
+ * Edges taken by commands (fpga_ready_used()) don't count, only stray ones.
+ * Two stray edges less than READY_QUIET_MS apart is a READY storm: logged
+ * once when it starts and once when it ends, and shown on the status line.
+ * Only checked in PROBE (startup, and after a resync); normal commands
+ * don't wait for it. */
+static struct {
+    bool     init;          /* the fields below are set up          */
+    uint32_t spare;         /* stray edges counted so far           */
+    uint32_t edge_at;       /* when a stray edge was last seen      */
+    uint32_t low_at;        /* when READY was last seen low         */
+    uint32_t high_at;       /* when READY was last seen high        */
+    bool     storm;
+    uint32_t storm_edges, storm_from;
+} rdy;
+
+static uint32_t stray_ready_count(void)
+{
+    return transport_ready_count() - fpga_ready_used();
+}
+
+/* true: READY has been high, with no stray edges, for READY_QUIET_MS. */
+static bool ready_quiet(uint32_t now)
+{
+    uint32_t c = stray_ready_count();
+    bool high = plat_fpga_ready_pin();
+    if (!rdy.init) {                    /* watch it for READY_QUIET_MS first */
+        rdy.init = true;
+        rdy.spare = c;
+        rdy.edge_at = rdy.low_at = rdy.high_at = now;
+    }
+    if (c != rdy.spare) {
+        uint32_t n = c - rdy.spare;
+        rdy.spare = c;
+        if (n > 1 || now - rdy.edge_at < READY_QUIET_MS) {
+            if (!rdy.storm) {
+                rdy.storm = true;
+                rdy.storm_edges = 0;
+                rdy.storm_from = now;
+                LOG_WARN("READY storm (edges < %u ms apart): waiting for it to stop",
+                         READY_QUIET_MS);
+            }
+            rdy.storm_edges += n;
+        }
+        rdy.edge_at = now;
+    }
+    if (high) rdy.high_at = now;
+    else      rdy.low_at  = now;
+
+    bool quiet = high && now - rdy.edge_at >= READY_QUIET_MS && now - rdy.low_at >= READY_QUIET_MS;
+    if (quiet && rdy.storm) {
+        rdy.storm = false;
+        LOG_INFO("READY storm over: %lu edges in %lu ms", (unsigned long)rdy.storm_edges,
+                 (unsigned long)(rdy.edge_at - rdy.storm_from));
+    }
+    return quiet;
+}
+
+/* The one status line in front of the console prompt while in PROBE. */
+static void probe_status(uint32_t now, bool now_please)
+{
+    static uint32_t shown_at;
+    if (!now_please && now - shown_at < STATUS_EVERY_MS) return;
+    shown_at = now;
+
+    char msg[64];
+    if (rdy.storm)
+        snprintf(msg, sizeof msg, "READY storm: %lu edges, waiting", (unsigned long)rdy.storm_edges);
+    else if (rdy.init && now - rdy.high_at >= READY_LOW_SHOW_MS)
+        snprintf(msg, sizeof msg, "waiting for FPGA READY high (%lu ms)",
+                 (unsigned long)(now - rdy.high_at));
+    else if (probe_tries)
+        snprintf(msg, sizeof msg, "probing FPGA: x%lu (%s)", (unsigned long)probe_tries,
+                 fpga_err_str(probe_err));
+    else
+        msg[0] = '\0';
+    cli_status(msg);
+}
+
 /* PROBE / INFO */
 static uint8_t probe_tx[PROBE_LEN], probe_rx[PROBE_LEN];
 
@@ -82,20 +171,18 @@ static void probe_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
     (void)cmd;
     if (err == FPGA_ERR_NONE) {
+        cli_status(NULL);
         if (probe_tries) {
-            cli_status(NULL);
             LOG_INFO("FPGA answered after %lu failed probe%s", (unsigned long)probe_tries,
                      probe_tries == 1 ? "" : "s");
         }
         probe_tries = 0;
         go(S_INFO);
     } else {
-        /* one line, updated in place in front of the console prompt */
-        char msg[64];
-        snprintf(msg, sizeof msg, "probing FPGA: x%lu (%s)",
-                 (unsigned long)++probe_tries, fpga_err_str(err));
-        cli_status(msg);
-        retry_at = plat_millis() + PROBE_RETRY_MS;
+        probe_tries++;
+        probe_err = err;
+        retry_at  = plat_millis() + PROBE_RETRY_MS;
+        probe_status(plat_millis(), true);      /* one line, updated in place */
         go(S_PROBE);
     }
 }
@@ -196,8 +283,6 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
  * or loading don't count as missed. */
 static void run_enter(void)
 {
-    input_t stale;
-    input_take(&stale);         /* input from loading / a demo doesn't count */
     run.sync_seen = frame_sync_count();
 }
 
@@ -281,21 +366,22 @@ static void run_frame(uint32_t n)
 
 static void run_poll(void)
 {
+    /* Input every poll, not just on frames: the mouse adds up in between. */
+    const fpga_info_t *scr = fpga_link_info();
+    input_t in;
+    input_take(&in);
+    /* input_log(&in); */
+    run.keys = in;              /* held keys are "down right now", so the latest copy is enough */
+    run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
+    run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - cursor_h());
+
+    if (key_pressed(&in, KEY_ESCAPE))
+        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
+        
+
     if (!sprite_poll()) { failed = true; return; }
     uint32_t n = frame_sync_take(&run.sync_seen);
-    if (n == 0) return;
-
-    /* Input once per frame: usb_input collects presses, releases and mouse
-     * movement between takes, so nothing that happened in between is lost. */
-    const fpga_info_t *scr = fpga_link_info();
-    input_take(&run.keys);
-    run.cx = clamp32(run.cx + run.keys.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
-    run.cy = clamp32(run.cy + run.keys.mouse_dy, 0, (int32_t)scr->height - cursor_h());
-
-    if (key_pressed(&run.keys, KEY_ESCAPE))
-        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
-
-    run_frame(n);
+    if (n) run_frame(n);
 }
 
 /* Leave the current room: save it, then load `to`.
@@ -345,6 +431,7 @@ static void resync(void)
     sprite_lost();               /* ...so this comes after them      */
     failed   = false;
     retry_at = plat_millis();
+    rdy.init = false;            /* READY must be steady again first */
     go(S_PROBE);
 }
 
@@ -361,7 +448,10 @@ void game_poll(void)
 
     switch (state) {
     case S_PROBE: {
-        if ((int32_t)(plat_millis() - retry_at) < 0) break;
+        uint32_t now = plat_millis();
+        bool quiet = ready_quiet(now);  /* tracked while waiting for retry_at too */
+        probe_status(now, false);
+        if (!quiet || (int32_t)(now - retry_at) < 0) break;
         for (unsigned i = 0; i < PROBE_LEN; i++)
             probe_tx[i] = (uint8_t)(i * 37u + retry_at);   /* new pattern each try */
         fpga_cmd_t c = fpga_cmd_echo(probe_tx, probe_rx, PROBE_LEN);

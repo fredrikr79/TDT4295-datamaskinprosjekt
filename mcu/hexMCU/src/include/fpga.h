@@ -233,6 +233,7 @@ typedef enum {
     FPGA_ERR_ABORTED,       /* was running when fpga_abort_all() came  */
     FPGA_ERR_CANCELLED,     /* never ran: an earlier command failed or
                                fpga_abort_all()                        */
+    FPGA_ERR_NOT_READY,     /* READY stayed low: nothing was sent      */
 } fpga_err_t;
 
 /* A box on the wire: x1,y1 = top-left pixel, x2 = W (pixels per row),

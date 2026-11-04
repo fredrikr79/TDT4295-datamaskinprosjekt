@@ -37,6 +37,14 @@
 static uint32_t ready_seen, used_seen;   /* written by main loop only */
 static int32_t  ready_spare;             /* READYs not (yet) consumed  */
 
+/* Spare READYs are reported at most once a second (READY_REPORT_MS): one
+ * on its own straight away, a storm as one line a second with the count. */
+#define READY_REPORT_MS  1000u
+#define READY_STORM_RATE 100u            /* per second: call it a storm */
+static uint32_t ready_report_at;         /* the last "fpga ready" line  */
+static uint32_t ready_unreported;        /* spare READYs since then     */
+static uint32_t ready_first_at;          /* the first of those          */
+
 /* ======================================================================
  * Line editor state + async redraw hooks
  *
@@ -827,10 +835,22 @@ void cli_poll(void)
     ready_seen = rc;
     used_seen  = used;
     if (ready_spare < 0) ready_spare = 0;
+    uint32_t now = plat_millis();
     if (ready_spare > 0 && fpga_queued() == 0) {
-        if (ready_spare == 1) LOG_INFO("fpga ready");
-        else LOG_INFO("fpga ready (x%ld)", (long)ready_spare);
+        if (!ready_unreported) ready_first_at = now;
+        ready_unreported += (uint32_t)ready_spare;
         ready_spare = 0;
+    }
+    if (ready_unreported && now - ready_report_at >= READY_REPORT_MS) {
+        uint32_t ms = now - ready_first_at, n = ready_unreported;
+        if (n == 1)
+            LOG_INFO("fpga ready");
+        else
+            LOG_INFO("fpga ready x%lu in %lu ms%s", (unsigned long)n, (unsigned long)ms,
+                     n >= 10u && (uint64_t)n * 1000u >= (uint64_t)READY_STORM_RATE * (ms ? ms : 1u)
+                         ? " (READY storm)" : "");
+        ready_unreported = 0;
+        ready_report_at  = now;
     }
 
     int c;

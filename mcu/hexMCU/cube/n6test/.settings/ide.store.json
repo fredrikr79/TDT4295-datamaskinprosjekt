@@ -1,0 +1,8 @@
+{
+  "source": {
+    "sourceType": "STM32CubeMX"
+  },
+  "board": "NUCLEO-N657X0-Q",
+  "device": "STM32N657X0H3Q",
+  "toolchain": "GCC"
+}

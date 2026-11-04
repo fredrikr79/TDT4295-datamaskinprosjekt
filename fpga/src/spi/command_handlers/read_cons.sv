@@ -44,6 +44,7 @@ module read_cons #(
       state <= MEM_START;
 
     end else begin
+      error_valid <= 1'b0;
       read_cons_w_en <= 1'b0;
       read_cons_r_en <= 1'b0;
       read_cons_done <= 1'b0;
@@ -127,7 +128,8 @@ module read_cons #(
                 read_cons_w_en <= mem_data_on_wire;
               end
             end else if (!mem_busy && mem_data_on_wire) begin
-              // write byte next cycle.
+              // Capture the first byte as the write enable is raised.
+              read_cons_fifo <= mem_out;
               read_cons_w_en <= 1'b1;
             end
           end

@@ -48,6 +48,7 @@ always_ff @(posedge clk) begin
         state <= START;
         sprite_update_done <= 1'b0;
     end else begin
+        error_valid <= 1'b0;
         if(send_sprite_update) begin
             case (state)
                 START: begin

@@ -15,15 +15,15 @@ module hud #(
 import hud_pkg::*;
 
 // Allways on req find an available id to hand out to a new sprite write
-always_comb begin
-    sprite_id_found = 1'b0;
-    sprite_available_id = '0;
 
-    for (int i = 0; i < SpriteLutDepth; i++) begin
-        if(!sprite_id_bitmap[i] && !sprite_id_found) begin
-            sprite_available_id = hud_pkg::sprite_lut_id'(i);
-            sprite_id_found = 1'b1;
-        end
+logic [hud_pkg::SpriteLutDepth-1:0] sprite_ptr = 0;
+always_ff @(posedge clk) begin
+    if(!sprite_id_bitmap[sprite_ptr] && !sprite_id_found) begin
+        sprite_available_id <= hud_pkg::sprite_lut_id'(sprite_ptr);
+        sprite_id_found <= 1'b1;
+    end else begin
+        sprite_id_found <= 1'b0;
+        sprite_ptr <= sprite_ptr + hud_pkg::SpriteLutDepth-1'(1);
     end
 end
 

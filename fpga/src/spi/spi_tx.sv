@@ -119,6 +119,7 @@ module spi_tx #(
     if (reset_s) begin
         tx_r_en <= 1'b0;
     end else begin
+      error_valid <= 1'b0;
       tx_r_en <= 1'b0;
 
       case (state)

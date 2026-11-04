@@ -60,9 +60,9 @@ module read_box #(
       read_box_fifo <= 8'd0;
       mem_req       <= 1'b0;
       state <= START;
-      error_valid <= 1'b0;
 
     end else begin
+      error_valid <= 1'b0;
       read_box_w_en <= 1'b0;
       read_box_r_en <= 1'b0;
       read_box_done <= 1'b0;

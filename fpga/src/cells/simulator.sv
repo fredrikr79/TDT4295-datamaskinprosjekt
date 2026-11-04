@@ -57,7 +57,7 @@ always @(posedge clk) begin
         // gravity and fluid uses case handlers to swap materials.
         automatic logic [3:0] gravity_mat = 4'hF, fluid_mat = 4'hF;
         automatic logic [7:0] explo_mat, gol_mat; // returns material directly
-
+        automatic integer refresh_state_noise = lowbias32(lfsr_gol ^ curr);
 
         // i * stride = base addr for sim core. base = round offset.
         automatic integer x;
@@ -129,7 +129,7 @@ always @(posedge clk) begin
             neighbourhood,
             sim_clock,
             gol_refresh_clock % GolRefreshDelay == 0,
-            lowbias32(lfsr_gol ^ curr)[0]
+            refresh_state_noise[0]
         );
 
         // Only eval transactions on recieving row of a transaction pair
@@ -255,7 +255,7 @@ function automatic logic [7:0] explosion_rules(
     temporal_noise *= 32'h7FEB352D;
     temporal_noise ^= temporal_noise >> 15;
 
-    can_move_free = temporal_noise[7:0] < 8'd64;
+    can_move_free = temporal_noise[7:0] < 8'd44;
 
     diagonal_cost = can_move_free
         ? 0

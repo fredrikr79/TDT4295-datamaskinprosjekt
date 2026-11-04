@@ -1,11 +1,13 @@
-module main (
+module main #(
+  parameter bit ON_BOARD_MEMORY = 1'b1
+)(
     input wire       clk,
     input wire [3:2] sw,
     input wire [3:0] btn,
 
-    output wire [3:0] vga_r,
-    vga_g,
+    output wire [4:0] vga_r,
     vga_b,
+    output wire [5:0] vga_g,
 
     output wire vga_hsync,
     vga_vsync,
@@ -17,19 +19,13 @@ module main (
     ck_rst,
 
     inout wire [7:0] octo_spi,
+    inout wire [3:0] led,
 
-    inout wire acknack,
-
-    output wire [3:0] led,
-
-    output wire led0_r,
-    led0_g,
-    led0_b,
+    output wire led_r,
+    led_g,
+    led_b,
     ready,
-    out_almost_empty,
-    out_empty,
-    in_almost_full,
-    in_full
+    acknack
 );
   logic active_area, pixel_pulse;
   vga_sync_params::x_coordinate_t coord_x;
@@ -53,53 +49,40 @@ module main (
 
   layer_pkg::layer_px_t layers[NumLayers];
 
+  logic pulse_new_row, pulse_transaction_pair_done, pulse_row_done;
+  sim_pkg::row_buffer_t buffers[3];
+  sim_pkg::row_buffer_t res_buffers[2];
+
   // Critical error detection (unrecoverable errors arising outside the SPI module)
   wire error_critical;
 
-  vga vga_controller (
-      .clk(clk),
-      .reset(sw[3]),
-      .enable(sw[2]),
-      .h_sync(vga_hsync),
-      .v_sync(vga_vsync),
-      .coord_x(coord_x),
-      .coord_y(coord_y),
-      .active_area(active_area),
-      .pixel_pulse(pixel_pulse),
-      .vga_r(vga_r),
-      .vga_g(vga_g),
-      .vga_b(vga_b),
-      .color(color)
-  );
+  // vga vga_controller (
+  //     .clk(clk),
+  //     .reset(sw[3]),
+  //     .enable(sw[2]),
+  //     .h_sync(vga_hsync),
+  //     .v_sync(vga_vsync),
+  //     .coord_x(coord_x),
+  //     .coord_y(coord_y),
+  //     .active_area(active_area),
+  //     .pixel_pulse(pixel_pulse),
+  //     .vga_r(vga_r),
+  //     .vga_g(vga_g),
+  //     .vga_b(vga_b),
+  //     .color(color)
+  // );
 
-  cells cell_controller (
-      .clk(clk),
-      .sw(sw),
-      .active_area(active_area),
-      .pixel_pulse(pixel_pulse),
-      .coord_x(coord_x),
-      .coord_y(coord_y),
-      .pixel(layers[LayerCells])
-  );
 
-  gol gol_controller (
-      .clk(clk),
-      .reset(sw[3]),
-      .active_area(active_area),
-      .pixel_pulse(pixel_pulse),
-      .pixel(layers[LayerGol])
-  );
+//   // TODO: Implement HUD layer. Temporarily always transparent. Remove after implementing the HUD layer.
+//   assign layers[LayerHud] = layer_pkg::TransparentPixel;
 
-  // TODO: Implement HUD layer. Temporarily always transparent. Remove after implementing the HUD layer.
-  assign layers[LayerHud] = layer_pkg::TransparentPixel;
-
-  compositor #(
-      .NumLayers(NumLayers)
-  ) layer_compositor (
-      .active_area(active_area),
-      .layers(layers),
-      .color(color)
-  );
+//   compositor #(
+//       .NumLayers(NumLayers)
+//   ) layer_compositor (
+//       .active_area(active_area),
+//       .layers(layers),
+//       .color(color)
+//   );
 
   // HUD sprites LUT declaration
   hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth];
@@ -111,19 +94,19 @@ module main (
   wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
   hud_pkg::sprite_lut_id sprite_available_id;
 
-  hud hud_controller (
-      .clk(clk),
-      .req_valid(sprite_req_valid),
-      .sprite_mem_id(sprite_mem_id),
-      .sprite_w_mem_addr(mem_addr),
-      .sprite_req_op(sprite_req_op),
-      .sprite_req_body(sprite_req_body),
-      .spriteLUT(spriteLUT),
-      .sprite_id_bitmap(sprite_id_bitmap),
-      .sprite_available_id(sprite_available_id),
-      .sprite_id_found(sprite_id_found),
-      .write_sprite_valid(write_sprite_valid)
-  );
+  // hud hud_controller (
+  //     .clk(clk),
+  //     .req_valid(sprite_req_valid),
+  //     .sprite_mem_id(sprite_mem_id),
+  //     .sprite_w_mem_addr(mem_addr),
+  //     .sprite_req_op(sprite_req_op),
+  //     .sprite_req_body(sprite_req_body),
+  //     .spriteLUT(spriteLUT),
+  //     .sprite_id_bitmap(sprite_id_bitmap),
+  //     .sprite_available_id(sprite_available_id),
+  //     .sprite_id_found(sprite_id_found),
+  //     .write_sprite_valid(write_sprite_valid)
+  // );
 
   spi spi_controller (
       .clk(clk),
@@ -133,9 +116,9 @@ module main (
       .octo_spi(octo_spi),
       .acknack(acknack),
       .led(led),
-      .led0_r(led0_r),
-      .led0_g(led0_g),
-      .led0_b(led0_b),
+      .led_r(led_r),
+      .led_g(led_g),
+      .led_b(led_b),
       .ready(ready),
 
       .out_almost_empty(out_almost_empty),
@@ -168,7 +151,37 @@ module main (
 
       // Critical error line
       .error_critical(error_critical)
-  );
+    );
+
+
+  // simulator simulation_core (
+  //   .clk(clk),
+  //   .pulse_new_row(pulse_new_row),
+  //   .sim_running(sim_running),
+  //   .buffers(buffers),
+  //   .pulse_transaction_pair_done(pulse_transaction_pair_done),
+  //   .pulse_row_done(pulse_row_done),
+  //   .res_buffer(res_buffers)
+  // );
+
+  if(ON_BOARD_MEMORY) begin : g_mem
+    memory_onboard memory (
+      .clk(clk),
+      .reset(ck_rst),
+      .enable(1'b1),
+      .transaction_toggle(mem_toggle),
+
+      .next_transaction(mem_transaction),
+      .address(mem_addr),
+      .length(mem_len),
+      .write_data(mem_in),
+
+      // Info to FPGA
+      .busy(mem_busy),
+      .data_on_cable(mem_data_on_wire),
+      .read_data(mem_out)
+    );
+  end
 
 endmodule
 

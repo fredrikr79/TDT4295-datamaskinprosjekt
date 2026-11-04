@@ -182,7 +182,7 @@ package sim_pkg;
     random_value = (random_value ^ (random_value >> 15)) * 32'h846c_a68b;
     random_value = random_value ^ (random_value >> 16);
 
-    return random_value;
+    return random_value[0];
   endfunction
 
   // Check for if a cell can displace another cell. Used to put the cell with the most density on the bottom.

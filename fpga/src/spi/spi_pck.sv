@@ -10,7 +10,7 @@ package spi_pck;
     ST_TX_IDLE = 8'b00111001,
     ST_TX_SEND = 8'b01010001,
     ST_MEMORY  = 8'b01011001,
-    ST_FAILED  = 8'b11111111
+    ST_FAILED  = 8'b11111100
   } state_e;
 
   // KNOWN COMMANDS

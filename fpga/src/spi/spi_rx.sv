@@ -72,6 +72,7 @@ module spi_rx #(
             rx_r_en <= 1'b0;
         end else begin
             rx_r_en <= 1'b0;
+            error_valid <= 1'b0;
 
             if (state == ST_RX && ck_ss_s && !in_empty) begin
                 rx_r_en <= 1'b1;
@@ -92,15 +93,5 @@ module spi_rx #(
       end
     end
   end
-
-  // ACK logic
-  reg [2:0] ack_sync = 3'b000;
-  always @(posedge clk) begin
-    if (reset) begin
-      ack_sync <= 3'b000;
-    end else ack_sync <= {ack_sync[1:0], in_wr_ack};
-  end
-
-  assign acknack = ack_sync[2];
 
 endmodule

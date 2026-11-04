@@ -39,6 +39,7 @@ module write_cons #(
       write_cons_r_en <= 1'b0;
       state <= MEM_START;
     end else begin
+      error_valid <= 1'b0;
       write_cons_r_en <= 1'b0;
       write_cons_done <= 1'b0;
       mem_req         <= 1'b0;

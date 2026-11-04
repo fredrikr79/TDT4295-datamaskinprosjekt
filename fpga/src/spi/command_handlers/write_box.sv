@@ -59,6 +59,7 @@ module write_box #(
       write_box_r_en <= 1'b0;
       write_box_done <= 1'b0;
       mem_req        <= 1'b0;
+      error_valid    <= 1'b0;
 
       if (send_write_box) begin
         case (state)

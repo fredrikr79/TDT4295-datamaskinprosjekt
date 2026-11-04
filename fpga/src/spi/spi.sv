@@ -12,9 +12,9 @@ module spi #(
     inout wire       acknack,
 
     output wire [3:0] led,
-    output wire       led0_r,
-    output wire       led0_g,
-    output wire       led0_b,
+    output wire       led_r,
+    output wire       led_g,
+    output wire       led_b,
     output wire       ready,
 
     output wire out_almost_empty,
@@ -102,6 +102,8 @@ module spi #(
     rx_error_valid,
     tx_error_valid,
     processor_error_valid;
+
+  assign acknack = ~error_valid;
 
   spi_pck::error_event_t error_event;
   assign error_event.valid = error_critical  |
@@ -238,13 +240,13 @@ module spi #(
   );
 
   // DEBUG
-  assign led[0] = ready;
-  assign led[1] = ~in_empty;
-  assign led[2] = ~out_empty;
-  assign led[3] = (state == ST_FAILED);
+  assign led[0] = in_full;
+  assign led[1] = in_empty;
+  assign led[2] = out_full;
+  assign led[3] = out_empty;
 
-  assign led0_r = state[2];
-  assign led0_g = state[1];
-  assign led0_b = state[0];
+  assign led_r = state[2];
+  assign led_g = state[1];
+  assign led_b = state[0];
 
 endmodule

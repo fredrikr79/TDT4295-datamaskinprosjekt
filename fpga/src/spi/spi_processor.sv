@@ -17,7 +17,7 @@ module spi_processor #(
     proc_r_en,
     proc_done,
     sim_running,
-    mem_toggle,
+    mem_toggle = 0,
     sprite_req_valid,
     write_sprite_valid,
     error_valid,
@@ -127,6 +127,18 @@ module spi_processor #(
     read_box_fifo,
     write_sprite_fifo,
     sprite_write_fifo;
+  logic [7:0] proc_fifo_reg;
+
+  always_comb begin
+    case (opcode)
+      INFO:         out_fifo = info_fifo;
+      READ_CONS:    out_fifo = read_cons_fifo;
+      READ_BOX:     out_fifo = read_box_fifo;
+      WRITE_SPRITE: out_fifo = write_sprite_fifo;
+      SPRITE_WRITE: out_fifo = sprite_write_fifo;
+      default:      out_fifo = proc_fifo_reg;
+    endcase
+  end
 
 
   // Mem transaction toggle mux
@@ -173,6 +185,14 @@ module spi_processor #(
     endcase
   end
 
+  logic [7:0] mem_in_cons, mem_in_box, mem_in_sprite;
+
+  // Mem write mux
+  assign mem_in =
+    (opcode == WRITE_CONS) ? mem_in_cons :
+    (opcode == WRITE_BOX) ? mem_in_box :
+    (opcode == WRITE_SPRITE) ? mem_in_sprite : 8'hFF;
+
   // Sprite LUT & Bitmap write request mux
   hud_pkg::sprite_inst_entry_t sprite_w_body, sprite_u_body, sprite_d_body;
   logic sprite_w_valid, sprite_u_valid, sprite_d_valid;
@@ -196,6 +216,7 @@ module spi_processor #(
     sprite_write_error_code,
     sprite_update_error_code,
     sprite_delete_error_code;
+
 
   always_ff @(posedge clk) begin
     case (opcode)
@@ -263,10 +284,10 @@ module spi_processor #(
     // Processes are registered in DECODE, it is recommended to MUX read / write toggles to subprocesses
     // e.g in_r_en = cmd1_in_r_en | cmd2_in_r_en
 
-    if (!reset_s) begin
+    if (reset_s) begin
       sim_running <= 1'b0;
       opcode <= spi_pck::opcode_e'(4'h0);
-      out_fifo <= 8'h00;
+      proc_fifo_reg <= 8'h00;
       cmd_r_en  <= 1'b0;
       echo_r_en <= 1'b0;
       fail_r_en <= 1'b0;
@@ -293,6 +314,7 @@ module spi_processor #(
       echo_done      <= 1'b0;
       start_sim_done <= 1'b0;
       stop_sim_done  <= 1'b0;
+      error_valid <= 1'b0;
 
       case (state)
         ST_FAILED: begin
@@ -318,7 +340,7 @@ module spi_processor #(
 
             ECHO: begin
               if (!out_full && !in_empty) begin
-                out_fifo  <= in_fifo;
+                proc_fifo_reg <= in_fifo;
                 echo_w_en <= 1'b1;
                 echo_r_en <= 1'b1;
               end else begin
@@ -329,9 +351,6 @@ module spi_processor #(
             INFO: begin
               if (!info_done) begin
                 send_info <= 1'b1;
-                if (info_w_en) begin
-                  out_fifo <= info_fifo;
-                end
               end else send_info <= 1'b0;
             end
 
@@ -348,9 +367,6 @@ module spi_processor #(
                 send_read_cons <= 1'b1;
                 mem_addr <= read_cons_mem_addr;
                 mem_transaction <= READ;
-                if (read_cons_w_en) begin
-                  out_fifo <= read_cons_fifo;
-                end
               end else send_read_cons <= 1'b0;
             end
 
@@ -367,9 +383,6 @@ module spi_processor #(
                 send_read_box <= 1'b1;
                 mem_addr <= read_box_mem_addr;
                 mem_transaction <= READ;
-                if (read_box_w_en) begin
-                  out_fifo <= read_box_fifo;
-                end
               end else send_read_box <= 1'b0;
             end
 
@@ -378,9 +391,6 @@ module spi_processor #(
                 send_write_sprite <= 1'b1;
                 mem_addr <= write_sprite_mem_addr;
                 mem_transaction <= WRITE;
-                if (write_sprite_w_en) begin
-                  out_fifo <= write_sprite_fifo;
-                end
               end else send_write_sprite <= 1'b0;
             end
 
@@ -389,9 +399,6 @@ module spi_processor #(
                 send_sprite_write <= 1'b1;
                 sprite_req_op <= LUT_WRITE;
                 sprite_req_body <= sprite_w_body;
-                if (sprite_write_w_en) begin
-                  out_fifo <= sprite_write_fifo;
-                end
               end else send_sprite_write <= 1'b0;
             end
 
@@ -426,7 +433,7 @@ module spi_processor #(
                 if (!in_empty) begin
                   fail_r_en <= 1'b1;
                 end else begin
-                  out_fifo <= error_event.code;
+                  proc_fifo_reg <= error_event.code;
                   fail_w_en <= 1'b1;
                   opcode <= UNSET;
                 end
@@ -457,7 +464,7 @@ module spi_processor #(
     .mem_busy(mem_busy),
     .mem_len(write_cons_mem_len),
     .mem_addr(write_cons_mem_addr),
-    .mem_in(mem_in),
+    .mem_in(mem_in_cons),
     .mem_req(write_cons_mem_req),
     .in_fifo(in_fifo),
     .write_cons_done(write_cons_done),
@@ -518,7 +525,7 @@ module spi_processor #(
     .mem_req(write_box_mem_req),
     .mem_busy(mem_busy),
     .mem_data_on_wire(mem_data_on_wire),
-    .mem_in(mem_in),
+    .mem_in(mem_in_box),
     .mem_addr(write_box_mem_addr),
     .error_valid(write_box_error_valid),
     .error_code(write_box_error_code)
@@ -534,7 +541,7 @@ module spi_processor #(
       .in_fifo(in_fifo),
       .write_sprite_fifo(write_sprite_fifo),
       .mem_len(write_sprite_mem_len),
-      .mem_in(mem_in),
+      .mem_in(mem_in_sprite),
       .write_sprite_done(write_sprite_done),
       .write_sprite_r_en(write_sprite_r_en),
       .write_sprite_w_en(write_sprite_w_en),

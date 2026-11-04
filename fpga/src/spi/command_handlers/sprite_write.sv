@@ -45,6 +45,8 @@ hud_pkg::sprite_lut_id param_mem_id;
 logic [15:0] param_x, param_y, param_w, param_h;
 logic [31:0] param_mem_addr;
 
+hud_pkg::sprite_mem_id id_search_cycle_counter = 0;
+
 always_ff @(posedge clk) begin
     sprite_write_r_en <= 1'b0;
     sprite_write_w_en <= 1'b0;
@@ -60,11 +62,14 @@ always_ff @(posedge clk) begin
         case (state)
             START: begin
                 // Await available ID
+                id_search_cycle_counter <= id_search_cycle_counter + 1;
+
                 if(sprite_id_found) begin
                     sprite_write_r_en <= 1'b1;
                     param_id <= sprite_available_id;
+                    id_search_cycle_counter <= 0;
                     state <= GET_MEM_ID_TOP;
-                end else begin
+                end else if(id_search_cycle_counter > hud_pkg::SpriteLutDepth) begin
                     error_valid <= 1'b1;
                     error_code <= RESOURCE_EXHAUSTED_ERROR;
                 end
@@ -72,7 +77,8 @@ always_ff @(posedge clk) begin
             GET_MEM_ID_TOP: begin
                 if($bits(hud_pkg::sprite_mem_id) > 8) begin
                     sprite_write_r_en <= 1'b1;
-                    param_mem_id[$bits(hud_pkg::sprite_mem_id)-1:8] <= in_fifo[$bits(hud_pkg::sprite_mem_id)-9:0];
+                    param_mem_id[$bits(hud_pkg::sprite_mem_id)-1:8]
+                        <= in_fifo[$bits(hud_pkg::sprite_mem_id)-9:0];
                 end
                 state <= GET_MEM_ID_BOTTOM;
             end

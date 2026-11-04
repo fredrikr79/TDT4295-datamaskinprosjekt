@@ -63,7 +63,6 @@ module write_sprite #(
             end
           end
           MEM_GET_MSG_LENGTH_TOP: begin
-            //TODO fix MSG is two bytes
             write_sprite_r_en <= 1'b1;
             total_bytes[15:8] <= in_fifo;
             state <= MEM_GET_MSG_LENGTH_BOTTOM;
@@ -107,6 +106,10 @@ module write_sprite #(
                 write_sprite_r_en <= 1'b0;
                 written_bytes <= 8'd0;
                 state <= MEM_INIT_REQ;
+              end
+
+              else begin
+                write_sprite_r_en <= mem_data_on_wire;
               end
             end else if (!mem_busy && mem_data_on_wire) begin
               write_sprite_r_en <= 1'b1;

@@ -29,6 +29,7 @@ module spi_fsm #(
       end
 
     end else begin
+      error_valid <= 0;
       case (state)
 
         ST_BOOT: begin
@@ -55,6 +56,10 @@ module spi_fsm #(
 
         ST_BUSY: begin
           case (opcode)
+            UNSET: begin
+              state <= ST_READY;
+            end
+
             ECHO, INFO, FAILED, READ_CONS, READ_BOX, WRITE_SPRITE, SPRITE_WRITE: begin // Non-void
               if (proc_done) begin
                 if(in_empty)
@@ -76,8 +81,9 @@ module spi_fsm #(
               end
             end // Void
             default: begin
-              error_valid <= 1'b1;
-              error_code <= ILLEGAL_STATE_ERROR;
+              // error_valid <= 1'b1;
+              // error_code <= ILLEGAL_STATE_ERROR;
+              // state <= ST_FAILED;
             end
           endcase
         end

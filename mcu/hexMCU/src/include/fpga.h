@@ -126,6 +126,13 @@
 
 #define FPGA_INFO_BYTES         10u     /* W, H, N: 2 bytes each, SID 4 bytes */
 
+/* What an INFO answer may say. Anything outside is taken as a garbled
+ * answer (FPGA_ERR_BAD_INFO), so the handshake tries again instead of going
+ * on with nonsense. PROTOCOL: widen these if the FPGA really goes beyond. */
+#define FPGA_INFO_MAX_DIM       2048u   /* W and H, cells                     */
+#define FPGA_INFO_MIN_N         9u      /* a BOX header alone is 9 bytes      */
+#define FPGA_INFO_MAX_N         8192u   /* N, bytes                           */
+
 /* Sprite parameters travel inside the command (see struct fpga_cmd). */
 #define FPGA_PARAM_MAX          11u     /* SPRITE_WRITE's, the longest */
 

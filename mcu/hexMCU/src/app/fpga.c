@@ -245,9 +245,25 @@ static fpga_err_t parse_info(void)
         .max_cmd = be16(&info_rx[4]),
         .session = be32(&info_rx[6]),
     };
-    /* A box header alone is 9 bytes; anything smaller is not usable. */
-    if (in.width == 0 || in.height == 0 || in.max_cmd < 9u)
+    /* Sizes that can't be real mean a garbled answer (a stale byte in
+     * front shifts every field, for one): log the raw bytes, so it can be
+     * worked out, and let the caller try again. */
+    if (in.width == 0 || in.width > FPGA_INFO_MAX_DIM ||
+        in.height == 0 || in.height > FPGA_INFO_MAX_DIM ||
+        in.max_cmd < FPGA_INFO_MIN_N || in.max_cmd > FPGA_INFO_MAX_N) {
+        static uint32_t logged_at;          /* at most every 2 s: probe retries fast */
+        static bool     logged;
+        if (logged && plat_millis() - logged_at < 2000u) return FPGA_ERR_BAD_INFO;
+        logged    = true;
+        logged_at = plat_millis();
+        LOG_WARN("INFO makes no sense: %ux%u, N=%u (allowed 1..%u x 1..%u, N %u..%u)",
+                 in.width, in.height, in.max_cmd, FPGA_INFO_MAX_DIM, FPGA_INFO_MAX_DIM,
+                 FPGA_INFO_MIN_N, FPGA_INFO_MAX_N);
+        LOG_WARN("  raw: %02X %02X  %02X %02X  %02X %02X  %02X %02X %02X %02X",
+                 info_rx[0], info_rx[1], info_rx[2], info_rx[3], info_rx[4],
+                 info_rx[5], info_rx[6], info_rx[7], info_rx[8], info_rx[9]);
         return FPGA_ERR_BAD_INFO;
+    }
 
     if (info.valid && info.session != in.session)
         LOG_INFO("new FPGA session 0x%08lX (was 0x%08lX)",

@@ -14,6 +14,13 @@
  * Instead sd_init() below does the same init and returns an error. Its
  * settings must match CubeMX's SDMMC1 page -- change both together.
  *
+ * SDMMC1 itself must stay ENABLED in CubeMX (only its init call is turned
+ * off): that's what generates HAL_SD_MspInit() in stm32u5xx_hal_msp.c --
+ * the SDMMC1 clock, its kernel clock source and the pins. Without it the
+ * HAL's empty weak HAL_SD_MspInit() runs, the peripheral stays unclocked,
+ * and every init sits in the HAL's 5 s software timeouts. sd_init() checks
+ * for that and gives up for good instead (one error in the log).
+ *
  * The media stays open between calls. Any I/O error drops it (abort, no
  * flush), and the next call mounts again -- that's how a card pulled out
  * and put back is picked up. */
@@ -43,6 +50,9 @@ static bool     sd_up;          /* HAL_SD_Init() succeeded                */
 static bool     mounted;        /* fx_media_open() succeeded              */
 static bool     tried;
 static uint32_t last_try;
+static bool     no_hw;          /* SDMMC1 can't work (not clocked): stop trying */
+
+#define SD_INIT_SLOW_MS 3000u   /* an init this slow is a setup problem, not a card */
 
 /* ---- the card ------------------------------------------------------------ */
 static bool sd_init(void)
@@ -54,8 +64,29 @@ static bool sd_init(void)
     hsd1.Init.BusWide             = SDMMC_BUS_WIDE_4B;
     hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
     hsd1.Init.ClockDiv            = 0;
-    if (HAL_SD_Init(&hsd1) != HAL_OK) {
-        HAL_SD_DeInit(&hsd1);   /* back to RESET, so the next try starts clean */
+
+    /* What HAL_SD_Init() does first, done here so we can check it worked:
+     * with no HAL_SD_MspInit() from CubeMX, the SDMMC1 clock stays off. */
+    if (hsd1.State == HAL_SD_STATE_RESET) HAL_SD_MspInit(&hsd1);
+    if (!__HAL_RCC_SDMMC1_IS_CLK_ENABLED()) {
+        LOG_ERR("SDMMC1 has no clock: HAL_SD_MspInit() isn't generated (enable SDMMC1 "
+                "in CubeMX, keep only its init call off). SD card disabled.");
+        no_hw = true;
+        return false;
+    }
+
+    uint32_t t0 = plat_millis();
+    HAL_StatusTypeDef st = HAL_SD_Init(&hsd1);
+    uint32_t ms = plat_millis() - t0, err = HAL_SD_GetError(&hsd1);
+    if (st != HAL_OK) {
+        HAL_SD_DeInit(&hsd1);   /* back to RESET, so the next try starts clean (clears the error) */
+        LOG_WARN("no SD card (init failed after %lu ms, error 0x%08lX)",
+                 (unsigned long)ms, (unsigned long)err);
+        if (ms >= SD_INIT_SLOW_MS) {
+            LOG_ERR("SD init took %lu ms: SDMMC1 clock or pins not set up? SD card disabled.",
+                    (unsigned long)ms);
+            no_hw = true;
+        }
         return false;
     }
     return true;
@@ -71,16 +102,13 @@ static void drop(void)
 static storage_status_t mount(void)
 {
     if (mounted) return STORAGE_OK;
+    if (no_hw) return STORAGE_NO_CARD;
     if (tried && plat_millis() - last_try < STORAGE_RETRY_MS) return STORAGE_NO_CARD;
     tried    = true;
     last_try = plat_millis();
 
     if (!sd_up) {
-        if (!sd_init()) {
-            LOG_WARN("no SD card (init failed, error 0x%08lX)",
-                     (unsigned long)HAL_SD_GetError(&hsd1));
-            return STORAGE_NO_CARD;
-        }
+        if (!sd_init()) return STORAGE_NO_CARD;     /* logged */
         sd_up = true;
     }
     UINT st = fx_media_open(&media, "HeksSD", fx_stm32_sd_driver, 0,

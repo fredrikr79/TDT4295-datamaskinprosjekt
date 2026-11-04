@@ -50,14 +50,11 @@ module main (
   logic sim_running = 1'b1; // Temporarily 1
 
   // Memory signals
-  logic mem_busy, mem_data_on_wire, mem_toggle;
-  logic [31:0] mem_addr;
-  logic [15:0] mem_len;
-  logic [7:0] mem_in, mem_out;
-  memory_pkg::transaction_e mem_transaction;
-
-  memory_pkg::message_length_t mem_len_burst;
-  assign mem_len_burst = memory_pkg::message_length_t'(mem_len);
+  logic spi_mem_toggle;
+  logic [31:0] spi_mem_addr;
+  memory_pkg::message_length_t spi_mem_len;
+  logic [7:0] spi_mem_in, mem_out;
+  memory_pkg::transaction_e spi_mem_transaction;
 
   localparam int unsigned NumLayers  = 3;
   localparam int unsigned LayerCells = 0;
@@ -128,7 +125,7 @@ module main (
       .mem_length(fb_mem_length),
       .mem_busy(mem_client_busy[memory_pkg::MemClientScanoutID]),
       .mem_data_on_cable(mem_client_data_on_cable[memory_pkg::MemClientScanoutID]),
-      .mem_read_data(mem_read_data),
+      .mem_read_data(mem_out),
 
       .pixel(layers[LayerCells]),
       .underrun(fb_underrun)
@@ -168,7 +165,7 @@ module main (
       .clk(clk),
       .req_valid(sprite_req_valid),
       .sprite_mem_id(sprite_mem_id),
-      .sprite_w_mem_addr(mem_addr),
+      .sprite_w_mem_addr(spi_mem_addr),
       .sprite_req_op(sprite_req_op),
       .sprite_req_body(sprite_req_body),
       .spriteLUT(spriteLUT),
@@ -195,7 +192,6 @@ module main (
   logic [memory_pkg::NumMemClients-1:0] mem_client_busy;
   logic [memory_pkg::NumMemClients-1:0] mem_client_data_on_cable;
   logic [memory_pkg::NumMemClients-1:0] mem_client_grant; // Used by testbenches
-  logic [7:0] mem_read_data;
 
   always_comb begin
     mem_client_toggle = '0;
@@ -205,13 +201,13 @@ module main (
       mem_client_length_burst[i]      = '0;
       mem_client_write_data[i]  = '0;
     end
-    
+
     // SPI
-    mem_client_toggle[memory_pkg::MemClientSpiID]      = mem_toggle;
-    mem_client_transaction[memory_pkg::MemClientSpiID] = mem_transaction;
-    mem_client_address[memory_pkg::MemClientSpiID]     = mem_addr;
-    mem_client_length_burst[memory_pkg::MemClientSpiID]= mem_len_burst;
-    mem_client_write_data[memory_pkg::MemClientSpiID]  = mem_in;
+    mem_client_toggle[memory_pkg::MemClientSpiID]      = spi_mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientSpiID] = spi_mem_transaction;
+    mem_client_address[memory_pkg::MemClientSpiID]     = spi_mem_addr;
+    mem_client_length_burst[memory_pkg::MemClientSpiID]= spi_mem_len;
+    mem_client_write_data[memory_pkg::MemClientSpiID]  = spi_mem_in;
 
     // Scan-out fb
     mem_client_toggle[memory_pkg::MemClientScanoutID]       = fb_mem_toggle;
@@ -221,10 +217,6 @@ module main (
 
     // TODO: Add the other clients here when they implement the external SRAM
   end
-
-  assign mem_busy         = mem_client_busy[memory_pkg::MemClientSpiID];
-  assign mem_data_on_wire = mem_client_data_on_cable[memory_pkg::MemClientSpiID];
-  assign mem_out          = mem_read_data;
 
   memory memory_subsystem (
       .clk(clk),
@@ -241,7 +233,7 @@ module main (
       .client_busy(mem_client_busy),
       .client_data_on_cable(mem_client_data_on_cable),
       .client_grant(mem_client_grant),
-      .read_data(mem_read_data),
+      .read_data(mem_out),
 
       .out_clk(mem_out_clk),
       .out_clk_n(mem_out_clk_n),
@@ -273,14 +265,14 @@ module main (
       .sim_running(sim_running),
 
       // Memory module fall-through signals
-      .mem_in(mem_in),
+      .mem_in(spi_mem_in),
       .mem_out(mem_out),
-      .mem_len(mem_len),
-      .mem_addr(mem_addr),
-      .mem_transaction(mem_transaction),
-      .mem_busy(mem_busy),
-      .mem_data_on_wire(mem_data_on_wire),
-      .mem_toggle(mem_toggle),
+      .mem_len(spi_mem_len),
+      .mem_addr(spi_mem_addr),
+      .mem_transaction(spi_mem_transaction),
+      .mem_busy(mem_client_busy[memory_pkg::MemClientSpiID]),
+      .mem_data_on_wire(mem_client_data_on_cable[memory_pkg::MemClientSpiID]),
+      .mem_toggle(spi_mem_toggle),
 
       // Sprite LUT transaction signals
       .sprite_available_id(sprite_available_id),

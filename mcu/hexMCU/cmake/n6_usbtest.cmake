@@ -37,6 +37,7 @@ function(hexmcu_add_n6_usbtest target)
         ${TINYUSB_INCLUDES}
         ${HEXMCU_HCD_DWC2_INCLUDE}
         ${APP_ROOT}/src/port/stm32/usb      # tusb_config.h, usb_port.h, usb_backend.h
+        ${APP_ROOT}/src/port/stm32/
     )
     # TinyUSB fixes in usb_backend_tinyusb.c, instead of patching third_party/:
     #   hcd_setup_send  hub descriptor request (hub.c)

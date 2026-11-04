@@ -24,17 +24,25 @@ any payload. Multi-byte fields go MSB first. The full spec is
 | INFO | 20 | — | — | W H N SID | `fpga_cmd_info()` |
 | WRITE_CONS | 30 | X Y N | N bytes | — | `fpga_cmd_write_cons(x, y, data, n)` |
 | READ_CONS | 40 | X Y N | — | N bytes | `fpga_cmd_read_cons(x, y, buf, n)` |
-| WRITE_BOX | 50 | X Y W H | pixels | — | `fpga_cmd_write_box(fpga_box(x,y,w,h), px, len)` |
-| READ_BOX | 60 | X Y W H | — | pixels | `fpga_cmd_read_box(box, buf, len)` |
+| WRITE_BOX | 50 | X Y W H | IDs | — | `fpga_cmd_write_box(fpga_box(x,y,w,h), ids, len)` |
+| READ_BOX | 60 | X Y W H | — | IDs | `fpga_cmd_read_box(box, buf, len)` |
 | WRITE_SPRITE | 70 | — | pixels | memID (2 B) | `fpga_cmd_write_sprite(px, len)` |
 | SPRITE_WRITE | 80 | memID, active, X Y W H | — | spriteID (2 B) | `fpga_cmd_sprite_write(...)` |
 | SPRITE_UPDATE | 90 | spriteID, active, X Y | — | — | `fpga_cmd_sprite_update(...)` |
 | SPRITE_DELETE | A0 | spriteID | — | — | `fpga_cmd_sprite_delete(id)` |
 | START_SIM / STOP_SIM | B0 / C0 | — | — | — | `fpga_cmd_sim_run(bool)` |
 
-- **CONS and BOX** work on the grid (the SIM layer). CONS is contiguous memory:
-  N bytes from (X, Y) on, row after row. A box's pixels are one stream, row by
-  row; X,Y is the top-left corner, W the pixels per row and H the number of rows.
+- **CONS and BOX** work on the grid (the SIM layer), which holds a **4-bit
+  material ID per cell** (`SIM_AIR`, `SIM_SAND`, `SIM_WATER`, `SIM_WALL`,
+  `SIM_LIFE`; up to 16). The FPGA turns IDs into colours with its own lookup
+  table.
+  - CONS is contiguous: N bytes from cell (X, Y) on, row after row.
+  - A box's cells are one stream, row by row: X,Y is the top-left cell, W the
+    cells per row and H the number of rows.
+  - Whether a byte carries one ID or two isn't agreed yet:
+    `FPGA_SIM_IDS_PER_BYTE` (1 or 2) switches it, and `fpga_sim_bytes(cells)`
+    gives the byte count.
+- **Only the HUD layer (sprites) is RGB565 pixels.**
 - **Sprites** are the HUD layer. See [sprite.md](sprite.md) for how they're
   managed.
 - **INFO** answers with the screen size (W, H), N (the most bytes one command

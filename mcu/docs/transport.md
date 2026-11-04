@@ -62,7 +62,7 @@ command fills it:
 | Command | fields | x, y | alt | len (write) |
 |---|---|---|---|---|
 | WRITE_CONS / READ_CONS | XY + ALT16 | X, Y | N | N / 0 |
-| WRITE_BOX / READ_BOX | XY + ALT32 | X, Y | W:H (hi:lo) | pixels / 0 |
+| WRITE_BOX / READ_BOX | XY + ALT32 | X, Y | W:H (hi:lo) | material IDs / 0 |
 | WRITE_SPRITE, ECHO | — | — | — | payload |
 | SPRITE_* | — | — | — | the parameters, as payload |
 | INFO, START/STOP_SIM | — | — | — | 0 |
@@ -108,7 +108,7 @@ instruction phase in every command, and that's the opcode, for reads too.
 | dummy cycles | read only: 4 turnaround cycles (`TRANSPORT_TURNAROUND_CYCLES`), so the FPGA can take the bus |
 | data | the payload (write) or the answer (read), by DMA |
 
-Because the header fits in the command phases, a payload (pixels, tiles) is sent
+Because the header fits in the command phases, a payload (material IDs, sprite pixels) is sent
 by DMA straight from the caller's buffer, with no copying into a header + payload
 buffer.
 
@@ -162,7 +162,7 @@ It models only the wires; what the FPGA does is `fake_fpga.c`.
 |---|---|
 | Screen | 640 × 360 (`DISPLAY_W/H`), reported by INFO |
 | N | 1024 bytes (input FIFO); bytes beyond it are dropped with a warning |
-| Grid | the SIM layer; CONS and BOX read and write it |
+| Grid | the SIM layer: a 4-bit material ID per cell, shown through a stand-in colour table (air black, sand tan, water blue, wall grey, life green, unused IDs bright magenta); CONS and BOX read and write IDs, one or two per byte (`FPGA_SIM_IDS_PER_BYTE`) |
 | Sprite memory | 2 MB, append-only; memIDs 1–1023, each WRITE_SPRITE takes one |
 | Sprite instances | 1024 (spriteIDs 0–1023); redrawn into the HUD layer every frame in ID order, 0xF81F see-through |
 | READY | 200 µs after each command |

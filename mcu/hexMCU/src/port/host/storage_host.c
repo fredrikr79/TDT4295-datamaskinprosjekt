@@ -167,6 +167,19 @@ storage_status_t storage_delete(const char *path)
     return remove(fp) == 0 ? STORAGE_OK : from_errno(errno);
 }
 
+storage_status_t storage_rename(const char *from, const char *to)
+{
+    char fp[PATH_MAX_LEN], tp[PATH_MAX_LEN];
+    storage_status_t st = mount();
+    if (st != STORAGE_OK) return st;
+    if (!full_path(from, fp) || !full_path(to, tp)) return STORAGE_ERROR;
+    make_parents(tp);
+#ifdef _WIN32
+    remove(tp);                                     /* rename() won't replace there */
+#endif
+    return rename(fp, tp) == 0 ? STORAGE_OK : from_errno(errno);
+}
+
 const char *storage_status_str(storage_status_t st)
 {
     static const char *const names[] =

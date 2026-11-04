@@ -52,14 +52,10 @@ static int room_y = FIRST_ROOM_Y;   /* the y-coordinate of the current room */
 static int next_room_x;             /* the x-coordinate of the next room */
 static int next_room_y;             /* the y-coordinate of the next room */
 
-static bool receiving_room_from_fpga = false;
-static bool sending_room_from_fpga = false;
-
 static player_t player;
 
 static portal_t portals[MAX_PORTALS] = {0};
 
-static uint8_t room_tiles[ROOM_X*ROOM_Y] = {0};
 static uint8_t *box;
 
 static void run_enter(void);
@@ -89,67 +85,39 @@ static void probe_done(const fpga_cmd_t *cmd, fpga_err_t err)
 
 static void info_done(const fpga_cmd_t *cmd, fpga_err_t err);
 
-/* SAVE: current room -> storage
- * Runs when we leave a room, before the next one is loaded.
- * Done callbacks set `failed` on any error; that triggers a resync. */
+/* SAVE: the current room, FPGA -> card (rooms.c reads it back row by row,
+ * then writes the file).
+ * Runs when we leave a room, before the next one is loaded. A failed
+ * command makes room_poll() say ROOM_FAILED; that triggers a resync. */
 static void save_start(void)
 {
-    LOG_INFO("saving room %d, %d", room_x, room_y);
-    receiving_room_from_fpga = true;
-    /* TODO: reset save progress */
-    read_room_from_fpga(room_tiles);
+    room_save_start(room_x, room_y);
     go(S_SAVE);
 }
 
-/* Same FPGA session, SAVE was interrupted: carry on where it stopped. */
+/* Same FPGA session, SAVE was interrupted: the grid is still there, so
+ * carry on reading it from the first row not done yet. */
 static void save_resume(void)
 {
-    /* TODO: continue from the first failed command */
+    if (!room_resume()) room_save_start(room_x, room_y);
     go(S_SAVE);
 }
 
-/* Change variable to indicate that all the data from the FPGA has be received */
-void save_finish(void)
-{
-    receiving_room_from_fpga = false;
-}
-
-/* Returns true once everything is saved and no commands are in flight. */
-static bool save_poll(void)
-{
-    return !receiving_room_from_fpga;
-}
-
-/* LOAD: scene for `room` -> FPGA
- * Done callbacks set `failed` on any error; that triggers a resync. */
+/* LOAD: room (room_x, room_y), card -> FPGA (rooms.c reads the file, then
+ * sends it row by row). */
 static void load_start(void)
 {
-    LOG_INFO("loading room %d, %d", room_x, room_y);
-    sending_room_from_fpga = true;
-    /* TODO: reset load progress */
     room_enter();
-    read_room(room_x, room_y, room_tiles);
-    send_room_to_fpga(room_tiles);
+    room_load_start(room_x, room_y);
     go(S_LOAD);
 }
 
-/* Same FPGA session, LOAD was interrupted: carry on where it stopped. */
+/* Same FPGA session, LOAD was interrupted: carry on from the first row
+ * not done yet (without resetting the game state room_enter() sets). */
 static void load_resume(void)
 {
-    /* TODO: continue from the first failed command */
+    if (!room_resume()) room_load_start(room_x, room_y);
     go(S_LOAD);
-}
-
-/* Change variable to indicate that all the data has been sendt to the FPGA */
-void load_finish(void)
-{
-    sending_room_from_fpga = false;
-}
-
-/* Returns true once the scene is loaded and no commands are in flight. */
-static bool load_poll(void)
-{
-    return !sending_room_from_fpga;
 }
 
 /* RUN: the game itself  */
@@ -217,7 +185,7 @@ static void run_enter(void)
 /* setup things for the menu */
 static void menu_setup(void)
 {
-    menu.menu_bg = sprite_new(sprite_img_solid(200, 400, RGB565(19, 5, 30)), 200, 50, false);
+    menu.menu_bg     = sprite_new(sprite_img_solid(200, 400, RGB565(19, 5, 30)), 200, 50, false);
     menu.menu_paused = sprite_new(assets.paused,200, 50, false);
     menu.menu_save   = sprite_new(assets.save_game,200, 100, false);
     menu.menu_load   = sprite_new(assets.load_game,200, 150, false);
@@ -386,18 +354,24 @@ void game_poll(void)
     case S_INFO_WAIT:
         break;                   /* the done callback moves us on */
     case S_SAVE:
-        if (save_poll())
-        {
-            save_room(room_x, room_y, room_tiles);
+        switch (room_poll()) {
+        case ROOM_FAILED: failed = true; break;
+        case ROOM_DONE:                         /* saved: on to the next room */
             room_x = next_room_x;
             room_y = next_room_y;
             load_start();
+            break;
+        default: break;
         }
         break;
     case S_LOAD:
         /* sprites upload alongside the room */
         if (!sprite_poll()) { failed = true; break; }
-        if (load_poll()) go(S_RUN);
+        switch (room_poll()) {
+        case ROOM_FAILED: failed = true; break;
+        case ROOM_DONE:   go(S_RUN);     break;
+        default: break;
+        }
         break;
     case S_RUN:
         run_poll();

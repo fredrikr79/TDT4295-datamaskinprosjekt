@@ -234,6 +234,22 @@ storage_status_t storage_delete(const char *path)
     return result(st);
 }
 
+storage_status_t storage_rename(const char *from, const char *to)
+{
+    CHAR f[PATH_MAX_LEN], t[PATH_MAX_LEN];
+    storage_status_t s = mount();
+    if (s != STORAGE_OK) return s;
+    if (!copy_path(from, f) || !copy_path(to, t)) return STORAGE_ERROR;
+
+    UINT st = fx_file_rename(&media, f, t);
+    if (st == FX_ALREADY_CREATED) {                 /* FileX won't replace: delete first */
+        st = fx_file_delete(&media, t);
+        if (st == FX_SUCCESS) st = fx_file_rename(&media, f, t);
+    }
+    if (st == FX_SUCCESS) st = fx_media_flush(&media);
+    return result(st);
+}
+
 const char *storage_status_str(storage_status_t st)
 {
     static const char *const names[] =

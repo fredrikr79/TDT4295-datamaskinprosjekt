@@ -16,6 +16,7 @@
 #include "funny_man.h"
 #include "demo.h"
 #include "probe.h"
+#include "cli.h"
 
 /* tuning */
 #define FIRST_ROOM_X    0u
@@ -30,6 +31,8 @@
  *             +---- SAVE
  *
  * PROBE is the handshake (probe.c: steady READY, ECHO, INFO).
+ * With loading off (console: "loading off"), PROBE -> HOLD instead: the
+ * game sends nothing more and the console has the FPGA to itself.
  * Any failed command -> resync -> PROBE. If the FPGA still has
  * the same session (its memory survived), we go back to the state that
  * was interrupted. If not, everything on it is gone and the current
@@ -37,8 +40,13 @@
  * ====================================================================== */
  
 /* This is the higher state machine that is responsible for error recovery and switching of scenes */
-typedef enum { S_PROBE, S_SAVE, S_LOAD, S_RUN } state_t;
-static const char *const state_names[] = { "probe", "save", "load", "run" };
+typedef enum { S_PROBE, S_SAVE, S_LOAD, S_RUN, S_HOLD } state_t;
+static const char *const state_names[] = { "probe", "save", "load", "run", "hold" };
+
+#ifndef GAME_LOADING
+#define GAME_LOADING 1          /* 0: start with loading off (HOLD after the handshake) */
+#endif
+static bool loading = GAME_LOADING;
 
 static state_t  state = S_PROBE;
 static state_t  resume_to = S_LOAD; /* where a resync goes back to (same session) */
@@ -159,9 +167,51 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
 /* Runs on every way into RUN, also after a resync that kept the session,
  * so nothing here may reset the game. Frames that went by while probing
  * or loading don't count as missed. */
+/* ---- frames: the FPGA's SYNC, or a timer while there is none -------------
+ * RUN steps once per SYNC (30 Hz from the FPGA). If no SYNC has come for
+ * SYNC_LOST_MS, frames come from a FRAME_MS timer instead, so the game
+ * still runs while the FPGA doesn't send SYNC (yet). Logged each time it
+ * switches. */
+#define SYNC_LOST_MS 200u
+#define FRAME_MS     33u        /* ~30 Hz, like SYNC */
+
+static struct {
+    uint32_t last_sync_ms;      /* when a SYNC was last seen           */
+    uint32_t next_frame_ms;     /* timer mode: when the next frame is due */
+    bool     timer;             /* frames from the timer right now     */
+} frames;
+
+/* Frames to run now: SYNCs since last time, or timer ticks without SYNC. */
+static uint32_t frames_due(void)
+{
+    uint32_t now = plat_millis();
+    uint32_t n = frame_sync_take(&run.sync_seen);
+    if (n) {
+        frames.last_sync_ms = now;
+        if (frames.timer) {
+            frames.timer = false;
+            LOG_INFO("frame SYNC from the FPGA: frames follow it again");
+        }
+        return n;
+    }
+    if (!frames.timer) {
+        if (now - frames.last_sync_ms < SYNC_LOST_MS) return 0;
+        frames.timer = true;
+        frames.next_frame_ms = now;
+        LOG_WARN("no frame SYNC from the FPGA for %u ms: frames from a %u ms timer instead",
+                 SYNC_LOST_MS, FRAME_MS);
+    }
+    if ((int32_t)(now - frames.next_frame_ms) < 0) return 0;
+    n = (now - frames.next_frame_ms) / FRAME_MS + 1u;
+    frames.next_frame_ms += n * FRAME_MS;
+    return n;
+}
+
 static void run_enter(void)
 {
     run.sync_seen = frame_sync_count();
+    frames.last_sync_ms  = plat_millis();     /* give SYNC a chance first */
+    frames.next_frame_ms = plat_millis();
 }
 
 /* setup things for the menu */
@@ -258,7 +308,7 @@ static void run_poll(void)
         
 
     if (!sprite_poll()) { failed = true; return; }
-    uint32_t n = frame_sync_take(&run.sync_seen);
+    uint32_t n = frames_due();
     if (n) run_frame(n);
 }
 
@@ -293,6 +343,40 @@ static void connected(void)
     }
 }
 
+/* ---- loading on / off (console) -----------------------------------------
+ * Off: after the next handshake -- or right away, if the game is past it --
+ * the game holds (HOLD) and sends nothing, so the console can test the
+ * FPGA by hand. Commands the game already queued still finish.
+ * On: from HOLD, a new handshake (the console may have changed anything),
+ * then on as after a resync: same session -> carry on where it was, new
+ * session -> load everything again. */
+bool game_loading(void) { return loading; }
+
+static void hold(void)
+{
+    if (state == S_SAVE || state == S_LOAD || state == S_RUN) resume_to = state;
+    cli_status(NULL);
+    LOG_INFO("loading is off: the game holds, the FPGA is the console's ('loading on' to go on)");
+    go(S_HOLD);
+}
+
+void game_set_loading(bool on)
+{
+    loading = on;
+    if (!on) {
+        if (state != S_PROBE && state != S_HOLD) hold();
+        else if (state == S_PROBE) LOG_INFO("loading is off: holding once the handshake is done");
+        return;
+    }
+    if (state != S_HOLD) return;        /* already going */
+    LOG_INFO("loading is on: handshake again, then on from '%s'", state_names[resume_to]);
+    fpga_abort_all();                   /* whatever the console left queued */
+    sprite_lost();
+    failed = false;
+    probe_start();
+    go(S_PROBE);
+}
+
 /* the state machine */
 static void resync(void)
 {
@@ -315,11 +399,16 @@ void game_poll(void)
     if (demo_busy()) { paused = true; demo_poll(); return; }
     if (paused) { paused = false; if (state == S_RUN) run_enter(); }
 
+    if (state == S_HOLD) return;        /* the console's turn: not even a resync */
     if (failed) { resync(); return; }
 
     switch (state) {
     case S_PROBE:
-        if (probe_poll() == PROBE_DONE) connected();
+        if (probe_poll() != PROBE_DONE) break;
+        if (loading) connected();
+        else         hold();
+        break;
+    case S_HOLD:
         break;
     case S_SAVE:
         switch (room_poll()) {

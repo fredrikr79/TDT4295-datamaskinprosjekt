@@ -19,6 +19,7 @@
 #include "transport.h"
 #include "fpga.h"
 #include "demo.h"
+#include "game.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -679,6 +680,20 @@ static void cmd_demo(int argc, char **argv)
     demo_list();
 }
 
+static void cmd_loading(int argc, char **argv)
+{
+    if (argc == 2) {
+        const char *a = argv[1];
+        if      (!strcmp(a, "on")  || !strcmp(a, "true")  || !strcmp(a, "1")) game_set_loading(true);
+        else if (!strcmp(a, "off") || !strcmp(a, "false") || !strcmp(a, "0")) game_set_loading(false);
+        else { log_raw("usage: loading [on|off]\r\n"); return; }
+    } else if (argc != 1) {
+        log_raw("usage: loading [on|off]\r\n");
+        return;
+    }
+    log_raw("loading: %s\r\n", game_loading() ? "on" : "off (game holds after the handshake)");
+}
+
 static void cmd_trace(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "on") == 0)       transport_set_trace(true);
@@ -738,6 +753,7 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "loading", cmd_loading,  "loading [on|off]    off: the game stops after the handshake, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },

@@ -66,7 +66,7 @@ static bool        abort_pending;   /* fpga_abort_all() called from a callback *
 static uint8_t     last_status;     /* ACK line at the last READY used      */
 static uint8_t     fail_rx[1];      /* error code after a NACK              */
 static uint8_t     last_fail;       /* ...as fpga_fail_code() reports it    */
-static char        last_failure[80] = "none";  /* fpga_last_failure()       */
+static char        last_failure[96] = "none";  /* fpga_last_failure()       */
 static uint32_t    ready_used;      /* READY edges consumed by WAIT_IRQ     */
 
 static fpga_info_t info;
@@ -161,10 +161,11 @@ static const char *op_name(uint8_t op)
     }
 }
 
-static void note_failure(uint8_t op, const char *step, fpga_err_t err)
+static void note_failure(const transport_hdr_t *h, const char *step, fpga_err_t err)
 {
-    int n = snprintf(last_failure, sizeof last_failure, "%s (0x%02X) at %s: %s",
-                     op_name(op), op, step, fpga_err_str(err));
+    int n = snprintf(last_failure, sizeof last_failure, "%s (0x%02X, %lu B) at %s: %s",
+                     op_name(h->opcode), h->opcode, (unsigned long)wire_bytes(h), step,
+                     fpga_err_str(err));
     if (err == FPGA_ERR_STATUS && n > 0 && (size_t)n < sizeof last_failure)
         snprintf(last_failure + n, sizeof last_failure - (size_t)n, ", %s (0x%02X)",
                  fpga_fail_str(last_fail), last_fail);
@@ -184,7 +185,7 @@ static void finish(fpga_err_t err)
         LOG_DBG("op 0x%02X failed at step %u/%u: %s", q[q_head].hdr.opcode,
                 run.idx + 1, run.n, fpga_err_str(err));
     if (err != FPGA_ERR_NONE && err != FPGA_ERR_ABORTED)
-        note_failure(q[q_head].hdr.opcode, step_names[run.steps[run.idx]], err);
+        note_failure(&q[q_head].hdr, step_names[run.steps[run.idx]], err);
 
     pop_and_report(err);
     if (err != FPGA_ERR_NONE)

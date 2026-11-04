@@ -17,7 +17,7 @@
  * | READ_CONS     | 40 | X 2B, Y 2B, N 2B                              | -        | N bytes
  * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | IDs      | -
  * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | IDs
- * | WRITE_SPRITE  | 70 | -                                             | pixels   | memID 2B
+ * | WRITE_SPRITE  | 70 | N 2B                                          | pixels   | memID 2B
  * | SPRITE_WRITE  | 80 | memID 2B, active, X 2B, Y 2B, W 2B, H 2B      | -        | spriteID 2B
  * | SPRITE_UPDATE | 90 | spriteID 2B, active, X 2B, Y 2B               | -        | -
  * | SPRITE_DELETE | A0 | spriteID 2B                                   | -        | -

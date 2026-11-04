@@ -19,7 +19,9 @@ static uint8_t file_data[DATA_MAX_SIZE];
 
 /* The room we're in, as tile IDs (row after row: cell x, y is
  * room_tiles[y * ROOM_X + x]). Loaded from the card, then sent to the FPGA;
- * read back from the FPGA, then saved. */
+ * read back from the FPGA, then saved. A tile is the FPGA's cell byte as
+ * it is on the wire (material in the high 4 bits, SIM_CELL() in fpga.h),
+ * passed through unchanged, so room files hold those bytes too. 0 = air. */
 static uint8_t room_tiles[ROOM_X*ROOM_Y];
 
 #define NAME_LEN 32     /* "save/-1000,-1000.dat" fits */

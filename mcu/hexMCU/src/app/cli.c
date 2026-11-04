@@ -18,6 +18,7 @@
 #include "platform.h"
 #include "transport.h"
 #include "fpga.h"
+#include "demo.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -52,24 +53,51 @@ static int32_t  ready_spare;             /* READYs not (yet) consumed  */
  * ====================================================================== */
 static char     line[LINE_MAX];      /* what the user is currently typing */
 static uint16_t line_len;
-static bool     prompt_visible;      /* is "> " + line on screen right now? */
+static bool     prompt_visible;      /* is status + "> " + line on screen right now? */
+
+/* Status text shown in front of the prompt ("probing FPGA: attempt 7 > "),
+ * set with cli_status(). It lives on the prompt line, so it updates in
+ * place without filling the terminal, using only \r like the rest. */
+#define STATUS_MAX    64
+static char     status[STATUS_MAX];
+static uint16_t status_len;
 
 void cli_async_begin(void)
 {
     if (!prompt_visible) return;
-    char blank[PROMPT_LEN + LINE_MAX];
-    uint16_t n = (uint16_t)(PROMPT_LEN + line_len);
+    char blank[STATUS_MAX + PROMPT_LEN + LINE_MAX];
+    uint16_t n = (uint16_t)(status_len + PROMPT_LEN + line_len);
     memset(blank, ' ', n);
     io_write("\r", 1);
     io_write(blank, n);
     io_write("\r", 1);
 }
 
+static void prompt_write(void)
+{
+    io_write(status, status_len);
+    io_write(PROMPT, PROMPT_LEN);
+}
+
 void cli_async_end(void)
 {
     if (!prompt_visible) return;
-    io_write(PROMPT, PROMPT_LEN);
+    prompt_write();
     io_write(line, line_len);
+}
+
+void cli_status(const char *text)
+{
+    char next[STATUS_MAX];
+    size_t n = text ? strlen(text) : 0;
+    if (n > STATUS_MAX - 1) n = STATUS_MAX - 1;
+    if (n) memcpy(next, text, n);
+    if (n) next[n++] = ' ';             /* a gap before "> "                 */
+    if (n == status_len && memcmp(status, next, n) == 0) return;
+    cli_async_begin();                  /* wipe the line with the old status */
+    memcpy(status, next, n);
+    status_len = (uint16_t)n;
+    cli_async_end();
 }
 
 /* Hex rows only, no hooks. Callers wrap the whole block in
@@ -633,6 +661,16 @@ static void cmd_abort(int argc, char **argv)
 }
 
 /* trace [on|off] -- one debug line per FPGA transfer and step */
+static void cmd_demo(int argc, char **argv)
+{
+    if (argc == 1)                          { demo_list(); return; }
+    if (argc == 2 && !strcmp(argv[1], "stop")) { demo_stop(); return; }
+    if (argc == 2 && demo_start(argv[1]))   return;
+    if (argc == 2) log_raw("no demo '%s'\r\n", argv[1]);
+    else           log_raw("usage: demo [<test> | stop]\r\n");
+    demo_list();
+}
+
 static void cmd_trace(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "on") == 0)       transport_set_trace(true);
@@ -692,6 +730,7 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
@@ -742,7 +781,7 @@ static void handle_char(char c)
         io_write("\r\n", 2);          /* print during it doesn't redraw the  */
         prompt_visible = false;       /* old command                         */
         dispatch(cmdline);
-        io_write(PROMPT, PROMPT_LEN); /* prompt is always back right away;   */
+        prompt_write();               /* prompt is always back right away;   */
         prompt_visible = true;        /* job results arrive as async lines   */
     } else if (c == '\b' || c == 0x7F) {                 /* backspace / DEL */
         if (line_len) { line_len--; io_write("\b \b", 3); }

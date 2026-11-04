@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "fpga.h"
 #include "rooms.h"
@@ -14,6 +15,8 @@
 #include "sprite.h"
 #include "assets.h"
 #include "funny_man.h"
+#include "demo.h"
+#include "cli.h"
 
 /* tuning */
 #define PROBE_LEN       100u
@@ -43,6 +46,7 @@ static const char *const state_names[] =
 static state_t  state = S_PROBE;
 static state_t  resume_to = S_LOAD; /* where a resync goes back to (same session) */
 static uint32_t retry_at;           /* S_PROBE: don't probe before this */
+static uint32_t probe_tries;        /* failed probes in a row (one status line) */
 static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
 static uint32_t session;            /* the FPGA session we drew into    */
@@ -63,7 +67,10 @@ static void room_enter(void);
 
 static void go(state_t s)
 {
-    if (s != state) LOG_INFO("%s -> %s", state_names[state], state_names[s]);
+    /* PROBE <-> PROBING repeats every 200 ms while the FPGA doesn't answer:
+     * that shows as one status line instead (probe_done). */
+    bool probe_loop = (s == S_PROBE && state == S_PROBING) || (s == S_PROBING && state == S_PROBE);
+    if (s != state && !probe_loop) LOG_INFO("%s -> %s", state_names[state], state_names[s]);
     state = s;
     if (s == S_RUN) run_enter();
 }
@@ -75,9 +82,19 @@ static void probe_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
     (void)cmd;
     if (err == FPGA_ERR_NONE) {
+        if (probe_tries) {
+            cli_status(NULL);
+            LOG_INFO("FPGA answered after %lu failed probe%s", (unsigned long)probe_tries,
+                     probe_tries == 1 ? "" : "s");
+        }
+        probe_tries = 0;
         go(S_INFO);
     } else {
-        LOG_DBG("probe: %s", fpga_err_str(err));
+        /* one line, updated in place in front of the console prompt */
+        char msg[64];
+        snprintf(msg, sizeof msg, "probing FPGA: x%lu (%s)",
+                 (unsigned long)++probe_tries, fpga_err_str(err));
+        cli_status(msg);
         retry_at = plat_millis() + PROBE_RETRY_MS;
         go(S_PROBE);
     }
@@ -179,6 +196,8 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
  * or loading don't count as missed. */
 static void run_enter(void)
 {
+    input_t stale;
+    input_take(&stale);         /* input from loading / a demo doesn't count */
     run.sync_seen = frame_sync_count();
 }
 
@@ -262,22 +281,21 @@ static void run_frame(uint32_t n)
 
 static void run_poll(void)
 {
-    /* Input every poll, not just on frames: the mouse adds up in between. */
-    const fpga_info_t *scr = fpga_link_info();
-    input_t in;
-    input_take(&in);
-    /* input_log(&in); */
-    run.keys = in;              /* held keys are "down right now", so the latest copy is enough */
-    run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
-    run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - cursor_h());
-
-    if (key_pressed(&in, KEY_ESCAPE))
-        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
-        
-
     if (!sprite_poll()) { failed = true; return; }
     uint32_t n = frame_sync_take(&run.sync_seen);
-    if (n) run_frame(n);
+    if (n == 0) return;
+
+    /* Input once per frame: usb_input collects presses, releases and mouse
+     * movement between takes, so nothing that happened in between is lost. */
+    const fpga_info_t *scr = fpga_link_info();
+    input_take(&run.keys);
+    run.cx = clamp32(run.cx + run.keys.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
+    run.cy = clamp32(run.cy + run.keys.mouse_dy, 0, (int32_t)scr->height - cursor_h());
+
+    if (key_pressed(&run.keys, KEY_ESCAPE))
+        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
+
+    run_frame(n);
 }
 
 /* Leave the current room: save it, then load `to`.
@@ -332,6 +350,13 @@ static void resync(void)
 
 void game_poll(void)
 {
+    /* A console demo has the FPGA to itself: the game waits (its commands
+     * already queued still finish). Afterwards RUN doesn't count the frames
+     * that went by as missed. */
+    static bool paused;
+    if (demo_busy()) { paused = true; demo_poll(); return; }
+    if (paused) { paused = false; if (state == S_RUN) run_enter(); }
+
     if (failed) { resync(); return; }
 
     switch (state) {

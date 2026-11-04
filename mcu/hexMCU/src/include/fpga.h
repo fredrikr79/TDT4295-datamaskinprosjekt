@@ -36,8 +36,8 @@
  * whole W x H. memIDs are few (see the spec), spriteIDs many.
  *
  * The two layers carry different things:
- *   SIM layer (grid): material IDs, 4 bits per cell (see "the SIM layer"
- *     below). CONS and BOX both read and write IDs.
+ *   SIM layer (grid): a byte per cell, the material ID in its high 4 bits
+ *     (see "the SIM layer" below). CONS and BOX both read and write these.
  *   HUD layer (sprites): RGB565 pixels, 2 bytes each, MSB first; 0xF81F
  *     (magenta) is see-through.
  *
@@ -130,22 +130,30 @@
 #define FPGA_PARAM_MAX          11u     /* SPRITE_WRITE's, the longest */
 
 /* ---- the SIM layer (grid) ------------------------------------------------
- * Every cell holds a 4-bit material ID; the FPGA turns IDs into colours
- * with its own lookup table. WRITE_CONS / READ_CONS carry IDs, X,Y count
- * cells and N counts bytes. */
-enum {                              /* PROTOCOL: the values still to agree   */
-    SIM_AIR   = 0,                  /* empty                                 */
-    SIM_SAND  = 1,
-    SIM_WATER = 2,
-    SIM_WALL  = 3,
-    SIM_LIFE  = 4,                  /* game of life                          */
-};
-#define SIM_ID_MAX  15u             /* 4 bits: up to 16 materials            */
+ * Every cell is a byte on the FPGA. Its HIGH 4 bits are the material (the
+ * FPGA's materials_e); the low 4 bits are the FPGA's own (state, for the
+ * simulation), so write them as 0 and ignore them when reading back.
+ * The FPGA turns materials into colours with its own lookup table.
+ * WRITE_CONS / READ_CONS / *_BOX carry these bytes; X,Y count cells and
+ * N counts bytes. */
+typedef enum {                      /* = MatAir ... MatExplo on the FPGA     */
+    MAT_AIR       = 0,              /* empty                                 */
+    MAT_STONE     = 1,
+    MAT_SAND      = 2,
+    MAT_WATER     = 3,
+    MAT_LAVA      = 4,
+    MAT_ACID      = 5,
+    MAT_LIFE      = 6,              /* game of life (MatGOL)                 */
+    MAT_EXPLOSIVE = 7,              /* MatExplo                              */
+    MAT_COUNT                       /* materials in use                      */
+} material_t;
+#define MAT_ID_MAX  15u             /* 4 bits: room for 16 materials         */
 
-/* PROTOCOL, not agreed yet: IDs per byte in CONS data.
- *   1 = one ID per byte (low 4 bits; N bytes = N cells)
- *   2 = two IDs per byte, the first cell in the high nibble (N bytes = 2N cells)
- * The fake FPGA follows this; rooms.c sends one per byte until it's settled. */
+/* PROTOCOL, not agreed yet: IDs per byte in CONS / BOX data.
+ *   1 = one cell per byte, the material in the high 4 bits (N bytes = N cells)
+ *   2 = two materials per byte, the first cell in the high nibble
+ *       (N bytes = 2N cells; the FPGA's low "state" bits can't travel)
+ * The fake FPGA follows this; rooms.c only works with 1. */
 #ifndef FPGA_SIM_IDS_PER_BYTE
 #define FPGA_SIM_IDS_PER_BYTE 1
 #endif
@@ -154,6 +162,33 @@ enum {                              /* PROTOCOL: the values still to agree   */
 static inline uint32_t fpga_sim_bytes(uint32_t cells)
 {
     return (cells + FPGA_SIM_IDS_PER_BYTE - 1u) / FPGA_SIM_IDS_PER_BYTE;
+}
+
+/* The cell byte for material m (one per byte), and the material in a cell
+ * byte: SIM_CELL(MAT_SAND) = 0x20, SIM_MAT(0x2F) = MAT_SAND. */
+#define SIM_CELL(m)  ((uint8_t)(((unsigned)(m) & 0x0Fu) << 4))
+#define SIM_MAT(b)   ((uint8_t)((uint8_t)(b) >> 4))
+
+/* Material of cell k in packed CONS / BOX data, and setting it. sim_put()
+ * clears the low bits / the other half as needed, so a buffer can be
+ * filled cell by cell in any order. Work for both packings. */
+static inline uint8_t sim_get(const uint8_t *buf, uint32_t k)
+{
+    if (FPGA_SIM_IDS_PER_BYTE == 2) {
+        uint8_t b = buf[k / 2u];
+        return (k & 1u) ? (uint8_t)(b & 0x0Fu) : SIM_MAT(b);
+    }
+    return SIM_MAT(buf[k]);
+}
+static inline void sim_put(uint8_t *buf, uint32_t k, uint8_t mat)
+{
+    mat &= 0x0Fu;
+    if (FPGA_SIM_IDS_PER_BYTE == 2) {
+        uint8_t *b = &buf[k / 2u];
+        *b = (k & 1u) ? (uint8_t)((*b & 0xF0u) | mat) : (uint8_t)((*b & 0x0Fu) | (mat << 4));
+    } else {
+        buf[k] = SIM_CELL(mat);
+    }
 }
 
 /* ACK line at READY, as transport_ready_status() reports it. */

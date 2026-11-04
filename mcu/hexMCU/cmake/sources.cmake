@@ -16,6 +16,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/render/funny_man.c
     ${APP_ROOT}/src/app/render/sprite.c
     ${APP_ROOT}/src/app/render/assets.c
+    ${APP_ROOT}/src/app/render/demo.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

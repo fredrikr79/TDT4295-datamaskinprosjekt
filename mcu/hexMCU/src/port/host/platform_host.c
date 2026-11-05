@@ -4,6 +4,8 @@
 
 #include "platform.h"
 #include "host_hooks.h"
+#include "fake_fpga.h"   /* fake_fpga_reset() */
+#include "cli.h"         /* cli_quit()        */
 
 #include <time.h>
 #include <stdbool.h>

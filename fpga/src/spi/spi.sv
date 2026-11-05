@@ -122,17 +122,20 @@ module spi #(
   assign error_valid = nack;
   assign acknack = ~nack;
 
-  spi_pck::error_event_t error_event;
-  assign error_event.valid = error_critical  |
-                             fsm_error_valid |
-                             rx_error_valid  |
-                             tx_error_valid  |
-                             processor_error_valid;
 
+  logic [7:0] error_code = 8'h00;
   logic [7:0] fsm_error_code,
     rx_error_code,
     tx_error_code,
     processor_error_code;
+
+
+  spi_pck::error_event_t error_event;
+  wire error_event_valid = error_critical |
+                          fsm_error_valid |
+                          rx_error_valid  |
+                          tx_error_valid  |
+                          processor_error_valid;
 
   always_ff @(posedge clk) begin
     if (error_critical)
@@ -146,6 +149,8 @@ module spi #(
     else if (processor_error_valid)
       error_event.code <= processor_error_code;
   end
+
+  assign error_event = '{valid: error_event_valid, code: error_code};
 
   always_ff @(posedge clk) begin
     if (reset) begin

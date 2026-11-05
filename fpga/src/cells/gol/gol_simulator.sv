@@ -48,7 +48,7 @@ module gol_simulator (
       .data_out(pixel_out_fifo)
   );
 
-  gol_row_delay #(
+  gol_memory #(
       .Depth(RowDelay)
   ) row1 (
       .clk (clk),
@@ -57,7 +57,7 @@ module gol_simulator (
       .data_out(pixel_out_row1)
   );
 
-  gol_row_delay #(
+  gol_memory #(
       .Depth(RowDelay)
   ) row2 (
       .clk (clk),

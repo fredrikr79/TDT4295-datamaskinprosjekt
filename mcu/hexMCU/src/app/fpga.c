@@ -17,7 +17,7 @@
  * read, which is a single READ. ECHO compares rx with tx at
  * the end, INFO parses its answer.
  *
- * The sprite commands carry their parameters and their one-byte answer
+ * The sprite commands carry their parameters and their two-byte answer
  * inside the command (param[], answer[]). fpga_submit() points tx / rx at
  * the copy in the queue slot, which stays put until the command is done,
  * so DMA can read and write it there.
@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "log.h"
@@ -38,11 +39,12 @@
 #include "fpga.h"
 
 #define BACKEND_READY_TIMEOUT_MS  100   /* waiting for backend to be free   */
+#define READY_HIGH_TIMEOUT_MS     100   /* waiting for the READY line high  */
 #define XFER_DONE_TIMEOUT_MS      100   /* waiting for transfer to finish   */
 #define FPGA_IRQ_TIMEOUT_MS       100   /* waiting for FPGA_READY interrupt */
 
-typedef enum { STEP_WRITE, STEP_WAIT_IRQ, STEP_READ } step_kind_t;
-static const char *const step_names[] = { "write", "wait-irq", "read" };
+typedef enum { STEP_WRITE, STEP_WAIT_IRQ, STEP_READ, STEP_READ_READY } step_kind_t;
+static const char *const step_names[] = { "write", "wait-irq", "read", "read-ready" };
 
 /* ---- queue: q[q_head] is the running / next command ------------------ */
 static fpga_cmd_t q[FPGA_QUEUE_LEN];
@@ -51,7 +53,7 @@ static uint8_t    q_head, q_count;
 /* ---- the running command --------------------------------------------- */
 static struct {
     bool        active;
-    step_kind_t steps[3];
+    step_kind_t steps[4];       /* WRITE, WAIT_IRQ, READ, READ_READY at most */
     uint8_t     n, idx;
     bool        in_flight;      /* current step's transfer has been started */
     bool        nack;           /* got NACK: the READ step fetches the code */
@@ -64,6 +66,7 @@ static bool        abort_pending;   /* fpga_abort_all() called from a callback *
 static uint8_t     last_status;     /* ACK line at the last READY used      */
 static uint8_t     fail_rx[1];      /* error code after a NACK              */
 static uint8_t     last_fail;       /* ...as fpga_fail_code() reports it    */
+static char        last_failure[96] = "none";  /* fpga_last_failure()       */
 static uint32_t    ready_used;      /* READY edges consumed by WAIT_IRQ     */
 
 static fpga_info_t info;
@@ -139,6 +142,37 @@ static void pop_and_report(fpga_err_t err)
     if (c.done) c.done(&c, err);
 }
 
+static const char *op_name(uint8_t op)
+{
+    switch (op) {
+    case ECHO_OPCODE:          return "ECHO";
+    case INFO_OPCODE:          return "INFO";
+    case WRITE_CONS_OPCODE:    return "WRITE_CONS";
+    case READ_CONS_OPCODE:     return "READ_CONS";
+    case WRITE_BOX_OPCODE:     return "WRITE_BOX";
+    case READ_BOX_OPCODE:      return "READ_BOX";
+    case WRITE_SPRITE_OPCODE:  return "WRITE_SPRITE";
+    case SPRITE_WRITE_OPCODE:  return "SPRITE_WRITE";
+    case SPRITE_UPDATE_OPCODE: return "SPRITE_UPDATE";
+    case SPRITE_DELETE_OPCODE: return "SPRITE_DELETE";
+    case START_SIM_OPCODE:     return "START_SIM";
+    case STOP_SIM_OPCODE:      return "STOP_SIM";
+    default:                   return "op";
+    }
+}
+
+static void note_failure(const transport_hdr_t *h, const char *step, fpga_err_t err)
+{
+    int n = snprintf(last_failure, sizeof last_failure, "%s (0x%02X, %lu B) at %s: %s",
+                     op_name(h->opcode), h->opcode, (unsigned long)wire_bytes(h), step,
+                     fpga_err_str(err));
+    if (err == FPGA_ERR_STATUS && n > 0 && (size_t)n < sizeof last_failure)
+        snprintf(last_failure + n, sizeof last_failure - (size_t)n, ", %s (0x%02X)",
+                 fpga_fail_str(last_fail), last_fail);
+}
+
+const char *fpga_last_failure(void) { return last_failure; }
+
 /* The running command has ended. On failure the commands queued behind it
  * are cancelled too -- but not ones its callbacks submit. */
 static void finish(fpga_err_t err)
@@ -150,6 +184,13 @@ static void finish(fpga_err_t err)
     if (err != FPGA_ERR_NONE)
         LOG_DBG("op 0x%02X failed at step %u/%u: %s", q[q_head].hdr.opcode,
                 run.idx + 1, run.n, fpga_err_str(err));
+    if (err != FPGA_ERR_NONE && err != FPGA_ERR_ABORTED) {
+        /* After the last step (a NACK's code read, an ECHO compare, INFO
+         * parse) run.idx is past the end of run.steps[]. */
+        const char *at = run.idx < run.n ? step_names[run.steps[run.idx]]
+                       : err == FPGA_ERR_STATUS ? "ack" : "check";
+        note_failure(&q[q_head].hdr, at, err);
+    }
 
     pop_and_report(err);
     if (err != FPGA_ERR_NONE)
@@ -180,17 +221,24 @@ void fpga_abort_all(void)
 /* ======================================================================
  * Running the head command
  * ====================================================================== */
+/* A READ step, and the READY after it if the FPGA gives one. */
+static void add_read(void)
+{
+    run.steps[run.n++] = STEP_READ;
+    if (FPGA_READY_AFTER_READ) run.steps[run.n++] = STEP_READ_READY;
+}
+
 static void start_head(void)
 {
     const fpga_cmd_t *c = &q[q_head];
 
     memset(&run, 0, sizeof run);
     if (c->kind == FPGA_KIND_RAW_READ) {
-        run.steps[run.n++] = STEP_READ;
+        add_read();
     } else {
         run.steps[run.n++] = STEP_WRITE;
         run.steps[run.n++] = STEP_WAIT_IRQ;
-        if (has_answer(c)) run.steps[run.n++] = STEP_READ;
+        if (has_answer(c)) add_read();
     }
     run.t0       = plat_millis();
     run.irq_mark = transport_ready_count();
@@ -210,9 +258,25 @@ static fpga_err_t parse_info(void)
         .max_cmd = be16(&info_rx[4]),
         .session = be32(&info_rx[6]),
     };
-    /* A box header alone is 9 bytes; anything smaller is not usable. */
-    if (in.width == 0 || in.height == 0 || in.max_cmd < 9u)
+    /* Sizes that can't be real mean a garbled answer (a stale byte in
+     * front shifts every field, for one): log the raw bytes, so it can be
+     * worked out, and let the caller try again. */
+    if (in.width == 0 || in.width > FPGA_INFO_MAX_DIM ||
+        in.height == 0 || in.height > FPGA_INFO_MAX_DIM ||
+        in.max_cmd < FPGA_INFO_MIN_N || in.max_cmd > FPGA_INFO_MAX_N) {
+        static uint32_t logged_at;          /* at most every 2 s: probe retries fast */
+        static bool     logged;
+        if (logged && plat_millis() - logged_at < 2000u) return FPGA_ERR_BAD_INFO;
+        logged    = true;
+        logged_at = plat_millis();
+        LOG_WARN("INFO makes no sense: %ux%u, N=%u (allowed 1..%u x 1..%u, N %u..%u)",
+                 in.width, in.height, in.max_cmd, FPGA_INFO_MAX_DIM, FPGA_INFO_MAX_DIM,
+                 FPGA_INFO_MIN_N, FPGA_INFO_MAX_N);
+        LOG_WARN("  raw: %02X %02X  %02X %02X  %02X %02X  %02X %02X %02X %02X",
+                 info_rx[0], info_rx[1], info_rx[2], info_rx[3], info_rx[4],
+                 info_rx[5], info_rx[6], info_rx[7], info_rx[8], info_rx[9]);
         return FPGA_ERR_BAD_INFO;
+    }
 
     if (info.valid && info.session != in.session)
         LOG_INFO("new FPGA session 0x%08lX (was 0x%08lX)",
@@ -260,16 +324,35 @@ static bool step(void)
     uint32_t elapsed = plat_millis() - run.t0;   /* wrap-safe */
 
     if (kind == STEP_WAIT_IRQ) {
-        if (transport_ready_count() != run.irq_mark) {
+        /* Done = a READY edge since the transfer began AND the line high
+         * now. A glitch while the FPGA is busy (edge, but the line back
+         * low) is then not taken as "done"; we wait for the real rising
+         * edge, and the ACK latched with that one is what counts. Assumes
+         * READY stays high while the FPGA is idle (it isn't a short pulse). */
+        if (transport_ready_count() != run.irq_mark && plat_fpga_ready_pin()) {
             ready_used++;
             last_status = transport_ready_status();
             if (last_status != FPGA_STATUS_OK) {
                 /* NACK: the FPGA queued an error code instead of any answer.
                  * Read that one byte, then fail the command. */
                 run.nack = true;
-                run.steps[run.idx + 1] = STEP_READ;
-                run.n = (uint8_t)(run.idx + 2);
+                run.n = (uint8_t)(run.idx + 1);
+                add_read();
             }
+            next_step();
+            return true;
+        }
+        if (elapsed < FPGA_IRQ_TIMEOUT_MS) return false;
+        finish(FPGA_ERR_NO_READY);
+        return true;
+    }
+
+    if (kind == STEP_READ_READY) {
+        /* The READY the FPGA gives when the answer READ is over: used up
+         * here, so it isn't counted as stray, and the next command can't
+         * take it for its own. (irq_mark was taken when the READ began.) */
+        if (transport_ready_count() != run.irq_mark && plat_fpga_ready_pin()) {
+            ready_used++;
             next_step();
             return true;
         }
@@ -282,6 +365,16 @@ static bool step(void)
         if (!BACKEND->done) {
             if (elapsed < BACKEND_READY_TIMEOUT_MS) return false;
             finish(FPGA_ERR_LINK_BUSY);
+            return true;
+        }
+
+        /* Never start a transfer while the FPGA holds READY low (busy,
+         * booting, being reset): it could pick the command up halfway
+         * through and read some byte in the middle as the opcode. Normally
+         * READY is already high here, since the last step waited for it. */
+        if (!plat_fpga_ready_pin()) {
+            if (elapsed < READY_HIGH_TIMEOUT_MS) return false;
+            finish(FPGA_ERR_NOT_READY);
             return true;
         }
 
@@ -404,8 +497,10 @@ uint16_t fpga_max_payload(uint8_t opcode)
         h.fields = TRANSPORT_F_XY | TRANSPORT_F_ALT16; break;
     case WRITE_BOX_OPCODE: case READ_BOX_OPCODE:
         h.fields = TRANSPORT_F_XY | TRANSPORT_F_ALT32; break;
+    case WRITE_SPRITE_OPCODE:
+        h.fields = TRANSPORT_F_ALT16; break;  /* the LEN field */
     default:
-        break;                              /* opcode only (WRITE_SPRITE...) */
+        break;                              /* opcode only (ECHO...) */
     }
     uint32_t hdr = wire_bytes(&h);          /* h.len == 0: header only */
     return info.max_cmd > hdr ? (uint16_t)(info.max_cmd - hdr) : 0u;
@@ -418,6 +513,7 @@ const char *fpga_err_str(fpga_err_t err)
         "transfer error", "transfer never completed",
         "no FPGA ready irq (timeout)", "FPGA answered NACK",
         "echo data mismatch", "bad INFO answer", "aborted", "cancelled",
+        "READY stayed low (FPGA busy?)",
     };
     return (unsigned)err < sizeof names / sizeof names[0] ? names[err] : "?";
 }
@@ -493,21 +589,21 @@ static uint8_t *put16(uint8_t *p, uint16_t v)
 
 fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len)
 {
-    /* No size field: the FPGA takes the opcode, then the whole payload as
-     * the image, like ECHO. Answers the memID. */
-    return (fpga_cmd_t){ .hdr = { .opcode = WRITE_SPRITE_OPCODE, .len = len },
-                         .tx = pixels, .rx_len = 1, .answer_rx = true,
+    /* opcode, LEN (2 bytes, in the alt-bytes phase, MSB first), then the
+     * pixels. Answers the memID. */
+    return (fpga_cmd_t){ .hdr = { .opcode = WRITE_SPRITE_OPCODE, .fields = TRANSPORT_F_ALT16,
+                                  .alt = (uint32_t)(len / FPGA_SPRITE_LEN_UNIT), .len = len },
+                         .tx = pixels, .rx_len = 2, .answer_rx = true,
                          .kind = FPGA_KIND_READ };
 }
 
-fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16_t y,
+fpga_cmd_t fpga_cmd_sprite_write(uint16_t mem_id, bool active, uint16_t x, uint16_t y,
                                  uint16_t w, uint16_t h)
 {
-    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_WRITE_OPCODE, .len = 10 },
-                     .param_tx = true, .rx_len = 1, .answer_rx = true,
+    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_WRITE_OPCODE, .len = 11 },
+                     .param_tx = true, .rx_len = 2, .answer_rx = true,
                      .kind = FPGA_KIND_READ };
-    uint8_t *p = c.param;
-    *p++ = mem_id;
+    uint8_t *p = put16(c.param, mem_id);
     *p++ = active ? 1u : 0u;
     p = put16(p, x);
     p = put16(p, y);
@@ -516,23 +612,22 @@ fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16
     return c;
 }
 
-fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y)
+fpga_cmd_t fpga_cmd_sprite_update(uint16_t sprite_id, bool active, uint16_t x, uint16_t y)
 {
-    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_UPDATE_OPCODE, .len = 6 },
+    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_UPDATE_OPCODE, .len = 7 },
                      .param_tx = true, .kind = FPGA_KIND_WRITE };
-    uint8_t *p = c.param;
-    *p++ = sprite_id;
+    uint8_t *p = put16(c.param, sprite_id);
     *p++ = active ? 1u : 0u;
     p = put16(p, x);
     put16(p, y);
     return c;
 }
 
-fpga_cmd_t fpga_cmd_sprite_delete(uint8_t sprite_id)
+fpga_cmd_t fpga_cmd_sprite_delete(uint16_t sprite_id)
 {
-    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_DELETE_OPCODE, .len = 1 },
+    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_DELETE_OPCODE, .len = 2 },
                      .param_tx = true, .kind = FPGA_KIND_WRITE };
-    c.param[0] = sprite_id;
+    put16(c.param, sprite_id);
     return c;
 }
 

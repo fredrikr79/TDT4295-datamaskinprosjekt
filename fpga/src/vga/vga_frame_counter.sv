@@ -11,7 +11,7 @@ module vga_frame_counter (
   assign enable_vertical_counter = enable & pixel_pulse && 32'(horizontal_count)
       == vga_sync_params::TotalWidth - 1;
 
-  vga_mod_n_counter #(
+  mod_n_counter #(
       .N(vga_sync_params::TotalHeight)
   ) vertical_counter (
       .clk(clk),
@@ -20,7 +20,7 @@ module vga_frame_counter (
       .count(vertical_count)
   );
 
-  vga_mod_n_counter #(
+  mod_n_counter #(
       .N(vga_sync_params::TotalWidth)
   ) horizontal_counter (
       .clk(clk),

@@ -10,7 +10,10 @@ VGA_SIM_BINARY := $(VGA_SIM_DIR)/V$(TOP_MODULE)
 VCD_DIR := vcd
 TOP_VCD := $(VCD_DIR)/$(TOP_MODULE).vcd
 
-SOURCES := $(shell find $(SOURCE_DIRECTORIES) \-type f \( -name "*.v" -o -name "*.sv" \) ! -path "src/config_pkg.sv") src/config_pkg.sv
+ALL_SOURCES := $(shell find $(SOURCE_DIRECTORIES) \-type f \( -name "*.v" -o -name "*.sv" \) ! -path "src/config_pkg.sv") src/config_pkg.sv
+PKG_SOURCES := $(filter %_pkg.sv,$(ALL_SOURCES))
+OTHER_SOURCES := $(filter-out %_pkg.sv,$(ALL_SOURCES))
+SOURCES := $(PKG_SOURCES) $(OTHER_SOURCES)
 
 .PHONY: sim-vga sim-vcd generate-vcd clean vivado-all vivado-build vivado-program lint
 
@@ -27,6 +30,7 @@ lint: $(SOURCES)
 $(TOP_VCD): $(VCD_SIM_BINARY) $(VCD_DIR)
 	./$<
 $(VCD_SIM_BINARY): $(VCD_SIM_DIR) $(SOURCES)
+	echo $(SOURCES)
 	verilator \
 		$(SOURCES) \
 		--binary --timing --trace --Wall --Wno-fatal \

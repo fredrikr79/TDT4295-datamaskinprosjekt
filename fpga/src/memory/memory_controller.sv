@@ -52,6 +52,8 @@ module memory_controller (
     current_state == memory_pkg::READING ||
     current_state == memory_pkg::WRITING;
 
+  logic run_memory_clock;
+
   always_comb begin
     case (current_state)
       memory_pkg::IDLE: begin
@@ -104,7 +106,6 @@ module memory_controller (
       end
     endcase
   end
-  logic run_memory_clock;
 
 
   divised_clock #(
@@ -139,34 +140,20 @@ module memory_controller (
     rwds_out <= transaction_out.rwds;
   endfunction
 
-  function automatic memory_pkg::transaction_output_t find_transaction_output(
-      input memory_pkg::transaction_e transaction);
-    case (transaction)
-      memory_pkg::RESET_ENABLE: return reset_enable_out;
-      memory_pkg::RESET: return reset_txn_out;
-      memory_pkg::DEEP_POWER_DOWN: return deep_power_down_txn_out;
-      memory_pkg::DEEP_POWER_UP: return deep_power_up_txn_out;
-      memory_pkg::WRITE_ENABLE: return write_enable_txn_out;
-      memory_pkg::WRITE_DISABLE: return write_disable_txn_out;
-      memory_pkg::WRITE_ANY_REGISTER: return write_any_register_txn_out;
-      memory_pkg::READ_ANY_REGISTER: return read_any_register_txn_out;
-      memory_pkg::READ_ID: return read_id_txn_out;
-      memory_pkg::READ: return read_txn_out;
-      memory_pkg::WRITE: return write_txn_out;
-      default: return none_out;
-    endcase
-  endfunction
-
   always_ff @(posedge clk) begin
-    if (reset) current_transaction <= memory_pkg::NONE;
-    else if (enable
-             && current_state == memory_pkg::IDLE
-           && transaction_toggle != current_transaction_toggle) begin
-      current_transaction <= next_transaction;
-      current_address <= address;
-      current_lenght <= length;
+    if (reset) begin
+      current_transaction <= memory_pkg::NONE;
+      current_transaction_toggle <= transaction_toggle;
+    end else if (enable && current_state == memory_pkg::IDLE) begin
+      if (transaction_toggle != current_transaction_toggle) begin
+        current_transaction <= next_transaction;
+        current_address <= address;
+        current_length <= length;
+        current_transaction_toggle <= transaction_toggle;
+      end else begin
+        current_transaction <= memory_pkg::NONE;
+      end
     end
-    current_transaction_toggle <= transaction_toggle;
   end
   always @(negedge clk) begin
     if (reset) begin
@@ -287,5 +274,24 @@ module memory_controller (
       .bytes_this_state(bytes_this_state),
       .out(write_txn_out)
   );
+
+  function automatic memory_pkg::transaction_output_t find_transaction_output(
+      input memory_pkg::transaction_e transaction);
+    case (transaction)
+      memory_pkg::RESET_ENABLE: return reset_enable_out;
+      memory_pkg::RESET: return reset_txn_out;
+      memory_pkg::DEEP_POWER_DOWN: return deep_power_down_txn_out;
+      memory_pkg::DEEP_POWER_UP: return deep_power_up_txn_out;
+      memory_pkg::WRITE_ENABLE: return write_enable_txn_out;
+      memory_pkg::WRITE_DISABLE: return write_disable_txn_out;
+      memory_pkg::WRITE_ANY_REGISTER: return write_any_register_txn_out;
+      memory_pkg::READ_ANY_REGISTER: return read_any_register_txn_out;
+      memory_pkg::READ_ID: return read_id_txn_out;
+      memory_pkg::READ: return read_txn_out;
+      memory_pkg::WRITE: return write_txn_out;
+      default: return none_out;
+    endcase
+  endfunction
+
 
 endmodule

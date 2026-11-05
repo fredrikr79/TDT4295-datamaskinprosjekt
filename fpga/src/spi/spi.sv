@@ -5,6 +5,7 @@ module spi #(
     input wire ck_ss,
     input wire ck_sck,
     input wire ck_rst,
+    input wire error_critical,
 
     // Octal SPI data bus
     inout wire [7:0] octo_spi,
@@ -19,7 +20,29 @@ module spi #(
     output wire out_almost_empty,
     output wire out_empty,
     output wire in_almost_full,
-    output wire in_full
+    output wire in_full,
+
+    output wire sim_running,
+
+    // Memory
+    input logic [7:0] mem_out,
+    output logic [7:0] mem_in,
+    output logic [15:0] mem_len,
+    input logic mem_busy,
+    mem_data_on_wire,
+    output logic [31:0] mem_addr,
+    output memory_pkg::transaction_e mem_transaction,
+
+    // Sprite LUT
+    input logic sprite_id_found,
+    input hud_pkg::sprite_lut_id sprite_available_id,
+    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+    output hud_pkg::sprite_inst_entry_t sprite_req_body,
+    output hud_pkg::sprite_op_e sprite_req_op,
+    output hud_pkg::sprite_mem_id write_sprite_mem_id,
+    output logic write_sprite_valid,
+    mem_toggle,
+    sprite_req_valid
 );
 
   import spi_pck::*;
@@ -32,11 +55,6 @@ module spi #(
   spi_pck::state_e state;
   spi_pck::opcode_e opcode;
   reg proc_done;
-
-  // RESET
-  reg rst_en = 1'b0;  // programatic reset
-  wire reset = ~ck_rst || rst_en;
-  wire reset_s = ~ck_rst_s || rst_en;
 
   // READY
   assign ready = (state == ST_READY) || (state == ST_TX_IDLE);
@@ -73,6 +91,43 @@ module spi #(
   wire ck_rst_s = ck_rst_sync[2];
   wire out_empty_s = out_empty_sync[2];
 
+  // RESET
+  reg rst_en = 1'b0;  // programatic reset
+  wire reset = ~ck_rst || rst_en;
+  wire reset_s = ~ck_rst_s || rst_en;
+
+  // Error detection
+  logic error_valid,
+    fsm_error_valid,
+    rx_error_valid,
+    tx_error_valid,
+    processor_error_valid;
+
+  spi_pck::error_event_t error_event;
+  assign error_event.valid = error_critical  |
+                             fsm_error_valid |
+                             rx_error_valid  |
+                             tx_error_valid  |
+                             processor_error_valid;
+
+  logic [7:0] fsm_error_code,
+    rx_error_code,
+    tx_error_code,
+    processor_error_code;
+
+  always_ff @(posedge clk) begin
+    if (error_critical)
+      error_event.code <= CRITICAL_ERROR;
+    if (fsm_error_valid)
+      error_event.code <= fsm_error_code;
+    else if (rx_error_valid)
+      error_event.code <= rx_error_code;
+    else if (tx_error_valid)
+      error_event.code <= rx_error_code;
+    else if (processor_error_valid)
+      error_event.code <= processor_error_code;
+  end
+
   always_ff @(posedge clk) begin
     if (reset) begin
       ck_ss_sync <= 3'b111;
@@ -97,7 +152,10 @@ module spi #(
       .in_empty(in_empty),
       .out_full(out_full),
       .state(state),
-      .proc_done(proc_done)
+      .proc_done(proc_done),
+      .error_event(error_event),
+      .error_valid(fsm_error_valid),
+      .error_code(fsm_error_code)
   );
 
   // Data recieve module
@@ -116,7 +174,9 @@ module spi #(
       .in_empty(in_empty),
       .in_ready(in_ready),
       .in_full(in_full),
-      .in_fifo(in_fifo)
+      .in_fifo(in_fifo),
+      .error_valid(rx_error_valid),
+      .error_code(rx_error_code)
   );
 
   // Data send module
@@ -136,7 +196,9 @@ module spi #(
       .out_empty(out_empty),
       .out_full(out_full),
       .out_ready(out_ready),
-      .out_empty_s(out_empty_s)
+      .out_empty_s(out_empty_s),
+      .error_valid(tx_error_valid),
+      .error_code(tx_error_code)
   );
 
   // Command processing module
@@ -151,7 +213,28 @@ module spi #(
       .proc_r_en(proc_r_en),
       .out_fifo(out_fifo),
       .opcode(opcode),
-      .proc_done(proc_done)
+      .proc_done(proc_done),
+      .mem_in(mem_in),
+      .mem_out(mem_out),
+      .mem_len(mem_len),
+      .mem_addr(mem_addr),
+      .mem_transaction(mem_transaction),
+      .mem_busy(mem_busy),
+      .mem_data_on_wire(mem_data_on_wire),
+      .mem_toggle(mem_toggle),
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_found(sprite_id_found),
+      .sprite_req_valid(sprite_req_valid),
+      .sprite_req_body(sprite_req_body),
+      .sprite_req_op(sprite_req_op),
+      .sprite_id_bitmap(sprite_id_bitmap),
+      .write_sprite_valid(write_sprite_valid),
+      .write_sprite_mem_id(write_sprite_mem_id),
+      .sim_running(sim_running),
+      .error_event(error_event),
+      .error_valid(processor_error_valid),
+      .error_code(processor_error_code)
+
   );
 
   // DEBUG

@@ -8,8 +8,11 @@
  *
  * --errors=N makes N% of transfers fail, to watch it resync.
  *
- * The picture must be an RGB565 BMP, at most the FPGA's screen size.
- * Make one from any image with ImageMagick:
+ * The picture must be an RGB565 BMP, at most the FPGA's screen size. The
+ * SIM layer holds material IDs, not colours, so each pixel becomes a
+ * material by its brightness (dark = air, then water, wall, sand) and the
+ * FPGA shows those materials' colours. Make one from any image with
+ * ImageMagick:
  *
  *   convert test.bmp -alpha off -resize 640x360! -define bmp:subtype=RGB565 test565.bmp
  *   (ImageMagick 7: "magick" instead of "convert")
@@ -19,7 +22,8 @@
  *
  *   PROBE   echo 100 bytes until they come back intact (FPGA is there)
  *   INFO    ask for W, H, N, session id
- *   LOAD    stream the picture into the SIM layer, a few chunks in flight
+ *   LOAD    stream the picture's materials into the SIM layer, a few
+ *           chunks in flight
  *   RUN     bounce a cube sprite around the HUD, one move per FPGA SYNC
  *           pulse; counts the frames it was too slow for
  *
@@ -47,22 +51,28 @@
 #include "host_hooks.h"
 #include "frame_sync.h"
 #include "display_host.h"       /* only for display_init() in main() */
-#include "hud.h"                /* the cube is a sprite; PX_BYTES, RGB565 */
+#include "sprite.h"             /* the cube is a sprite; RGB565 */
 
 /* ---- tuning ------------------------------------------------------------ */
 #define PROBE_LEN       100u
 #define PROBE_RETRY_MS  200u
 #define LOAD_BUFS       4u          /* picture chunks in flight at once  */
 #define LOAD_BUF_BYTES  1024u       /* >= the largest payload we send    */
+
+#if FPGA_SIM_IDS_PER_BYTE != 1
+#error "test_host sends one material ID per byte; packing two per byte isn't done here yet"
+#endif
 #define CUBE            16          /* cube size in pixels               */
 #define CUBE_SPEED      3           /* pixels per frame, each axis       */
 #define CUBE_COLOUR     RGB565(255, 200, 0)
 #define STATS_FRAMES    150u        /* report on-time/behind this often  */
 
-static void put_px(uint8_t *dst, uint16_t v)     /* MSB first */
+/* A pixel's cell byte (material in the high 4 bits), by brightness. */
+static uint8_t px_to_id(uint16_t v)
 {
-    dst[0] = (uint8_t)(v >> 8);
-    dst[1] = (uint8_t)v;
+    uint32_t r = (v >> 11) & 31u, g = (v >> 5) & 63u, b = v & 31u;
+    uint32_t luma = (r * 8u * 299u + g * 4u * 587u + b * 8u * 114u) / 1000u;   /* 0..255 */
+    return SIM_CELL(luma < 48u ? MAT_AIR : luma < 110u ? MAT_WATER : luma < 170u ? MAT_STONE : MAT_SAND);
 }
 
 static uint16_t min16(uint32_t a, uint32_t b) { return (uint16_t)(a < b ? a : b); }
@@ -117,7 +127,7 @@ static bool pic_open(const char *path)
     return true;
 }
 
-/* w x h pixels starting at (x, y), row by row, MSB first, into dst. */
+/* w x h cells starting at (x, y), row by row, one material ID each, into dst. */
 static bool pic_read(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t *dst)
 {
     uint8_t row[2u * 1024u];
@@ -126,8 +136,8 @@ static bool pic_read(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t *ds
         if (fseek(pic.f, (long)(pic.data_off + fy * pic.stride + x * 2u), SEEK_SET) != 0 ||
             fread(row, 2, w, pic.f) != w)
             return false;
-        for (uint16_t i = 0; i < w; i++, dst += 2)
-            put_px(dst, le16(&row[2u * i]));
+        for (uint16_t i = 0; i < w; i++)
+            *dst++ = px_to_id(le16(&row[2u * i]));
     }
     return true;
 }
@@ -235,8 +245,8 @@ static void load_resume(void)
 
 static void load_poll(void)
 {
-    const uint16_t max_px = min16(fpga_max_payload(WRITE_BOX_OPCODE),
-                                  LOAD_BUF_BYTES) / PX_BYTES;
+    /* one ID per byte: cells per box = payload bytes */
+    const uint16_t max_px = min16(fpga_max_payload(WRITE_BOX_OPCODE), LOAD_BUF_BYTES);
 
     while (load.y < pic.h) {
         /* Space first, then a free buffer, THEN read the data. */
@@ -261,7 +271,7 @@ static void load_poll(void)
         }
 
         fpga_box_t box = fpga_box(load.x, load.y, w, h);
-        fpga_cmd_t c = fpga_cmd_write_box(box, b->data, (uint16_t)(w * h * PX_BYTES));
+        fpga_cmd_t c = fpga_cmd_write_box(box, b->data, (uint16_t)fpga_sim_bytes((uint32_t)w * h));
         c.done = load_done;
         c.ctx  = b;
         if (fpga_submit(&c) != FPGA_OK) { failed = true; return; }  /* can't be EFULL: checked */
@@ -282,11 +292,9 @@ static void load_poll(void)
 
 /* ---- RUN: a cube bouncing around the HUD --------------------------------
  * The cube is a sprite: its image is uploaded once, then each frame only
- * moves it. hud_poll() sends the moves (and after an error or a new FPGA
+ * moves it. sprite_poll() sends the moves (and after an error or a new FPGA
  * session, the upload and the sprite again). */
-static uint8_t      cube_px[CUBE * CUBE * PX_BYTES];
-static hud_image_t  cube_img;
-static hud_sprite_t cube_spr;
+static sprite_t *cube_spr;
 
 static struct {
     int16_t    x, y, dx, dy;    /* where the cube is going           */
@@ -300,9 +308,8 @@ static void run_enter(void)
     static bool made;
     if (!made) {
         made = true;
-        hud_fill(cube_px, CUBE, CUBE, CUBE_COLOUR);
-        hud_image_init(&cube_img, cube_px, CUBE, CUBE);
-        hud_sprite_init(&cube_spr, &cube_img, cube.x, cube.y, true);
+        sprite_init();
+        cube_spr = sprite_new(sprite_img_solid(CUBE, CUBE, CUBE_COLOUR), cube.x, cube.y, true);
     }
     cube.sync_seen = frame_sync_count();
     cube.frames = cube.behind = 0;
@@ -317,12 +324,12 @@ static void cube_move(void)
     cube.y = (int16_t)(cube.y + cube.dy);
     if (cube.x < 0 || cube.x + CUBE > in->width)  { cube.dx = (int16_t)-cube.dx; cube.x = (int16_t)(cube.x + 2 * cube.dx); }
     if (cube.y < 0 || cube.y + CUBE > in->height) { cube.dy = (int16_t)-cube.dy; cube.y = (int16_t)(cube.y + 2 * cube.dy); }
-    hud_sprite_move(&cube_spr, cube.x, cube.y);
+    sprite_move(cube_spr, cube.x, cube.y);
 }
 
 static void run_poll(void)
 {
-    if (!hud_poll()) { failed = true; return; }
+    if (!sprite_poll()) { failed = true; return; }
 
     /* Next frame when the FPGA starts one. More than one SYNC since last
      * time means we were still busy when a frame went by: behind. */
@@ -359,7 +366,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
     } else {
         have_session = true;
         session      = in->session;
-        hud_forget();            /* new FPGA memory: sprites are gone */
+        sprite_forget();         /* new FPGA memory: sprites are gone */
         load_start();
     }
 }
@@ -369,7 +376,7 @@ static void resync(void)
 {
     LOG_WARN("command failed in '%s' -> resync", state_names[state]);
     fpga_abort_all();            /* callbacks run now and free the buffers */
-    hud_lost();                  /* ...so this comes after them           */
+    sprite_lost();               /* ...so this comes after them           */
     failed        = false;
     retry_at      = plat_millis();
     go(S_PROBE);

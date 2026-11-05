@@ -18,6 +18,8 @@
 #include "platform.h"
 #include "transport.h"
 #include "fpga.h"
+#include "demo.h"
+#include "game.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -36,6 +38,14 @@
 static uint32_t ready_seen, used_seen;   /* written by main loop only */
 static int32_t  ready_spare;             /* READYs not (yet) consumed  */
 
+/* Spare READYs are reported at most once a second (READY_REPORT_MS): one
+ * on its own straight away, a storm as one line a second with the count. */
+#define READY_REPORT_MS  1000u
+#define READY_STORM_RATE 100u            /* per second: call it a storm */
+static uint32_t ready_report_at;         /* the last "fpga ready" line  */
+static uint32_t ready_unreported;        /* spare READYs since then     */
+static uint32_t ready_first_at;          /* the first of those          */
+
 /* ======================================================================
  * Line editor state + async redraw hooks
  *
@@ -52,24 +62,51 @@ static int32_t  ready_spare;             /* READYs not (yet) consumed  */
  * ====================================================================== */
 static char     line[LINE_MAX];      /* what the user is currently typing */
 static uint16_t line_len;
-static bool     prompt_visible;      /* is "> " + line on screen right now? */
+static bool     prompt_visible;      /* is status + "> " + line on screen right now? */
+
+/* Status text shown in front of the prompt ("probing FPGA: attempt 7 > "),
+ * set with cli_status(). It lives on the prompt line, so it updates in
+ * place without filling the terminal, using only \r like the rest. */
+#define STATUS_MAX    64
+static char     status[STATUS_MAX];
+static uint16_t status_len;
 
 void cli_async_begin(void)
 {
     if (!prompt_visible) return;
-    char blank[PROMPT_LEN + LINE_MAX];
-    uint16_t n = (uint16_t)(PROMPT_LEN + line_len);
+    char blank[STATUS_MAX + PROMPT_LEN + LINE_MAX];
+    uint16_t n = (uint16_t)(status_len + PROMPT_LEN + line_len);
     memset(blank, ' ', n);
     io_write("\r", 1);
     io_write(blank, n);
     io_write("\r", 1);
 }
 
+static void prompt_write(void)
+{
+    io_write(status, status_len);
+    io_write(PROMPT, PROMPT_LEN);
+}
+
 void cli_async_end(void)
 {
     if (!prompt_visible) return;
-    io_write(PROMPT, PROMPT_LEN);
+    prompt_write();
     io_write(line, line_len);
+}
+
+void cli_status(const char *text)
+{
+    char next[STATUS_MAX];
+    size_t n = text ? strlen(text) : 0;
+    if (n > STATUS_MAX - 1) n = STATUS_MAX - 1;
+    if (n) memcpy(next, text, n);
+    if (n) next[n++] = ' ';             /* a gap before "> "                 */
+    if (n == status_len && memcmp(status, next, n) == 0) return;
+    cli_async_begin();                  /* wipe the line with the old status */
+    memcpy(status, next, n);
+    status_len = (uint16_t)n;
+    cli_async_end();
 }
 
 /* Hex rows only, no hooks. Callers wrap the whole block in
@@ -283,9 +320,9 @@ static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
     else if (what == PEND_READ)
         print_hex(rd_buf, pend.len);
     else if (what == PEND_SPR_UPLOAD)
-        LOG_INFO("sprite upload: memID %u", fpga_answer_id(cmd));
+        LOG_INFO("sprite upload: memID %u", (unsigned)fpga_answer_id(cmd));
     else if (what == PEND_SPR_NEW)
-        LOG_INFO("sprite new: spriteID %u", fpga_answer_id(cmd));
+        LOG_INFO("sprite new: spriteID %u", (unsigned)fpga_answer_id(cmd));
     else
         LOG_INFO("%s: ok", pend_names[what]);
 }
@@ -545,30 +582,30 @@ static void cmd_sprite(int argc, char **argv)
         return;
     }
     if (strcmp(sub, "new") == 0 && (argc == 7 || argc == 8)) {
-        if (!parse_arg("memID", argv[2], 0xFF, &a[0]) ||
+        if (!parse_arg("memID", argv[2], 0xFFFF, &a[0]) ||
             !parse_arg("x", argv[3], 0xFFFF, &a[1]) || !parse_arg("y", argv[4], 0xFFFF, &a[2]) ||
             !parse_arg("w", argv[5], 0xFFFF, &a[3]) || !parse_arg("h", argv[6], 0xFFFF, &a[4]))
             return;
         bool show = !(argc == 8 && strcmp(argv[7], "hide") == 0);
         if (console_busy()) return;
-        pend_start(PEND_SPR_NEW, fpga_cmd_sprite_write((uint8_t)a[0], show, (uint16_t)a[1],
+        pend_start(PEND_SPR_NEW, fpga_cmd_sprite_write((uint16_t)a[0], show, (uint16_t)a[1],
                    (uint16_t)a[2], (uint16_t)a[3], (uint16_t)a[4]));
         return;
     }
     if (strcmp(sub, "move") == 0 && (argc == 5 || argc == 6)) {
-        if (!parse_arg("id", argv[2], 0xFF, &a[0]) ||
+        if (!parse_arg("id", argv[2], 0xFFFF, &a[0]) ||
             !parse_arg("x", argv[3], 0xFFFF, &a[1]) || !parse_arg("y", argv[4], 0xFFFF, &a[2]))
             return;
         bool show = !(argc == 6 && strcmp(argv[5], "hide") == 0);
         if (console_busy()) return;
-        pend_start(PEND_SPR_MOVE, fpga_cmd_sprite_update((uint8_t)a[0], show,
+        pend_start(PEND_SPR_MOVE, fpga_cmd_sprite_update((uint16_t)a[0], show,
                    (uint16_t)a[1], (uint16_t)a[2]));
         return;
     }
     if (strcmp(sub, "del") == 0 && argc == 3) {
-        if (!parse_arg("id", argv[2], 0xFF, &a[0])) return;
+        if (!parse_arg("id", argv[2], 0xFFFF, &a[0])) return;
         if (console_busy()) return;
-        pend_start(PEND_SPR_DEL, fpga_cmd_sprite_delete((uint8_t)a[0]));
+        pend_start(PEND_SPR_DEL, fpga_cmd_sprite_delete((uint16_t)a[0]));
         return;
     }
     log_raw("usage: sprite upload <w> <h> <colour>\r\n"
@@ -633,6 +670,38 @@ static void cmd_abort(int argc, char **argv)
 }
 
 /* trace [on|off] -- one debug line per FPGA transfer and step */
+static void cmd_demo(int argc, char **argv)
+{
+    if (argc == 1)                          { demo_list(); return; }
+    if (argc == 2 && !strcmp(argv[1], "stop")) { demo_stop(); return; }
+    if (argc == 2 && demo_start(argv[1]))   return;
+    if (argc == 2) log_raw("no demo '%s'\r\n", argv[1]);
+    else           log_raw("usage: demo [<test> | stop]\r\n");
+    demo_list();
+}
+
+static void cmd_reset(int argc, char **argv)
+{
+    if (argc == 1)                          game_reset_all();
+    else if (argc == 2 && !strcmp(argv[1], "fpga")) game_reset_fpga();
+    else if (argc == 2 && !strcmp(argv[1], "mcu"))  game_reset_mcu();
+    else log_raw("usage: reset [fpga | mcu]   (no argument: both)\r\n");
+}
+
+static void cmd_loading(int argc, char **argv)
+{
+    if (argc == 2) {
+        const char *a = argv[1];
+        if      (!strcmp(a, "on")  || !strcmp(a, "true")  || !strcmp(a, "1")) game_set_loading(true);
+        else if (!strcmp(a, "off") || !strcmp(a, "false") || !strcmp(a, "0")) game_set_loading(false);
+        else { log_raw("usage: loading [on|off]\r\n"); return; }
+    } else if (argc != 1) {
+        log_raw("usage: loading [on|off]\r\n");
+        return;
+    }
+    log_raw("loading: %s\r\n", game_loading() ? "on" : "off (the game holds, no probing)");
+}
+
 static void cmd_trace(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "on") == 0)       transport_set_trace(true);
@@ -692,6 +761,9 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
+    { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
+    { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
@@ -742,7 +814,7 @@ static void handle_char(char c)
         io_write("\r\n", 2);          /* print during it doesn't redraw the  */
         prompt_visible = false;       /* old command                         */
         dispatch(cmdline);
-        io_write(PROMPT, PROMPT_LEN); /* prompt is always back right away;   */
+        prompt_write();               /* prompt is always back right away;   */
         prompt_visible = true;        /* job results arrive as async lines   */
     } else if (c == '\b' || c == 0x7F) {                 /* backspace / DEL */
         if (line_len) { line_len--; io_write("\b \b", 3); }
@@ -788,10 +860,22 @@ void cli_poll(void)
     ready_seen = rc;
     used_seen  = used;
     if (ready_spare < 0) ready_spare = 0;
+    uint32_t now = plat_millis();
     if (ready_spare > 0 && fpga_queued() == 0) {
-        if (ready_spare == 1) LOG_INFO("fpga ready");
-        else LOG_INFO("fpga ready (x%ld)", (long)ready_spare);
+        if (!ready_unreported) ready_first_at = now;
+        ready_unreported += (uint32_t)ready_spare;
         ready_spare = 0;
+    }
+    if (ready_unreported && now - ready_report_at >= READY_REPORT_MS) {
+        uint32_t ms = now - ready_first_at, n = ready_unreported;
+        if (n == 1)
+            LOG_INFO("fpga ready");
+        else
+            LOG_INFO("fpga ready x%lu in %lu ms%s", (unsigned long)n, (unsigned long)ms,
+                     n >= 10u && (uint64_t)n * 1000u >= (uint64_t)READY_STORM_RATE * (ms ? ms : 1u)
+                         ? " (READY storm)" : "");
+        ready_unreported = 0;
+        ready_report_at  = now;
     }
 
     int c;

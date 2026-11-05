@@ -61,7 +61,6 @@ static void MX_GPDMA1_Init(void);
 static void MX_ICACHE_Init(void);
 static void MX_OCTOSPI1_Init(void);
 static void MX_USART1_UART_Init(void);
-static void MX_SDMMC1_SD_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -108,7 +107,6 @@ int main(void)
   MX_ICACHE_Init();
   MX_OCTOSPI1_Init();
   MX_USART1_UART_Init();
-  MX_SDMMC1_SD_Init();
   MX_FileX_Init();
   /* USER CODE BEGIN 2 */
   myMain(); // call main form my main
@@ -309,7 +307,7 @@ static void MX_OCTOSPI1_Init(void)
   * @param None
   * @retval None
   */
-static void MX_SDMMC1_SD_Init(void)
+void MX_SDMMC1_SD_Init(void)
 {
 
   /* USER CODE BEGIN SDMMC1_Init 0 */

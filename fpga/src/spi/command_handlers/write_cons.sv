@@ -3,101 +3,135 @@ module write_cons #(
 ) (
     input wire clk,
     ck_rst,
-    data_rdy,
+    mem_data_on_wire,
+    send_write_cons,
     mem_busy,
+    input logic in_empty,
     input logic [7:0] in_fifo,
-    output logic [7:0] write_cons_fifo,
-    mem_len,
-    mem_in,
+    output logic [7:0] mem_in,
+    error_code,
+    output logic [15:0] mem_len,
     output logic write_cons_done,
     write_cons_r_en,
-    mem_toggle,
-    output logic [31:0] mem_addr,
-    output memory_pkg::transaction_e mem_func
+    mem_req,
+    error_valid,
+    output logic [31:0] mem_addr
 );
 
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_pkg::*;
+  import mem_driver_pkg::*;
+  import memory_pkg::*;
 
-  logic [7:0] tx_index = 8'd0;
+  logic [15:0] total_bytes = 16'b0;
+  logic [7:0] written_bytes = 8'd0;
+  logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
-  logic [7:0] mem_len;
-  logic [31:0] memAddr;
-  logic toggle_init;  // Init captures toggle at the start of the transaction.
 
-
-  read_states_e state = START;
+  mem_driver_pkg::mem_states_e state = MEM_START;
 
   always_ff @(posedge clk) begin
 
-    if (!ck_rst) begin
-      tx_index <= 8'd0;
+    if (ck_rst) begin
+      tx_index <= 16'd0;
       write_cons_done <= 1'b0;
       write_cons_r_en <= 1'b0;
-      write_cons_fifo <= 8'd0;
-      state <= START;
+      state <= MEM_START;
     end else begin
       write_cons_r_en <= 1'b0;
       write_cons_done <= 1'b0;
+      mem_req         <= 1'b0;
 
-      // Fetch target memory address
-      case (state)
-        START: begin
-          write_cons_r_en <= 1'b1;
-          state <= GET_X_TOP;
-          toggle_init <= mem_toggle;
-        end
-        GET_X_TOP: begin
-          write_cons_r_en <= 1'b1;
-          gridX[15:8] <= in_fifo;
-          state <= GET_X_BOTTOM;
-        end
-        GET_X_BOTTOM: begin
-          write_cons_r_en <= 1'b1;
-          gridX[7:0] <= in_fifo;
-          state <= GET_Y_TOP;
-        end
-        GET_Y_TOP: begin
-          write_cons_r_en <= 1'b1;
-          gridY[15:8] <= in_fifo;
-          state <= GET_Y_BOTTOM;
-        end
-        GET_Y_BOTTOM: begin
-          write_cons_r_en <= 1'b1;
-          gridY[7:0] <= in_fifo;
-          state <= GET_MSG_LENGTH;
-        end
-        GET_MSG_LENGTH: begin
-          mem_len <= in_fifo;
-          state   <= GET_MEM_ADDR;
-        end
-        GET_MEM_ADDR: begin
-          memAddr <= GridPosToMemAddr(gridX, gridY);
-          mem_func <= WRITE;
-          state <= DATA;
-        end
-        DATA: begin
-          if (!mem_busy) begin
-            // use captured toggle to signal the new transaction on the same
-            // cycle as data is pushed
-            mem_toggle <= !toggle_init;
-
-            // Read N bytes from in_queue to mem_in
-            if (tx_index < mem_len && data_rdy) begin
-              mem_in <= in_fifo;
-              write_cons_r_en <= 1'b1;
-              tx_index <= tx_index + 8'd1;
-            end else begin
-              write_cons_done <= 1'b1;
-              tx_index <= 8'd0;
-              state <= START;
+      if (send_write_cons) begin
+        // Fetch target memory address
+        case (state)
+          MEM_START: begin
+            write_cons_r_en <= 1'b1;
+            state <= MEM_GET_X_TOP;
+          end
+          MEM_GET_X_TOP: begin
+            write_cons_r_en <= 1'b1;
+            gridX[15:8] <= in_fifo;
+            state <= MEM_GET_X_BOTTOM;
+          end
+          MEM_GET_X_BOTTOM: begin
+            write_cons_r_en <= 1'b1;
+            gridX[7:0] <= in_fifo;
+            state <= MEM_GET_Y_TOP;
+          end
+          MEM_GET_Y_TOP: begin
+            write_cons_r_en <= 1'b1;
+            gridY[15:8] <= in_fifo;
+            state <= MEM_GET_Y_BOTTOM;
+          end
+          MEM_GET_Y_BOTTOM: begin
+            write_cons_r_en <= 1'b1;
+            gridY[7:0] <= in_fifo;
+            state <= MEM_GET_MSG_LENGTH_TOP;
+          end
+          MEM_GET_MSG_LENGTH_TOP: begin
+            //TODO fix MSG is two bytes
+            write_cons_r_en <= 1'b1;
+            total_bytes[15:8] <= in_fifo;
+            state <= MEM_GET_MSG_LENGTH_BOTTOM;
+          end
+          MEM_GET_MSG_LENGTH_BOTTOM: begin
+            total_bytes[7:0] <= in_fifo;
+            state <= MEM_GET_MEM_ADDR;
+            if(in_empty) begin
+              error_valid <= 1'b1;
+              error_code <= MISSING_PARAMETER_ERROR;
             end
           end
-        end
-        default:;
-      endcase
+          MEM_GET_MEM_ADDR: begin
+            mem_addr <= GridPosToMemAddr(gridX + tx_index, gridY);
+            mem_len <= 32'(total_bytes - tx_index) > memory_pkg::MaxMessageLength
+              ? 16'(memory_pkg::MaxMessageLength)
+              : (total_bytes - tx_index);
+            state <= MEM_INIT_REQ;
+          end
+          MEM_INIT_REQ: begin
+            // The signal is delayed one cycle in the SPI controller.
+            if (!mem_busy) begin
+              mem_req <= 1'b1;
+              state   <= MEM_DATA;
+            end
+          end
+          MEM_DATA: begin
+            if (write_cons_r_en) begin
+              // Capture data once write_cons is visible to fifo.
+              mem_in <= in_fifo;
+              written_bytes <= written_bytes + 8'd1;
+              tx_index <= tx_index + 16'd1;
+
+              if (tx_index >= total_bytes - 1) begin
+                // Command end
+                write_cons_r_en <= 1'b0;
+                write_cons_done <= 1'b1;
+                tx_index <= 16'd0;
+                written_bytes <= 8'd0;
+                state <= MEM_DONE;
+              end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
+                // Transaction timeout, issue new where we finished.
+                write_cons_r_en <= 1'b0;
+                written_bytes <= 8'd0;
+                state <= MEM_GET_MEM_ADDR;
+              end else begin
+                write_cons_r_en <= mem_data_on_wire;
+              end
+            end else if (!mem_busy && mem_data_on_wire) begin
+              // write byte next cycle.
+              write_cons_r_en <= 1'b1;
+            end
+          end
+          MEM_DONE: begin
+            // Simply wait one cycle for done signal to be processed.
+            state <= MEM_START;
+          end
+          default: ;
+        endcase
+      end
     end
   end
 endmodule

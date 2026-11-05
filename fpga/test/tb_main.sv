@@ -1,3 +1,6 @@
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
+
 module tb_main #(
     parameter string DUMPFILEPATH = ""  // this parameter is overwritten when compiling with make
 ) (

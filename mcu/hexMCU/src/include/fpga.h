@@ -15,12 +15,12 @@
  * | INFO          | 20 | -                                             | -        | W H N SID
  * | WRITE_CONS    | 30 | X 2B, Y 2B, N 2B                              | N bytes  | -
  * | READ_CONS     | 40 | X 2B, Y 2B, N 2B                              | -        | N bytes
- * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | pixels   | -
- * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | pixels
- * | WRITE_SPRITE  | 70 | -                                             | pixels   | memID
- * | SPRITE_WRITE  | 80 | memID, active, X 2B, Y 2B, W 2B, H 2B         | -        | spriteID
- * | SPRITE_UPDATE | 90 | spriteID, active, X 2B, Y 2B                  | -        | -
- * | SPRITE_DELETE | A0 | spriteID                                      | -        | -
+ * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | IDs      | -
+ * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | IDs
+ * | WRITE_SPRITE  | 70 | LEN 2B (payload size, FPGA_SPRITE_LEN_UNIT)   | pixels   | memID 2B
+ * | SPRITE_WRITE  | 80 | memID 2B, active, X 2B, Y 2B, W 2B, H 2B      | -        | spriteID 2B
+ * | SPRITE_UPDATE | 90 | spriteID 2B, active, X 2B, Y 2B               | -        | -
+ * | SPRITE_DELETE | A0 | spriteID 2B                                   | -        | -
  * | START_SIM     | B0 | -                                             | -        | -
  * | STOP_SIM      | C0 | -                                             | -        | -
  * ------------------------------------------------------------------------------------------
@@ -35,10 +35,15 @@
  * WRITE_SPRITEs in a row; SPRITE_WRITE then names the first memID and the
  * whole W x H. memIDs are few (see the spec), spriteIDs many.
  *
- * Boxes: X,Y is the top-left pixel, W the pixels per row, H the rows; the
- * pixels are one stream, row by row, the last one at (X+W-1, Y+H-1). Build
- * boxes with fpga_box(). Pixels are RGB565, 2 bytes each, MSB first.
- * 0xF81F (magenta) is see-through in sprites.
+ * The two layers carry different things:
+ *   SIM layer (grid): a byte per cell, the material ID in its high 4 bits
+ *     (see "the SIM layer" below). CONS and BOX both read and write these.
+ *   HUD layer (sprites): RGB565 pixels, 2 bytes each, MSB first; 0xF81F
+ *     (magenta) is see-through.
+ *
+ * Boxes: X,Y is the top-left cell, W the cells per row, H the rows; the
+ * cells are one stream, row by row, the last one at (X+W-1, Y+H-1), packed
+ * like CONS (FPGA_SIM_IDS_PER_BYTE). Build boxes with fpga_box().
  *
  * INFO answer, MSB first (FPGA_INFO_BYTES): W, H, N 16 bits, SID 32 bits.
  *   W, H  screen size in pixels
@@ -109,6 +114,25 @@
 #define WRITE_BOX_OPCODE        0x50u
 #define READ_BOX_OPCODE         0x60u
 #define WRITE_SPRITE_OPCODE     0x70u
+
+/* The first memID the FPGA hands out (the real FPGA starts at 0). */
+#ifndef FPGA_MEMID_FIRST
+#define FPGA_MEMID_FIRST        0u
+#endif
+
+/* READY drops while OCTOSPI is busy and rises when it's done -- after
+ * every transfer, the answer READ included. 1: fpga.c waits for (and uses)
+ * that READY after each READ too, so it isn't taken as a stray one. */
+#ifndef FPGA_READY_AFTER_READ
+#define FPGA_READY_AFTER_READ   1
+#endif
+
+/* WRITE_SPRITE's LEN field (2 bytes, MSB first, right after the opcode)
+ * counts the payload in these units: 1 = bytes, 2 = pixels (RGB565).
+ * PROTOCOL: check which one the FPGA expects. */
+#ifndef FPGA_SPRITE_LEN_UNIT
+#define FPGA_SPRITE_LEN_UNIT    1u
+#endif
 #define SPRITE_WRITE_OPCODE     0x80u
 #define SPRITE_UPDATE_OPCODE    0x90u
 #define SPRITE_DELETE_OPCODE    0xA0u
@@ -121,8 +145,77 @@
 
 #define FPGA_INFO_BYTES         10u     /* W, H, N: 2 bytes each, SID 4 bytes */
 
+/* What an INFO answer may say. Anything outside is taken as a garbled
+ * answer (FPGA_ERR_BAD_INFO), so the handshake tries again instead of going
+ * on with nonsense. PROTOCOL: widen these if the FPGA really goes beyond. */
+#define FPGA_INFO_MAX_DIM       2048u   /* W and H, cells                     */
+#define FPGA_INFO_MIN_N         9u      /* a BOX header alone is 9 bytes      */
+#define FPGA_INFO_MAX_N         8192u   /* N, bytes                           */
+
 /* Sprite parameters travel inside the command (see struct fpga_cmd). */
-#define FPGA_PARAM_MAX          10u     /* SPRITE_WRITE's, the longest */
+#define FPGA_PARAM_MAX          11u     /* SPRITE_WRITE's, the longest */
+
+/* ---- the SIM layer (grid) ------------------------------------------------
+ * Every cell is a byte on the FPGA. Its HIGH 4 bits are the material (the
+ * FPGA's materials_e); the low 4 bits are the FPGA's own (state, for the
+ * simulation), so write them as 0 and ignore them when reading back.
+ * The FPGA turns materials into colours with its own lookup table.
+ * WRITE_CONS / READ_CONS / *_BOX carry these bytes; X,Y count cells and
+ * N counts bytes. */
+typedef enum {                      /* = MatAir ... MatExplo on the FPGA     */
+    MAT_AIR       = 0,              /* empty                                 */
+    MAT_STONE     = 1,
+    MAT_SAND      = 2,
+    MAT_WATER     = 3,
+    MAT_LAVA      = 4,
+    MAT_ACID      = 5,
+    MAT_LIFE      = 6,              /* game of life (MatGOL)                 */
+    MAT_EXPLOSIVE = 7,              /* MatExplo                              */
+    MAT_COUNT                       /* materials in use                      */
+} material_t;
+#define MAT_ID_MAX  15u             /* 4 bits: room for 16 materials         */
+
+/* PROTOCOL, not agreed yet: IDs per byte in CONS / BOX data.
+ *   1 = one cell per byte, the material in the high 4 bits (N bytes = N cells)
+ *   2 = two materials per byte, the first cell in the high nibble
+ *       (N bytes = 2N cells; the FPGA's low "state" bits can't travel)
+ * The fake FPGA follows this; rooms.c only works with 1. */
+#ifndef FPGA_SIM_IDS_PER_BYTE
+#define FPGA_SIM_IDS_PER_BYTE 1
+#endif
+
+/* Bytes that n cells take in CONS / BOX data. */
+static inline uint32_t fpga_sim_bytes(uint32_t cells)
+{
+    return (cells + FPGA_SIM_IDS_PER_BYTE - 1u) / FPGA_SIM_IDS_PER_BYTE;
+}
+
+/* The cell byte for material m (one per byte), and the material in a cell
+ * byte: SIM_CELL(MAT_SAND) = 0x20, SIM_MAT(0x2F) = MAT_SAND. */
+#define SIM_CELL(m)  ((uint8_t)(((unsigned)(m) & 0x0Fu) << 4))
+#define SIM_MAT(b)   ((uint8_t)((uint8_t)(b) >> 4))
+
+/* Material of cell k in packed CONS / BOX data, and setting it. sim_put()
+ * clears the low bits / the other half as needed, so a buffer can be
+ * filled cell by cell in any order. Work for both packings. */
+static inline uint8_t sim_get(const uint8_t *buf, uint32_t k)
+{
+    if (FPGA_SIM_IDS_PER_BYTE == 2) {
+        uint8_t b = buf[k / 2u];
+        return (k & 1u) ? (uint8_t)(b & 0x0Fu) : SIM_MAT(b);
+    }
+    return SIM_MAT(buf[k]);
+}
+static inline void sim_put(uint8_t *buf, uint32_t k, uint8_t mat)
+{
+    mat &= 0x0Fu;
+    if (FPGA_SIM_IDS_PER_BYTE == 2) {
+        uint8_t *b = &buf[k / 2u];
+        *b = (k & 1u) ? (uint8_t)((*b & 0xF0u) | mat) : (uint8_t)((*b & 0x0Fu) | (mat << 4));
+    } else {
+        buf[k] = SIM_CELL(mat);
+    }
+}
 
 /* ACK line at READY, as transport_ready_status() reports it. */
 #define FPGA_STATUS_OK          0u      /* ACK high: the command worked */
@@ -166,6 +259,7 @@ typedef enum {
     FPGA_ERR_ABORTED,       /* was running when fpga_abort_all() came  */
     FPGA_ERR_CANCELLED,     /* never ran: an earlier command failed or
                                fpga_abort_all()                        */
+    FPGA_ERR_NOT_READY,     /* READY stayed low: nothing was sent      */
 } fpga_err_t;
 
 /* A box on the wire: x1,y1 = top-left pixel, x2 = W (pixels per row),
@@ -215,7 +309,7 @@ struct fpga_cmd {
 
     /* Carried inside the command, for the sprite commands: their
      * parameters are the payload (tx points here once queued), and their
-     * one-byte answer lands here (fpga_answer_id()). */
+     * two-byte answer lands here (fpga_answer_id()). */
     bool            param_tx;               /* tx = param            */
     bool            answer_rx;              /* rx = answer           */
     uint8_t         param[FPGA_PARAM_MAX];
@@ -224,7 +318,10 @@ struct fpga_cmd {
 
 /* The memID (WRITE_SPRITE) or spriteID (SPRITE_WRITE) a command got back.
  * Valid in its done callback when err == FPGA_ERR_NONE. */
-static inline uint8_t fpga_answer_id(const fpga_cmd_t *cmd) { return cmd->answer[0]; }
+static inline uint16_t fpga_answer_id(const fpga_cmd_t *cmd)
+{
+    return (uint16_t)((cmd->answer[0] << 8) | cmd->answer[1]);     /* MSB first */
+}
 
 /* len is always the buffer size in bytes. */
 fpga_cmd_t fpga_cmd_echo(const uint8_t *tx, uint8_t *rx, uint16_t len);
@@ -244,10 +341,10 @@ fpga_cmd_t fpga_cmd_read_box(fpga_box_t box, uint8_t *buf, uint16_t len);
  * sprite_write places an instance and answers its spriteID. Read either
  * with fpga_answer_id(cmd) in the done callback. */
 fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len);
-fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16_t y,
+fpga_cmd_t fpga_cmd_sprite_write(uint16_t mem_id, bool active, uint16_t x, uint16_t y,
                                  uint16_t w, uint16_t h);
-fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y);
-fpga_cmd_t fpga_cmd_sprite_delete(uint8_t sprite_id);
+fpga_cmd_t fpga_cmd_sprite_update(uint16_t sprite_id, bool active, uint16_t x, uint16_t y);
+fpga_cmd_t fpga_cmd_sprite_delete(uint16_t sprite_id);
 
 fpga_cmd_t fpga_cmd_sim_run(bool run);      /* START_SIM / STOP_SIM      */
 
@@ -282,6 +379,11 @@ uint8_t       fpga_ready_status(void);  /* ACK status at the last READY used */
 /* The error code that came with the last NACK; 0 if it couldn't be read. */
 uint8_t       fpga_fail_code(void);
 const char   *fpga_fail_str(uint8_t code);
+
+/* The last command that failed (not aborted or cancelled), in words, for
+ * logs: "WRITE_CONS (0x30) at wait-irq: no FPGA ready irq (timeout)", with
+ * the NACK code if there was one. "none" if nothing has failed. */
+const char   *fpga_last_failure(void);
 uint32_t      fpga_ready_used(void);    /* READY edges consumed by commands */
 
 const char   *fpga_err_str(fpga_err_t err);

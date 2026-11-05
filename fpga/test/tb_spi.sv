@@ -1,3 +1,6 @@
+/* verilator lint_off PINMISSING */
+/* verilator lint_off MULTITOP */
+
 module tb_spi;
 
   // ============================================================
@@ -45,6 +48,27 @@ module tb_spi;
   wire       in_almost_full;
   wire       in_full;
 
+  logic      error_critical;
+  logic      sim_running;
+
+
+  logic [7:0] mem_out;
+  logic [7:0] mem_in;
+  logic [15:0] mem_len;
+  logic mem_busy,
+    mem_data_on_wire;
+  logic [31:0] mem_addr;
+  memory_pkg::transaction_e mem_transaction;
+
+  // Sprite LUT
+  logic sprite_id_found;
+  hud_pkg::sprite_lut_id sprite_available_id;
+  logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
+  hud_pkg::sprite_inst_entry_t sprite_req_body;
+  hud_pkg::sprite_op_e sprite_req_op;
+  logic write_sprite_valid,
+    mem_toggle,
+    sprite_req_valid;
 
   // ============================================================
   // DUT
@@ -70,7 +94,28 @@ module tb_spi;
       .out_almost_empty(out_almost_empty),
       .out_empty       (out_empty),
       .in_almost_full  (in_almost_full),
-      .in_full         (in_full)
+      .in_full         (in_full),
+
+      .mem_out(mem_out),
+      .mem_in(mem_in),
+      .mem_len(mem_len),
+      .mem_busy(mem_busy),
+      .mem_data_on_wire(mem_data_on_wire),
+      .mem_addr(mem_addr),
+      .mem_transaction(mem_transaction),
+      .mem_toggle(mem_toggle),
+
+      .sprite_id_found(sprite_id_found),
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_bitmap(sprite_id_bitmap),
+      .sprite_req_body(sprite_req_body),
+      .sprite_req_op(sprite_req_op),
+      .write_sprite_valid(write_sprite_valid),
+      .sprite_req_valid(sprite_req_valid),
+
+      .sim_running(sim_running),
+
+      .error_critical(error_critical)
   );
 
 
@@ -336,7 +381,7 @@ module tb_spi;
     mcu_write_byte(8'hAA);
 
     // Let the FPGA's TX handshake develop.
-    repeat (4) @(posedge sck_src);
+    repeat (3) @(posedge sck_src);
 
     $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS", $time);
 
@@ -434,7 +479,7 @@ module tb_spi;
     mcu_write_byte(8'hAA);
 
     // Let the FPGA's TX handshake develop.
-    repeat (4) @(posedge sck_src);
+    repeat (3) @(posedge sck_src);
 
     $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS", $time);
 
@@ -523,7 +568,7 @@ module tb_spi;
     mcu_write_byte(8'hAA);
 
     // Let the FPGA's TX handshake develop.
-    repeat (4) @(posedge sck_src);
+    repeat (3) @(posedge sck_src);
 
     $display("[%0t] FPGA SHOULD NOW BE DRIVING TX BUS", $time);
 

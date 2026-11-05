@@ -33,7 +33,6 @@ static bool tile_is_swimmable(uint8_t id)
 
 static void perform_jump(
     player_t player,
-    uint8_t *box,
     bool is_grounded,
     uint16_t in_water,
     uint16_t in_lava,
@@ -56,6 +55,7 @@ void damage_player(player_t player, uint16_t amount)
     ticks_since_last_damage = PLAYER_DAMAGE_TO_HEAL_DELAY;
 
     // TODO: Check if dead
+    // if (player.health == 0) reset_game()
 }
 
 void heal_player(player_t player, uint16_t amount)
@@ -127,10 +127,9 @@ void update_player(
     else
         player.velocity_x *= 0.9;
 
-    // Apply gravity
+    // Jump & swim
     if (jump_next_frame) perform_jump(
         player,
-        box,
         on_ground,
         in_water,
         in_lava,
@@ -163,6 +162,7 @@ void update_player(
     player.velocity_y += force_x / 2;
     player.velocity_y += force_y / 2;
 
+    // Calculate boundaries for collision detection
     uint8_t last_end_x = velocity_box.rel_x;
     uint8_t last_start_x = last_end_x + (int) floorf(player.velocity_x);
     if (player.velocity_x > 0)

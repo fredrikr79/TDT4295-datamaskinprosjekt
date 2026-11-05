@@ -8,7 +8,7 @@ module hud #(
     input hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth],
     output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
-    output hud_pkg::sprite_lut_id sprite_available_id,
+    output logic [15:0] sprite_available_id,
     output logic sprite_id_found
 );
 
@@ -16,14 +16,16 @@ import hud_pkg::*;
 
 // Allways on req find an available id to hand out to a new sprite write
 
-logic [hud_pkg::SpriteLutDepth-1:0] sprite_ptr = 0;
+localparam int PtrW = (hud_pkg::SpriteLutDepth > 1) ? $clog2(hud_pkg::SpriteLutDepth) : 1;
+logic [PtrW-1:0] sprite_ptr = '0;
 always_ff @(posedge clk) begin
-    if(!sprite_id_bitmap[sprite_ptr] && !sprite_id_found) begin
+    if(!sprite_id_bitmap[sprite_ptr]) begin
         sprite_available_id <= hud_pkg::sprite_lut_id'(sprite_ptr);
         sprite_id_found <= 1'b1;
     end else begin
         sprite_id_found <= 1'b0;
-        sprite_ptr <= sprite_ptr + hud_pkg::SpriteLutDepth-1'(1);
+        if (sprite_ptr == PtrW'(hud_pkg::SpriteLutDepth - 1)) sprite_ptr <= '0;
+        else sprite_ptr <= sprite_ptr + 1'b1;
     end
 end
 

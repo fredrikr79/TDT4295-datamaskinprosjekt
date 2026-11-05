@@ -623,7 +623,7 @@ static void image_done(const fpga_cmd_t *cmd, fpga_err_t err)
     /* the budget, for every chunk -- also those of an attempt already failed */
     if (memids_pending) memids_pending--;
     if (err == FPGA_ERR_NONE)
-        memids_known = fpga_answer_id(cmd);     /* exact */
+        memids_known = fpga_answer_id(cmd) + 1u - FPGA_MEMID_FIRST;   /* exact */
     else if (err != FPGA_ERR_CANCELLED && err != FPGA_ERR_STATUS)
         memids_known++;                         /* may have happened */
     /* (CANCELLED never ran; a NACK means the FPGA refused it) */

@@ -69,7 +69,7 @@
 /* The real FPGA has 16 MB; memIDs run out long before 2 MB is used
  * (1023 uploads of at most N-1 bytes). */
 #define SPRITE_MEM    (2u * 1024u * 1024u)  /* bytes of sprite memory      */
-#define MAX_IMAGES    1024u         /* memID LUT: memIDs 1 .. MAX_IMAGES-1 */
+#define MAX_IMAGES    1024u         /* memID LUT: up to MAX_IMAGES-1 memIDs */
 #define MAX_SPRITES   1024u         /* PROTOCOL: spriteIDs 0 .. 1023       */
 
 /* ---- state ------------------------------------------------------------ */
@@ -89,8 +89,8 @@ static struct {
 
     uint8_t    mem[SPRITE_MEM]; /* sprite images, one after the other       */
     uint32_t   mem_used;
-    struct { uint32_t off, len; } image[MAX_IMAGES];   /* [0] = none       */
-    uint16_t   n_images;        /* memIDs handed out: 1 .. n_images         */
+    struct { uint32_t off, len; } image[MAX_IMAGES];   /* by memID          */
+    uint16_t   n_images;        /* memIDs handed out: FPGA_MEMID_FIRST on   */
     instance_t sprite[MAX_SPRITES];
 } ff;
 
@@ -287,7 +287,10 @@ static bool expect_fields(const transport_hdr_t *h, uint8_t fields,
 }
 
 /* ---- sprites ------------------------------------------------------------ */
-static bool image_ok(uint16_t mem_id) { return mem_id >= 1 && mem_id <= ff.n_images; }
+static bool image_ok(uint16_t mem_id)
+{
+    return (uint16_t)(mem_id - FPGA_MEMID_FIRST) < ff.n_images;   /* wraps below FIRST */
+}
 
 static bool sprite_used(unsigned id) { return id < MAX_SPRITES && ff.sprite[id].used; }
 
@@ -311,7 +314,7 @@ static int32_t write_sprite(const transport_hdr_t *h, const uint8_t *data, uint1
     if (ff.n_images + 1u >= MAX_IMAGES || ff.mem_used + len > SPRITE_MEM)
         return fail(status, FPGA_FAIL_RESOURCE_EXHAUSTED, "write_sprite");
 
-    uint16_t id = ++ff.n_images;
+    uint16_t id = (uint16_t)(FPGA_MEMID_FIRST + ff.n_images++);   /* like the FPGA: from FPGA_MEMID_FIRST */
     ff.image[id].off = ff.mem_used;
     ff.image[id].len = len;
     memcpy(&ff.mem[ff.mem_used], data, len);

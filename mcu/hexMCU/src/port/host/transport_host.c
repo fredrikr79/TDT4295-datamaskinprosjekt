@@ -25,6 +25,7 @@
 #include "host_hooks.h"
 #include "cli.h"
 #include "fake_fpga.h"
+#include "fpga.h"
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -185,6 +186,11 @@ static void host_poll(void)
         } else {
             if (link.is_read) {
                 fake_fpga_read(&link.hdr, link.rx);
+                if (FPGA_READY_AFTER_READ) {    /* like the FPGA: READY after every transfer */
+                    link.status_next = link.status_pins;
+                    link.ready_at_ns = t + 2000ull;
+                    host_ready_pin   = false;
+                }
             } else {
                 int32_t us = fake_fpga_write(&link.hdr, link.tx,
                                              &link.status_next);

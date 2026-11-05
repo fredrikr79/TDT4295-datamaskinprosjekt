@@ -40,8 +40,13 @@
  * ====================================================================== */
  
 /* This is the higher state machine that is responsible for error recovery and switching of scenes */
-typedef enum { S_PROBE, S_SAVE, S_LOAD, S_RUN, S_HOLD } state_t;
-static const char *const state_names[] = { "probe", "save", "load", "run", "hold" };
+typedef enum { S_PROBE, S_SAVE, S_LOAD, S_RUN, S_HOLD, S_FPGA_RESET } state_t;
+static const char *const state_names[] = { "probe", "save", "load", "run", "hold", "fpga-reset" };
+
+#define FPGA_RESET_PULSE_MS 10u     /* the FPGA's reset pin held low this long */
+static uint32_t fpga_reset_until;
+
+
 
 #ifndef GAME_LOADING
 #define GAME_LOADING 1          /* 0: start with loading off: HOLD, no probing */
@@ -381,6 +386,53 @@ void game_set_loading(bool on)
     go(S_PROBE);
 }
 
+/* ---- resets (console: "reset", "reset fpga", "reset mcu") ---------------
+ * FPGA: everything queued is dropped, the reset pin is held low for
+ * FPGA_RESET_PULSE_MS, and then it's a new FPGA: everything on it is
+ * forgotten and the handshake starts over (with loading off: back to HOLD).
+ * MCU: a full restart, as from power-up. Both: the FPGA's reset pulse, then
+ * the MCU restart. */
+void game_reset_fpga(void)
+{
+    LOG_WARN("resetting the FPGA (reset pin low for %u ms)", FPGA_RESET_PULSE_MS);
+    if (demo_busy()) demo_stop();
+    if (state == S_PROBE) probe_stop();
+    fpga_abort_all();                   /* callbacks run now (CANCELLED) */
+    plat_fpga_reset(true);
+    fpga_reset_until = plat_millis() + FPGA_RESET_PULSE_MS;
+    go(S_FPGA_RESET);
+}
+
+void game_reset_mcu(void)
+{
+    LOG_WARN("resetting the MCU");
+    plat_mcu_reset();                   /* doesn't return */
+}
+
+void game_reset_all(void)
+{
+    LOG_WARN("resetting the FPGA and the MCU");
+    fpga_abort_all();
+    plat_fpga_reset(true);
+    uint32_t t0 = plat_millis();
+    while (plat_millis() - t0 < FPGA_RESET_PULSE_MS) { }   /* the MCU restarts anyway */
+    plat_fpga_reset(false);
+    plat_mcu_reset();
+}
+
+/* The reset pulse is over: a new FPGA, nothing of ours on it. */
+static void fpga_reset_done(void)
+{
+    plat_fpga_reset(false);
+    LOG_INFO("FPGA reset released: starting over");
+    sprite_forget();                    /* its memory is gone: send it all again */
+    have_session = false;               /* -> connected() loads everything */
+    resume_to    = S_LOAD;
+    failed       = false;
+    if (loading) { probe_start(); go(S_PROBE); }
+    else         go(S_HOLD);
+}
+
 /* the state machine */
 static void resync(void)
 {
@@ -400,6 +452,10 @@ void game_poll(void)
      * already queued still finish). Afterwards RUN doesn't count the frames
      * that went by as missed. */
     static bool paused;
+    if (state == S_FPGA_RESET) {        /* before anything else: nothing may be sent */
+        if ((int32_t)(plat_millis() - fpga_reset_until) >= 0) fpga_reset_done();
+        return;
+    }
     if (demo_busy()) { paused = true; demo_poll(); return; }
     if (paused) { paused = false; if (state == S_RUN) run_enter(); }
 
@@ -421,6 +477,7 @@ void game_poll(void)
         else         hold();
         break;
     case S_HOLD:
+    case S_FPGA_RESET:
         break;
     case S_SAVE:
         switch (room_poll()) {

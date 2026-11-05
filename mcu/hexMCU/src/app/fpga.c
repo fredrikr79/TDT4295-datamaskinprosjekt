@@ -43,8 +43,8 @@
 #define XFER_DONE_TIMEOUT_MS      100   /* waiting for transfer to finish   */
 #define FPGA_IRQ_TIMEOUT_MS       100   /* waiting for FPGA_READY interrupt */
 
-typedef enum { STEP_WRITE, STEP_WAIT_IRQ, STEP_READ } step_kind_t;
-static const char *const step_names[] = { "write", "wait-irq", "read" };
+typedef enum { STEP_WRITE, STEP_WAIT_IRQ, STEP_READ, STEP_READ_READY } step_kind_t;
+static const char *const step_names[] = { "write", "wait-irq", "read", "read-ready" };
 
 /* ---- queue: q[q_head] is the running / next command ------------------ */
 static fpga_cmd_t q[FPGA_QUEUE_LEN];
@@ -53,7 +53,7 @@ static uint8_t    q_head, q_count;
 /* ---- the running command --------------------------------------------- */
 static struct {
     bool        active;
-    step_kind_t steps[3];
+    step_kind_t steps[4];       /* WRITE, WAIT_IRQ, READ, READ_READY at most */
     uint8_t     n, idx;
     bool        in_flight;      /* current step's transfer has been started */
     bool        nack;           /* got NACK: the READ step fetches the code */
@@ -221,17 +221,24 @@ void fpga_abort_all(void)
 /* ======================================================================
  * Running the head command
  * ====================================================================== */
+/* A READ step, and the READY after it if the FPGA gives one. */
+static void add_read(void)
+{
+    run.steps[run.n++] = STEP_READ;
+    if (FPGA_READY_AFTER_READ) run.steps[run.n++] = STEP_READ_READY;
+}
+
 static void start_head(void)
 {
     const fpga_cmd_t *c = &q[q_head];
 
     memset(&run, 0, sizeof run);
     if (c->kind == FPGA_KIND_RAW_READ) {
-        run.steps[run.n++] = STEP_READ;
+        add_read();
     } else {
         run.steps[run.n++] = STEP_WRITE;
         run.steps[run.n++] = STEP_WAIT_IRQ;
-        if (has_answer(c)) run.steps[run.n++] = STEP_READ;
+        if (has_answer(c)) add_read();
     }
     run.t0       = plat_millis();
     run.irq_mark = transport_ready_count();
@@ -329,9 +336,23 @@ static bool step(void)
                 /* NACK: the FPGA queued an error code instead of any answer.
                  * Read that one byte, then fail the command. */
                 run.nack = true;
-                run.steps[run.idx + 1] = STEP_READ;
-                run.n = (uint8_t)(run.idx + 2);
+                run.n = (uint8_t)(run.idx + 1);
+                add_read();
             }
+            next_step();
+            return true;
+        }
+        if (elapsed < FPGA_IRQ_TIMEOUT_MS) return false;
+        finish(FPGA_ERR_NO_READY);
+        return true;
+    }
+
+    if (kind == STEP_READ_READY) {
+        /* The READY the FPGA gives when the answer READ is over: used up
+         * here, so it isn't counted as stray, and the next command can't
+         * take it for its own. (irq_mark was taken when the READ began.) */
+        if (transport_ready_count() != run.irq_mark && plat_fpga_ready_pin()) {
+            ready_used++;
             next_step();
             return true;
         }

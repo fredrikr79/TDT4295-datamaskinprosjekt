@@ -9,8 +9,9 @@
  *   echo    ECHO of 1 byte up to the largest the FPGA takes (N - 1)
  *   info    INFO: screen size, N, session
  *   cons    STOP_SIM, WRITE_CONS a row and read it back with READ_CONS,
- *           a write that runs over the end of a row, one single byte,
- *           START_SIM
+ *           a write that runs over the end of a row, one single byte (read
+ *           back alone and in a 4-byte read: tells a write fault from a
+ *           read fault), START_SIM
  *   box     STOP_SIM, WRITE_BOX / READ_BOX of 1x1 up to the biggest box
  *           that fits in N, plus a READ_CONS through a box (box and cons
  *           must agree where cells are), START_SIM
@@ -456,7 +457,10 @@ static step_t cons_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
     case 2: case 4: case 5: case 7:
         *c = fpga_cmd_read_cons(x, y, rx, (uint16_t)fpga_sim_bytes(n));
         return STEP_CMD;
-    case 8: *c = fpga_cmd_sim_run(true); return STEP_CMD;
+    case 8:                             /* the same cell, in a 4-byte read */
+        *c = fpga_cmd_read_cons(x, y, rx, 4u);
+        return STEP_CMD;
+    case 9: *c = fpga_cmd_sim_run(true); return STEP_CMD;
     default: return STEP_END;
     }
 }
@@ -467,6 +471,7 @@ static void cons_check(unsigned i, const fpga_cmd_t *c)
     static const char *const what[] = {
         [2] = "a row", [4] = "the part that ran onto the next row, read alone",
         [5] = "a write over the end of a row", [7] = "one byte",
+        [8] = "the same byte, in a 4-byte read",    /* write or read at fault? */
     };
     if (i >= sizeof what / sizeof what[0] || !what[i]) return;
     uint16_t x, y;
@@ -680,7 +685,6 @@ static void sprite_check(unsigned i, const fpga_cmd_t *c)
         spr_mem = fpga_answer_id(c);
         LOG_INFO("  image uploaded: memID %u (memIDs are never freed: each run uses one)",
                  spr_mem);
-        if (spr_mem == 0) { LOG_WARN("  memID 0 means none"); d.bad++; }
     } else if (i == 1) {
         spr_id = fpga_answer_id(c);
         LOG_INFO("  sprite placed: spriteID %u, now moving it", spr_id);

@@ -680,6 +680,14 @@ static void cmd_demo(int argc, char **argv)
     demo_list();
 }
 
+static void cmd_reset(int argc, char **argv)
+{
+    if (argc == 1)                          game_reset_all();
+    else if (argc == 2 && !strcmp(argv[1], "fpga")) game_reset_fpga();
+    else if (argc == 2 && !strcmp(argv[1], "mcu"))  game_reset_mcu();
+    else log_raw("usage: reset [fpga | mcu]   (no argument: both)\r\n");
+}
+
 static void cmd_loading(int argc, char **argv)
 {
     if (argc == 2) {
@@ -753,6 +761,7 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },

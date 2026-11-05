@@ -1,3 +1,5 @@
+#define LOG_TAG "platform"
+
 #include "log.h"
 #include "platform.h"
 #include "transport.h"
@@ -32,13 +34,23 @@ bool plat_fpga_ready_pin(void)
  * READY and SYNC must be on different pin NUMBERS: EXTI line n is shared by
  * pin n of every port, so PA3 and PB3 can't both have an interrupt.
  */
+static volatile bool button_pressed;
+
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t pin)
 {
     if (pin == FPGA_READY_Pin) transport_ready_isr();
 #ifdef FPGA_SYNC_Pin
     if (pin == FPGA_SYNC_Pin)  frame_sync_isr();
 #endif
-    if (pin == B1_Pin) LOG_INFO("Button pressed!");
+    if (pin == B1_Pin) button_pressed = true;
+}
+
+/* call from the main loop */
+bool plat_button_pressed(void)
+{
+    if (!button_pressed) return false;
+    button_pressed = false;
+    return true;
 }
 
 bool plat_exit(int code)
@@ -46,3 +58,13 @@ bool plat_exit(int code)
     (void)code;
     return false;
 }
+
+void plat_fpga_reset(bool hold)
+{
+#ifdef FPGA_RESET_Pin
+    HAL_GPIO_WritePin(FPGA_RESET_GPIO_Port, FPGA_RESET_Pin, hold ? GPIO_PIN_RESET : GPIO_PIN_SET);
+#else
+    if (hold) LOG_WARN("no FPGA_RESET pin yet: the FPGA is NOT reset (only the MCU side starts over)");
+#endif
+}
+void plat_mcu_reset(void) { NVIC_SystemReset(); }

@@ -115,6 +115,18 @@
 #define READ_BOX_OPCODE         0x60u
 #define WRITE_SPRITE_OPCODE     0x70u
 
+/* The first memID the FPGA hands out (the real FPGA starts at 0). */
+#ifndef FPGA_MEMID_FIRST
+#define FPGA_MEMID_FIRST        0u
+#endif
+
+/* READY drops while OCTOSPI is busy and rises when it's done -- after
+ * every transfer, the answer READ included. 1: fpga.c waits for (and uses)
+ * that READY after each READ too, so it isn't taken as a stray one. */
+#ifndef FPGA_READY_AFTER_READ
+#define FPGA_READY_AFTER_READ   1
+#endif
+
 /* WRITE_SPRITE's LEN field (2 bytes, MSB first, right after the opcode)
  * counts the payload in these units: 1 = bytes, 2 = pixels (RGB565).
  * PROTOCOL: check which one the FPGA expects. */

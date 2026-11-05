@@ -116,15 +116,13 @@ module write_sprite #(
             end
           end
           MEM_RETURN_TOP: begin
-            if($bits(hud_pkg::sprite_lut_id) > 8) begin
-                write_sprite_w_en <= 1'b1;
-                write_sprite_fifo <= 8'(next_id[$bits(hud_pkg::sprite_lut_id)-1:8]);
-            end
+            write_sprite_w_en <= 1'b1;
+            write_sprite_fifo <= 8'(32'(next_id) >> 8);
             state <= MEM_RETURN_BOTTOM;
             end
           MEM_RETURN_BOTTOM: begin
             write_sprite_w_en <= 1'b1;
-            write_sprite_fifo <= next_id[7:0];
+            write_sprite_fifo <= 8'(next_id);
             write_sprite_done <= 1'b1;
             next_id <= next_id + hud_pkg::sprite_mem_id'(1);
             state <= MEM_DONE;

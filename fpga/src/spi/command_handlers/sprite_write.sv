@@ -4,7 +4,7 @@ module sprite_write #(
     input wire clk, ck_rst, send_sprite_write, sprite_id_found,
     input logic in_empty,
     input logic [7:0] in_fifo,
-    input hud_pkg::sprite_lut_id sprite_available_id,
+    input logic [15:0] sprite_available_id,
     output logic sprite_write_r_en,
         sprite_write_w_en,
         sprite_write_done,
@@ -149,10 +149,8 @@ always_ff @(posedge clk) begin
                 state <= ID_TOP;
             end
             ID_TOP: begin
-                if($bits(hud_pkg::sprite_lut_id) > 8) begin
-                    sprite_write_w_en <= 1'b1;
-                    sprite_write_fifo <= 8'(param_id[$bits(hud_pkg::sprite_lut_id)-1:8]);
-                end
+                sprite_write_w_en <= 1'b1;
+                sprite_write_fifo <= param_id[15:8];
                 state <= ID_BOTTOM;
             end
             ID_BOTTOM: begin

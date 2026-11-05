@@ -69,7 +69,7 @@ module spi_processor #(
       info_w_en,
       read_cons_w_en,
       read_box_w_en,
-      fail_w_en = 1'b0,
+      fail_w_en,
       write_sprite_w_en,
       sprite_write_w_en;
 
@@ -464,7 +464,7 @@ module spi_processor #(
               end
             end
 
-            default : opcode <= UNSET;
+            default:; // Wait until error_valid
           endcase
         end
         default:; // Error handled by spi_fsm

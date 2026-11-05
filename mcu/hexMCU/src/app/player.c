@@ -1,7 +1,6 @@
 #include "player.h"
 #include "rooms.h"
 #include "game.h"
-#include <stdlib.h>
 #include <math.h>
 #include <stdint.h>
 
@@ -10,11 +9,6 @@ bool jump_next_frame = false;
 
 uint16_t ticks_since_last_damage = 0;
 uint16_t ticks_since_last_heal = 0;
-
-static bool tile_has_collision(uint8_t id)
-{
-    return id == STONE || id == SAND || id == GOL;
-}
 
 static bool tile_has_damage(uint8_t id)
 {
@@ -162,172 +156,12 @@ void update_player(
     player.velocity_y += force_x / 2;
     player.velocity_y += force_y / 2;
 
-    // Calculate boundaries for collision detection
-    uint8_t last_end_x = velocity_box.rel_x;
-    uint8_t last_start_x = last_end_x + (int) floorf(player.velocity_x);
-    if (player.velocity_x > 0)
-    {
-        last_start_x = last_end_x + PLAYER_SIZE_X;
-        last_end_x = last_start_x + (int) ceilf(player.velocity_x);
-        if (last_end_x > velocity_box.box.x2) last_end_x = velocity_box.box.x2;
-    }
-    uint8_t last_end_y = velocity_box.rel_y;
-    uint8_t last_start_y = last_end_y + (int) floorf(player.velocity_y);
-    if (player.velocity_y > 0)
-    {
-        last_start_y = last_end_y + PLAYER_SIZE_Y;
-        last_end_y = last_start_y + (int) ceilf(player.velocity_y);
-        if (last_end_y > velocity_box.box.y2) last_end_y = velocity_box.box.y2;
-    }
-
-    // Data for choosing the next axis
-    float prio_x = 1;
-    float prio_y = 1;
-    float y_of_x = fabsf(player.velocity_y / player.velocity_x);
-    float x_of_y = fabsf(player.velocity_x / player.velocity_y);
-    bool current_axis_x = fabsf(player.velocity_y) < fabsf(player.velocity_x);
-    if (current_axis_x) prio_y = y_of_x;
-    else prio_x = x_of_y;
-
-    // Progression data
-    int vertical_progress = 0;
-    int horizontal_progress = 0;
-    int vertical_end = (player.velocity_y < 0)
-        ? (int) floorf(player.velocity_y)
-        : (int) ceilf(player.velocity_y);
-    int vertical_max = (player.velocity_y < 0)
-        ? -velocity_box.rel_y
-        : velocity_box.box.y2 - velocity_box.rel_y - PLAYER_SIZE_Y;
-    if (abs(vertical_max) < abs(vertical_end)) vertical_end = vertical_max;
-    int horizontal_end = (player.velocity_x < 0)
-        ? (int) floorf(player.velocity_x)
-        : (int) ceilf(player.velocity_x);
-    int horizontal_max = (player.velocity_x < 0)
-        ? -velocity_box.rel_x
-        : velocity_box.box.x2 - velocity_box.rel_x - PLAYER_SIZE_X;
-    if (abs(horizontal_max) < abs(horizontal_end)) horizontal_end = horizontal_max;
-    bool vertical_done = vertical_end == 0;
-    bool horizontal_done = horizontal_end == 0;
-    bool vertical_collision = false;
-    bool horizontal_collision = false;
-
-    // Set up read direction and origins
-    uint8_t base_x = velocity_box.rel_x - 1;
-    if (player.velocity_x > 0) base_x += PLAYER_SIZE_X + 1;
-    uint8_t base_y = velocity_box.rel_y - 1;
-    if (player.velocity_y > 0) base_y += PLAYER_SIZE_Y + 1;
-    int dir_x = (player.velocity_x < 0) ? -1 : 1;
-    int dir_y = (player.velocity_y < 0) ? -1 : 1;
-
-    // Perform step wise checking for collision
-    while (vertical_done && horizontal_done)
-    {
-        if (current_axis_x)
-        {
-            for (
-                uint8_t x = velocity_box.rel_x + horizontal_progress;
-                x < velocity_box.rel_x + PLAYER_SIZE_X + horizontal_progress;
-                x++
-            )
-            {
-                if (tile_has_collision(box[x + (base_y + vertical_progress)*velocity_box.box.x2]))
-                {
-                    vertical_done = true;
-                    vertical_collision = true;
-                    vertical_progress -= dir_y;
-                    break;
-                }
-            }
-            vertical_progress += dir_y;
-            if (vertical_max <= vertical_progress)
-            {
-                if (velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y)
-                    vertical_collision = true;
-                else break;
-            }
-        }
-
-        else
-        {
-            for (
-                uint8_t y = velocity_box.rel_y + vertical_progress;
-                y < velocity_box.rel_y + PLAYER_SIZE_Y + vertical_progress;
-                y++
-            )
-            {
-                if (tile_has_collision(box[base_x + horizontal_progress + y*velocity_box.box.x2]))
-                {
-                    horizontal_done = true;
-                    horizontal_collision = true;
-                    horizontal_progress -= dir_x;
-                    break;
-                }
-            }
-            horizontal_progress += dir_x;
-            if (horizontal_max <= horizontal_progress)
-            {
-                if (velocity_box.box.x1 + velocity_box.box.x2 == ROOM_X)
-                    horizontal_collision = true;
-                else break;
-            }
-        }
-
-        float one = 1;
-        float remainder_x = 1 - modff(prio_x, &one);
-        one = 1;
-        float remainder_y = 1 - modff(prio_y, &one);
-        vertical_done = abs(vertical_end) <= abs(vertical_progress);
-        horizontal_done = abs(horizontal_end) <= abs(horizontal_progress);
-        if (!vertical_done && !horizontal_done)
-            current_axis_x = remainder_x / x_of_y < remainder_y / y_of_x;
-        else current_axis_x = !vertical_done;
-        if (current_axis_x)
-        {
-            prio_x = ceilf(prio_x);
-            prio_y += y_of_x * prio_x;
-        }
-        else
-        {
-            prio_y = ceilf(prio_y);
-            prio_x += x_of_y * prio_y;
-        }
-    }
-
-    // Stop player if collided, and apply movement
-    if (horizontal_collision)
-    {
-        player.velocity_x = 0;
-        player.x += horizontal_progress;
-    }
-    else player.x += player.velocity_x;
-    if (vertical_collision)
-    {
-        player.velocity_y = 0;
-        player.y += vertical_progress;
-    }
-    else player.y += player.velocity_y;
-
-    // Ensure the player is within bounds
-    if (player.x <= 0)
-    {
-        player.x = 0;
-        player.velocity_x = 0;
-    }
-    if (player.y <= 0)
-    {
-        player.y = 0;
-        player.velocity_y = 0;
-    }
-    if (ROOM_X - 1 <= player.x)
-    {
-        player.x = ROOM_X - 1;
-        player.velocity_x = 0;
-    }
-    if (ROOM_Y - 1 <= player.y)
-    {
-        player.y = ROOM_Y - 1;
-        player.velocity_y = 0;
-    }
+    perform_collision_detection(
+        &player.x, &player.y,
+        &player.velocity_x, &player.velocity_y,
+        PLAYER_SIZE_X, PLAYER_SIZE_Y,
+        velocity_box, box
+    );
 
     // Apply second half of velocity
     player.velocity_x += force_x / 2;
@@ -366,8 +200,11 @@ void update_player(
     }
 
     // Create the next velocity box
-    velocity_box_t nvb = next_velocity_box(player);
-    set_next_velocity_box(&nvb);
+    velocity_box_t next_velocity_box = create_velocity_box(
+        player.x, player.y,
+        PLAYER_SIZE_X, PLAYER_SIZE_Y
+    );
+    set_next_velocity_box(&next_velocity_box);
 }
 
 void move_left()
@@ -388,26 +225,4 @@ void move_stop()
 void start_jump()
 {
     jump_next_frame = true;
-}
-
-velocity_box_t next_velocity_box(player_t player)
-{
-    int dx = 20;
-    int dy = 30;
-    int rel_x = (dx - PLAYER_SIZE_X) / 2;
-    int rel_y = (dy - PLAYER_SIZE_Y) / 2;
-
-    int x = floorf(player.x + 0.5);
-    int y = floorf(player.y + 0.5);
-
-    if (x - rel_x < 0) rel_x = x;
-    else if (x - rel_x + dx >= ROOM_X) rel_x = x + dx - ROOM_X;
-    if (y - rel_y < 0) rel_y = y;
-    else if (y - rel_y + dy >= ROOM_Y) rel_y = y + dy - ROOM_Y;
-
-    fpga_box_t box = {
-        x - rel_x, y - rel_y,
-        dx, dy
-    };
-    return (velocity_box_t) {box, rel_x, rel_y, dx*dy};
 }

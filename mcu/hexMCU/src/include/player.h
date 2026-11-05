@@ -2,6 +2,7 @@
 
 #include "fpga.h"
 #include "rooms.h"
+#include "collision.h"
 #include <stdint.h>
 
 #define GRAVITY_AIR 0.4
@@ -35,14 +36,6 @@ typedef struct
     uint16_t breath_meter;
 } player_t;
 
-typedef struct
-{
-    fpga_box_t box;
-    uint8_t rel_x;
-    uint8_t rel_y;
-    uint16_t length;
-} velocity_box_t;
-
 void update_player(
     player_t player,
     uint8_t *box, velocity_box_t velocity_box,
@@ -52,4 +45,3 @@ void move_left();
 void move_right();
 void move_stop();
 void start_jump();
-velocity_box_t next_velocity_box(player_t player);

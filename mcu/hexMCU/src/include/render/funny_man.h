@@ -1,5 +1,5 @@
-#ifndef PLAYER_H
-#define PLAYER_H
+#ifndef FUNNY_MAN_H
+#define FUNNY_MAN_H
 
 /* The stand-in character: a cube with a smiley face, as a HUD sprite.
  * Portable: MCU and host build.
@@ -7,7 +7,8 @@
  *   room_enter:  player_init(x, y);
  *   run_frame:   player_frame(&keys, n);    WASD / arrow keys move it
  *
- * hud_poll() does the sending, like for the cursor. */
+ * sprite_poll() does the sending, like for the cursor. Call player_init()
+ * after sprite_init(). */
 
 #include <stdint.h>
 

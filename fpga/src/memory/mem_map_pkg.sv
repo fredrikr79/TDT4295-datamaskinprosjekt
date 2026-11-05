@@ -20,8 +20,8 @@ package mem_map_pkg;
   // Region sizes //
 
   // Cell layer
-  localparam int unsigned BytesPerCellWord = cell_pkg::WordBits / 8;  // 4
-  localparam int unsigned CellGridBytes = cell_pkg::TotalCellWords * BytesPerCellWord;  // 115,200
+  localparam int unsigned BytesPerCellWord = sim_pkg::WordBits / 8;  // 4
+  localparam int unsigned CellGridBytes = sim_pkg::TotalWords * BytesPerCellWord;  // 115,200
 
   // Framebuffers
   localparam int unsigned FbBytes = GridCells;  // 230,400
@@ -37,10 +37,10 @@ package mem_map_pkg;
   localparam int unsigned SpritesMemPointer = align_to_next_page(Fb1MemPointer + FbBytes);
 
   // Cell layer helper functions //
-  function automatic memory_pkg::address_t cell_word_addr(input cell_pkg::grid_x_t x,
-                                                          input cell_pkg::grid_y_t y);
+  function automatic memory_pkg::address_t cell_word_addr(input sim_pkg::grid_x_t x,
+                                                          input sim_pkg::grid_y_t y);
     return memory_pkg::address_t
-        '(CellGridMemPointer + cell_pkg::get_word_addr(x, y) * BytesPerCellWord);
+        '(CellGridMemPointer + sim_pkg::get_word_addr(x, y) * BytesPerCellWord);
   endfunction
 
 

@@ -17,7 +17,7 @@
  * read, which is a single READ. ECHO compares rx with tx at
  * the end, INFO parses its answer.
  *
- * The sprite commands carry their parameters and their one-byte answer
+ * The sprite commands carry their parameters and their two-byte answer
  * inside the command (param[], answer[]). fpga_submit() points tx / rx at
  * the copy in the queue slot, which stays put until the command is done,
  * so DMA can read and write it there.
@@ -496,18 +496,17 @@ fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len)
     /* No size field: the FPGA takes the opcode, then the whole payload as
      * the image, like ECHO. Answers the memID. */
     return (fpga_cmd_t){ .hdr = { .opcode = WRITE_SPRITE_OPCODE, .len = len },
-                         .tx = pixels, .rx_len = 1, .answer_rx = true,
+                         .tx = pixels, .rx_len = 2, .answer_rx = true,
                          .kind = FPGA_KIND_READ };
 }
 
-fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16_t y,
+fpga_cmd_t fpga_cmd_sprite_write(uint16_t mem_id, bool active, uint16_t x, uint16_t y,
                                  uint16_t w, uint16_t h)
 {
-    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_WRITE_OPCODE, .len = 10 },
-                     .param_tx = true, .rx_len = 1, .answer_rx = true,
+    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_WRITE_OPCODE, .len = 11 },
+                     .param_tx = true, .rx_len = 2, .answer_rx = true,
                      .kind = FPGA_KIND_READ };
-    uint8_t *p = c.param;
-    *p++ = mem_id;
+    uint8_t *p = put16(c.param, mem_id);
     *p++ = active ? 1u : 0u;
     p = put16(p, x);
     p = put16(p, y);
@@ -516,23 +515,22 @@ fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16
     return c;
 }
 
-fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y)
+fpga_cmd_t fpga_cmd_sprite_update(uint16_t sprite_id, bool active, uint16_t x, uint16_t y)
 {
-    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_UPDATE_OPCODE, .len = 6 },
+    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_UPDATE_OPCODE, .len = 7 },
                      .param_tx = true, .kind = FPGA_KIND_WRITE };
-    uint8_t *p = c.param;
-    *p++ = sprite_id;
+    uint8_t *p = put16(c.param, sprite_id);
     *p++ = active ? 1u : 0u;
     p = put16(p, x);
     put16(p, y);
     return c;
 }
 
-fpga_cmd_t fpga_cmd_sprite_delete(uint8_t sprite_id)
+fpga_cmd_t fpga_cmd_sprite_delete(uint16_t sprite_id)
 {
-    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_DELETE_OPCODE, .len = 1 },
+    fpga_cmd_t c = { .hdr = { .opcode = SPRITE_DELETE_OPCODE, .len = 2 },
                      .param_tx = true, .kind = FPGA_KIND_WRITE };
-    c.param[0] = sprite_id;
+    put16(c.param, sprite_id);
     return c;
 }
 

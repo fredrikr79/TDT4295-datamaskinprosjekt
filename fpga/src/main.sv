@@ -56,10 +56,9 @@ module main (
   logic [7:0] spi_mem_in, mem_out;
   memory_pkg::transaction_e spi_mem_transaction;
 
-  localparam int unsigned NumLayers  = 3;
+  localparam int unsigned NumLayers  = 2;
   localparam int unsigned LayerCells = 0;
-  localparam int unsigned LayerGol   = 1;
-  localparam int unsigned LayerHud   = 2;
+  localparam int unsigned LayerHud   = 1;
 
   layer_pkg::layer_px_t layers[NumLayers];
 
@@ -87,17 +86,17 @@ module main (
   );
 
 
-  layer_pkg::layer_px_t cells_pixel_unused;
-  cells cell_controller (
-      .clk(clk),
-      .sw(sw),
-      .sim_running(sim_running),
-      .active_area(active_area),
-      .pixel_pulse(pixel_pulse),
-      .coord_x(coord_x),
-      .coord_y(coord_y),
-      .pixel(cells_pixel_unused) // Temporary for implementing frame buffer
-  );
+//   layer_pkg::layer_px_t cells_pixel_unused;
+//   cells cell_controller (
+//       .clk(clk),
+//       .sw(sw),
+//       .sim_running(sim_running),
+//       .active_area(active_area),
+//       .pixel_pulse(pixel_pulse),
+//       .coord_x(coord_x),
+//       .coord_y(coord_y),
+//       .pixel(cells_pixel_unused) // Temporary for implementing frame buffer
+//   );
 
   // Framebuffer
   logic fb_sel;
@@ -129,15 +128,6 @@ module main (
 
       .pixel(layers[LayerCells]),
       .underrun(fb_underrun)
-  );
-
-  gol gol_controller (
-      .clk(clk),
-      .reset(sw[3]),
-      .sim_running(sim_running),
-      .active_area(active_area),
-      .pixel_pulse(pixel_pulse),
-      .pixel(layers[LayerGol])
   );
 
   // TODO: Implement HUD layer. Temporarily always transparent. Remove after implementing the HUD layer.

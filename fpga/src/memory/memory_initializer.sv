@@ -49,8 +49,9 @@ module memory_initializer (
           address: 'h00000004,
           length: 2,
           write_data: {
-              {'b1, memory_pkg::DriveStrength, 'b1111},
-              {memory_pkg::InitialLatency, 'b1, memory_pkg::BurstLength}
+            {1'b1, memory_pkg::DriveStrength, 4'b1111},
+            {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
+            {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
       },
       '{
@@ -58,8 +59,9 @@ module memory_initializer (
           address: 'h00800004,
           length: 2,
           write_data: {
-              {'b1, memory_pkg::DriveStrength, 'b1111},
-              {memory_pkg::InitialLatency, 'b1, memory_pkg::BurstLength}
+            {1'b1, memory_pkg::DriveStrength, 4'b1111},
+            {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
+            {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
       },
       // Write to configuration registers 1
@@ -67,13 +69,17 @@ module memory_initializer (
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00000006,
           length: 2,
-          write_data: {'hFF, 'b1, 'b0, 'b0, 'b000, 'b00}
+          write_data: {
+            8'hFF, 1'b1, 1'b0, 1'b0, 3'b000, 2'b00, {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          }
       },
       '{
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00800006,
           length: 2,
-          write_data: {'hFF, 'b1, 'b0, 'b0, 'b000, 'b00}
+          write_data: {
+            8'hFF, 1'b1, 1'b0, 1'b0, 3'b000, 2'b00, {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          }
       }
   };
   logic [TransactionCount-1:0] i_current_transactions;

@@ -10,7 +10,7 @@ module palette (
   initial begin
     for (int unsigned i = 0; i < palette_pkg::PaletteEntries; i++) begin
       if (i < 16) begin
-        entries[i] = cell_pkg::material_color(cell_pkg::material_t'(i));
+        entries[i] = sim_pkg::material_color(sim_pkg::material_t'(i));
       end else begin
         entries[i] = color_pkg::color_t'({
           i[7:5], i[7],  // abca

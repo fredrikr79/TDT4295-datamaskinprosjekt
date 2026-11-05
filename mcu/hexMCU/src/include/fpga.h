@@ -15,12 +15,12 @@
  * | INFO          | 20 | -                                             | -        | W H N SID
  * | WRITE_CONS    | 30 | X 2B, Y 2B, N 2B                              | N bytes  | -
  * | READ_CONS     | 40 | X 2B, Y 2B, N 2B                              | -        | N bytes
- * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | pixels   | -
- * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | pixels
- * | WRITE_SPRITE  | 70 | -                                             | pixels   | memID
- * | SPRITE_WRITE  | 80 | memID, active, X 2B, Y 2B, W 2B, H 2B         | -        | spriteID
- * | SPRITE_UPDATE | 90 | spriteID, active, X 2B, Y 2B                  | -        | -
- * | SPRITE_DELETE | A0 | spriteID                                      | -        | -
+ * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | IDs      | -
+ * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | IDs
+ * | WRITE_SPRITE  | 70 | -                                             | pixels   | memID 2B
+ * | SPRITE_WRITE  | 80 | memID 2B, active, X 2B, Y 2B, W 2B, H 2B      | -        | spriteID 2B
+ * | SPRITE_UPDATE | 90 | spriteID 2B, active, X 2B, Y 2B               | -        | -
+ * | SPRITE_DELETE | A0 | spriteID 2B                                   | -        | -
  * | START_SIM     | B0 | -                                             | -        | -
  * | STOP_SIM      | C0 | -                                             | -        | -
  * ------------------------------------------------------------------------------------------
@@ -35,10 +35,15 @@
  * WRITE_SPRITEs in a row; SPRITE_WRITE then names the first memID and the
  * whole W x H. memIDs are few (see the spec), spriteIDs many.
  *
- * Boxes: X,Y is the top-left pixel, W the pixels per row, H the rows; the
- * pixels are one stream, row by row, the last one at (X+W-1, Y+H-1). Build
- * boxes with fpga_box(). Pixels are RGB565, 2 bytes each, MSB first.
- * 0xF81F (magenta) is see-through in sprites.
+ * The two layers carry different things:
+ *   SIM layer (grid): material IDs, 4 bits per cell (see "the SIM layer"
+ *     below). CONS and BOX both read and write IDs.
+ *   HUD layer (sprites): RGB565 pixels, 2 bytes each, MSB first; 0xF81F
+ *     (magenta) is see-through.
+ *
+ * Boxes: X,Y is the top-left cell, W the cells per row, H the rows; the
+ * cells are one stream, row by row, the last one at (X+W-1, Y+H-1), packed
+ * like CONS (FPGA_SIM_IDS_PER_BYTE). Build boxes with fpga_box().
  *
  * INFO answer, MSB first (FPGA_INFO_BYTES): W, H, N 16 bits, SID 32 bits.
  *   W, H  screen size in pixels
@@ -122,7 +127,34 @@
 #define FPGA_INFO_BYTES         10u     /* W, H, N: 2 bytes each, SID 4 bytes */
 
 /* Sprite parameters travel inside the command (see struct fpga_cmd). */
-#define FPGA_PARAM_MAX          10u     /* SPRITE_WRITE's, the longest */
+#define FPGA_PARAM_MAX          11u     /* SPRITE_WRITE's, the longest */
+
+/* ---- the SIM layer (grid) ------------------------------------------------
+ * Every cell holds a 4-bit material ID; the FPGA turns IDs into colours
+ * with its own lookup table. WRITE_CONS / READ_CONS carry IDs, X,Y count
+ * cells and N counts bytes. */
+enum {                              /* PROTOCOL: the values still to agree   */
+    SIM_AIR   = 0,                  /* empty                                 */
+    SIM_SAND  = 1,
+    SIM_WATER = 2,
+    SIM_WALL  = 3,
+    SIM_LIFE  = 4,                  /* game of life                          */
+};
+#define SIM_ID_MAX  15u             /* 4 bits: up to 16 materials            */
+
+/* PROTOCOL, not agreed yet: IDs per byte in CONS data.
+ *   1 = one ID per byte (low 4 bits; N bytes = N cells)
+ *   2 = two IDs per byte, the first cell in the high nibble (N bytes = 2N cells)
+ * The fake FPGA follows this; rooms.c sends one per byte until it's settled. */
+#ifndef FPGA_SIM_IDS_PER_BYTE
+#define FPGA_SIM_IDS_PER_BYTE 1
+#endif
+
+/* Bytes that n cells take in CONS / BOX data. */
+static inline uint32_t fpga_sim_bytes(uint32_t cells)
+{
+    return (cells + FPGA_SIM_IDS_PER_BYTE - 1u) / FPGA_SIM_IDS_PER_BYTE;
+}
 
 /* ACK line at READY, as transport_ready_status() reports it. */
 #define FPGA_STATUS_OK          0u      /* ACK high: the command worked */
@@ -215,7 +247,7 @@ struct fpga_cmd {
 
     /* Carried inside the command, for the sprite commands: their
      * parameters are the payload (tx points here once queued), and their
-     * one-byte answer lands here (fpga_answer_id()). */
+     * two-byte answer lands here (fpga_answer_id()). */
     bool            param_tx;               /* tx = param            */
     bool            answer_rx;              /* rx = answer           */
     uint8_t         param[FPGA_PARAM_MAX];
@@ -224,7 +256,10 @@ struct fpga_cmd {
 
 /* The memID (WRITE_SPRITE) or spriteID (SPRITE_WRITE) a command got back.
  * Valid in its done callback when err == FPGA_ERR_NONE. */
-static inline uint8_t fpga_answer_id(const fpga_cmd_t *cmd) { return cmd->answer[0]; }
+static inline uint16_t fpga_answer_id(const fpga_cmd_t *cmd)
+{
+    return (uint16_t)((cmd->answer[0] << 8) | cmd->answer[1]);     /* MSB first */
+}
 
 /* len is always the buffer size in bytes. */
 fpga_cmd_t fpga_cmd_echo(const uint8_t *tx, uint8_t *rx, uint16_t len);
@@ -244,10 +279,10 @@ fpga_cmd_t fpga_cmd_read_box(fpga_box_t box, uint8_t *buf, uint16_t len);
  * sprite_write places an instance and answers its spriteID. Read either
  * with fpga_answer_id(cmd) in the done callback. */
 fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len);
-fpga_cmd_t fpga_cmd_sprite_write(uint8_t mem_id, bool active, uint16_t x, uint16_t y,
+fpga_cmd_t fpga_cmd_sprite_write(uint16_t mem_id, bool active, uint16_t x, uint16_t y,
                                  uint16_t w, uint16_t h);
-fpga_cmd_t fpga_cmd_sprite_update(uint8_t sprite_id, bool active, uint16_t x, uint16_t y);
-fpga_cmd_t fpga_cmd_sprite_delete(uint8_t sprite_id);
+fpga_cmd_t fpga_cmd_sprite_update(uint16_t sprite_id, bool active, uint16_t x, uint16_t y);
+fpga_cmd_t fpga_cmd_sprite_delete(uint16_t sprite_id);
 
 fpga_cmd_t fpga_cmd_sim_run(bool run);      /* START_SIM / STOP_SIM      */
 

@@ -8,6 +8,12 @@
  * Mouse: click the window to grab it (relative mode), F12 lets go. The
  * grabbing click and F12 are not passed on to the game.
  *
+ * Controllers: any controller SDL knows (DualShock, DualSense, Xbox,
+ * Switch Pro, ...) shows up as pad 0, 1 in plug-in order, with the same
+ * PAD_* layout as the MCU gives a DualShock 4. They are read as state every
+ * poll rather than through events, so display_poll() flushing the event
+ * queue doesn't matter for them.
+ *
  * Sharing the SDL event queue: this file takes only keyboard and mouse
  * events out of it (SDL_PeepEvents by type range). display_poll() flushes
  * everything else and must leave those two ranges alone. That way it
@@ -26,7 +32,7 @@
 
 static uint8_t     kb[8];       /* { modifier, reserved, key[6] } */
 static uint8_t     buttons;
-static float       rem_x, rem_y, rem_wheel;   /* sub-unit motion carried over */
+static float       rem_x, rem_y, rem_wheel, rem_pan;   /* sub-unit motion carried over */
 static SDL_Window *grabbed;     /* window in relative mouse mode, or NULL */
 static bool        grab_failed; /* relative mode not supported: don't retry */
 static bool        had_focus;
@@ -58,20 +64,11 @@ static void kb_key(SDL_Scancode scancode, bool down)
 }
 
 /* ---- mouse --------------------------------------------------------------- */
-static int8_t clamp8(int v)
+/* Same path as a report-protocol mouse on the MCU: full-size values, wheel
+ * and horizontal wheel (pan). */
+static void mouse_send(int dx, int dy, int wheel, int pan)
 {
-    return (int8_t)(v < -127 ? -127 : v > 127 ? 127 : v);
-}
-
-/* Big movements are split into several reports, like a fast real mouse. */
-static void mouse_send(int dx, int dy, int wheel)
-{
-    do {
-        int8_t x = clamp8(dx), y = clamp8(dy), w = clamp8(wheel);
-        uint8_t r[4] = { buttons, (uint8_t)x, (uint8_t)y, (uint8_t)w };
-        usb_input_mouse_report(r, sizeof r);
-        dx -= x; dy -= y; wheel -= w;
-    } while (dx || dy || wheel);
+    usb_input_mouse_motion(buttons, dx, dy, wheel, pan);
 }
 
 /* SDL3 motion and wheel are floats (high-resolution mice): send the whole
@@ -103,14 +100,122 @@ static void ungrab(void)
     grabbed = NULL;
 }
 
+/* ---- controllers --------------------------------------------------------- */
+#define PAD_SCAN_MS     500u    /* how often to look for new controllers */
+#define TRIGGER_PRESSED 32u     /* lt/rt above this count as PAD_L2/PAD_R2 down */
+
+static struct {
+    SDL_Gamepad   *gp;          /* NULL: slot free */
+    SDL_JoystickID id;
+} pads[INPUT_PADS];
+static bool pads_ok;            /* SDL gamepad subsystem is up */
+
+/* Look for controllers plugged in and out. */
+static void pads_scan(void)
+{
+    for (unsigned p = 0; p < INPUT_PADS; p++) {
+        if (!pads[p].gp || SDL_GamepadConnected(pads[p].gp)) continue;
+        SDL_CloseGamepad(pads[p].gp);
+        pads[p].gp = NULL;
+        usb_input_gamepad_connected((uint8_t)p, false);
+        LOG_INFO("pad %u: controller gone", p);
+    }
+
+    int n = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&n);
+    if (!ids) return;
+    for (int i = 0; i < n; i++) {
+        int free_slot = -1;
+        bool open = false;
+        for (unsigned p = 0; p < INPUT_PADS; p++) {
+            if (pads[p].gp && pads[p].id == ids[i]) open = true;
+            if (!pads[p].gp && free_slot < 0) free_slot = (int)p;
+        }
+        if (open) continue;
+        if (free_slot < 0) break;                       /* all slots taken */
+
+        SDL_Gamepad *gp = SDL_OpenGamepad(ids[i]);
+        if (!gp) {
+            LOG_WARN("can't open controller: %s", SDL_GetError());
+            continue;
+        }
+        pads[free_slot].gp = gp;
+        pads[free_slot].id = ids[i];
+        usb_input_gamepad_connected((uint8_t)free_slot, true);
+        const char *name = SDL_GetGamepadName(gp);
+        LOG_INFO("pad %d: %s", free_slot, name ? name : "controller");
+    }
+    SDL_free(ids);
+}
+
+static int8_t stick(Sint16 v)  { return (int8_t)((int)v / 256); }      /* -32768..32767 -> -128..127 */
+static uint8_t trigger(Sint16 v) { return v <= 0 ? 0 : (uint8_t)((int)v / 128); } /* 0..32767 -> 0..255 */
+
+/* Read each controller's state and hand it over. Without keyboard focus
+ * the game gets "nothing pressed", like the keyboard and mouse. */
+static void pads_poll(bool focus)
+{
+    static const struct { SDL_GamepadButton b; uint32_t bit; } map[] = {
+        { SDL_GAMEPAD_BUTTON_SOUTH,          PAD_SOUTH  },
+        { SDL_GAMEPAD_BUTTON_EAST,           PAD_EAST   },
+        { SDL_GAMEPAD_BUTTON_WEST,           PAD_WEST   },
+        { SDL_GAMEPAD_BUTTON_NORTH,          PAD_NORTH  },
+        { SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,  PAD_L1     },
+        { SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, PAD_R1     },
+        { SDL_GAMEPAD_BUTTON_BACK,           PAD_SELECT },
+        { SDL_GAMEPAD_BUTTON_START,          PAD_START  },
+        { SDL_GAMEPAD_BUTTON_LEFT_STICK,     PAD_L3     },
+        { SDL_GAMEPAD_BUTTON_RIGHT_STICK,    PAD_R3     },
+        { SDL_GAMEPAD_BUTTON_GUIDE,          PAD_HOME   },
+        { SDL_GAMEPAD_BUTTON_TOUCHPAD,       PAD_TOUCH  },
+        { SDL_GAMEPAD_BUTTON_DPAD_UP,        PAD_UP     },
+        { SDL_GAMEPAD_BUTTON_DPAD_DOWN,      PAD_DOWN   },
+        { SDL_GAMEPAD_BUTTON_DPAD_LEFT,      PAD_LEFT   },
+        { SDL_GAMEPAD_BUTTON_DPAD_RIGHT,     PAD_RIGHT  },
+    };
+
+    for (unsigned p = 0; p < INPUT_PADS; p++) {
+        SDL_Gamepad *gp = pads[p].gp;
+        if (!gp) continue;
+
+        usb_gamepad_t g = { .touch_valid = true };      /* all released, no fingers */
+        if (focus) {
+            for (unsigned k = 0; k < sizeof map / sizeof map[0]; k++)
+                if (SDL_GetGamepadButton(gp, map[k].b)) g.buttons |= map[k].bit;
+
+            g.lx = stick(SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX));
+            g.ly = stick(SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY));
+            g.rx = stick(SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX));
+            g.ry = stick(SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY));
+            g.lt = trigger(SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
+            g.rt = trigger(SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+            if (g.lt > TRIGGER_PRESSED) g.buttons |= PAD_L2;  /* SDL has no L2/R2 buttons */
+            if (g.rt > TRIGGER_PRESSED) g.buttons |= PAD_R2;
+
+            /* SDL gives 0..1 from the top left, same corner as the MCU */
+            if (SDL_GetNumGamepadTouchpads(gp) > 0) {
+                for (int f = 0; f < 2; f++) {
+                    bool down = false;
+                    float x = 0, y = 0;
+                    if (!SDL_GetGamepadTouchpadFinger(gp, 0, f, &down, &x, &y, NULL)) continue;
+                    g.touch[f].down = down;
+                    g.touch[f].x = (uint16_t)(x * (PAD_TOUCH_W - 1) + 0.5f);
+                    g.touch[f].y = (uint16_t)(y * (PAD_TOUCH_H - 1) + 0.5f);
+                }
+            }
+        }
+        usb_input_gamepad((uint8_t)p, &g);
+    }
+}
+
 /* Focus lost: SDL won't tell us about key-ups any more, so let go of all. */
 static void release_all(void)
 {
     memset(kb, 0, sizeof kb);
     kb_send();
     buttons = 0;
-    rem_x = rem_y = rem_wheel = 0.0f;
-    mouse_send(0, 0, 0);
+    rem_x = rem_y = rem_wheel = rem_pan = 0.0f;
+    mouse_send(0, 0, 0, 0);
     ungrab();
 }
 
@@ -131,7 +236,7 @@ static void handle(const SDL_Event *e)
     case SDL_EVENT_MOUSE_MOTION: {
         int dx = take_whole(&rem_x, e->motion.xrel);
         int dy = take_whole(&rem_y, e->motion.yrel);
-        if (dx || dy) mouse_send(dx, dy, 0);
+        if (dx || dy) mouse_send(dx, dy, 0, 0);
         break;
     }
 
@@ -147,20 +252,21 @@ static void handle(const SDL_Event *e)
             grab_failed = true;
         }
         buttons |= button_bit(e->button.button);
-        mouse_send(0, 0, 0);
+        mouse_send(0, 0, 0, 0);
         break;
 
     case SDL_EVENT_MOUSE_BUTTON_UP:
         if (!(buttons & button_bit(e->button.button))) break;   /* the grab click */
         buttons &= (uint8_t)~button_bit(e->button.button);
-        mouse_send(0, 0, 0);
+        mouse_send(0, 0, 0, 0);
         break;
 
     case SDL_EVENT_MOUSE_WHEEL: {
-        float y = e->wheel.y;
-        if (e->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) y = -y;
+        float y = e->wheel.y, x = e->wheel.x;   /* +y = away from you, +x = right */
+        if (e->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) { y = -y; x = -x; }
         int w = take_whole(&rem_wheel, y);
-        if (w) mouse_send(0, 0, w);
+        int p = take_whole(&rem_pan, x);
+        if (w || p) mouse_send(0, 0, w, p);
         break;
     }
 
@@ -182,15 +288,21 @@ void usb_backend_init(void)
     usb_input_connected(USB_KEYBOARD, true);
     usb_input_connected(USB_MOUSE, true);
     LOG_INFO("input from the display window: click to grab the mouse, F12 to let go");
+
+    /* Controllers are optional: keyboard and mouse work without them. */
+    pads_ok = SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    if (!pads_ok) LOG_WARN("no controller support: %s", SDL_GetError());
+    else          pads_scan();
 }
 
 void usb_backend_poll(void)
 {
+    static Uint64 last_scan;
     SDL_Event ev[32];
     int n;
 
     if (!SDL_WasInit(SDL_INIT_VIDEO)) return;
-    SDL_PumpEvents();
+    SDL_PumpEvents();           /* also updates the controllers' state */
 
     /* Keyboard focus gone (alt-tab, window closed): key-ups won't come. */
     bool focus = SDL_GetKeyboardFocus() != NULL;
@@ -204,4 +316,13 @@ void usb_backend_poll(void)
     while ((n = SDL_PeepEvents(ev, 32, SDL_GETEVENT,
                                SDL_EVENT_MOUSE_MOTION, SDL_EVENT_MOUSE_WHEEL)) > 0)
         for (int i = 0; i < n; i++) handle(&ev[i]);
+
+    if (pads_ok) {
+        Uint64 now = SDL_GetTicks();
+        if (now - last_scan >= PAD_SCAN_MS) {
+            pads_scan();
+            last_scan = now;
+        }
+        pads_poll(focus);
+    }
 }

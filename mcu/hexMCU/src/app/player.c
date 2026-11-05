@@ -178,9 +178,18 @@ void update_player(
     }
 
     // Damage
+    if (player.burn_timer)
+    {
+        damage_player(player, 1);
+        player.burn_timer--;
+    }
     if (in_stone) damage_player(player, 1);
     if (in_sand) damage_player(player, 1);
-    if (in_lava) damage_player(player, 5);
+    if (in_lava)
+    {
+        damage_player(player, 3);
+        player.burn_timer = PLAYER_BURN_TIME;
+    }
     if (in_acid) damage_player(player, 3);
     if (in_gol) damage_player(player, 2);
     if (in_explosion) damage_player(player, 5);

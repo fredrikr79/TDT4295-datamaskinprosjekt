@@ -20,10 +20,11 @@
 #define PLAYER_SIZE_Y 16
 
 #define PLAYER_MAX_HEALTH 500
-#define PLAYER_DAMAGE_TO_HEAL_DELAY 1000
+#define PLAYER_DAMAGE_TO_HEAL_DELAY 250
 #define PLAYER_HEAL_DELAY 1
 #define PLAYER_HEAL_AMOUNT 5
-#define PLAYER_MAX_BREATH 500
+#define PLAYER_MAX_BREATH 250
+#define PLAYER_BURN_TIME 125
 
 typedef struct
 {
@@ -34,6 +35,7 @@ typedef struct
 
     uint16_t health;
     uint16_t breath_meter;
+    uint16_t burn_timer;
 } player_t;
 
 void update_player(

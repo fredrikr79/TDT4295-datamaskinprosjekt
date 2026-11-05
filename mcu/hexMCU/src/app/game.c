@@ -280,14 +280,14 @@ static void run_poll(void)
 
 static void handle_movement_keys(input_t in)
 {
-    bool left_pressed = key_pressed(&in, KEY_A);
-    bool right_pressed = key_pressed(&in, KEY_D);
+    bool left_pressed = key_held(&in, KEY_A);
+    bool right_pressed = key_held(&in, KEY_D);
 
     if (left_pressed && !right_pressed) move_left();
     if (right_pressed && !left_pressed) move_right();
     else move_stop();
 
-    if (key_pressed(&in, KEY_SPACE)) start_jump();
+    if (key_held(&in, KEY_SPACE)) start_jump();
 }
 
 /* Leave the current room: save it, then load `to`.

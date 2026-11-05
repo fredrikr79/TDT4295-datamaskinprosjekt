@@ -2,7 +2,8 @@
 /* verilator lint_off MULTITOP */
 
 module tb_main #(
-    parameter string DUMPFILEPATH = ""  // this parameter is overwritten when compiling with make
+    parameter string DUMPDIR = "",
+    parameter string DUMPFILENAME = ""  // these parameter are overwritten when compiling with make
 ) (
     input logic clk,
     input logic reset,
@@ -34,8 +35,8 @@ module tb_main #(
   assign pixel_pulse = dut.pixel_pulse;
 
   initial begin
-    if (DUMPFILEPATH != "") begin
-      $dumpfile(DUMPFILEPATH);
+    if (DUMPFILENAME != "") begin
+      $dumpfile({DUMPDIR, "/", DUMPFILENAME});
       $dumpvars(0, tb);
     end
   end

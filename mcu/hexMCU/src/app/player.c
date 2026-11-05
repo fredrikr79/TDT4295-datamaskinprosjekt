@@ -156,7 +156,8 @@ void update_player(
     player.velocity_y += force_x / 2;
     player.velocity_y += force_y / 2;
 
-    perform_collision_detection(
+    // Move the player
+    perform_object_movement(
         &player.x, &player.y,
         &player.velocity_x, &player.velocity_y,
         PLAYER_SIZE_X, PLAYER_SIZE_Y,

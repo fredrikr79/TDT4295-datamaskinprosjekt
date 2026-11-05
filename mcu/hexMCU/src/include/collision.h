@@ -15,7 +15,7 @@ velocity_box_t create_velocity_box(
     uint8_t size_x, uint8_t size_y
 );
 
-bool perform_collision_detection(
+bool perform_object_movement(
     float *pos_x, float *pos_y,
     float *velocity_x, float *velocity_y,
     uint8_t size_x, uint8_t size_y,

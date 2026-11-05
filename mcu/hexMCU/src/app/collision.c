@@ -35,7 +35,7 @@ velocity_box_t create_velocity_box(
     return (velocity_box_t) {box, rel_x, rel_y, dx*dy};
 }
 
-bool perform_collision_detection(
+bool perform_object_movement(
     float *pos_x, float *pos_y,
     float *velocity_x, float *velocity_y,
     uint8_t size_x, uint8_t size_y,
@@ -173,7 +173,7 @@ bool perform_collision_detection(
         }
     }
 
-    // Stop player if collided, and apply movement
+    // Stop object if collided, and apply movement
     if (horizontal_collision)
     {
         *velocity_x = 0;
@@ -187,7 +187,7 @@ bool perform_collision_detection(
     }
     else *pos_y += *velocity_y;
 
-    // Ensure the player is within bounds
+    // Ensure the object is within bounds
     if (*pos_x <= 0)
     {
         *pos_x = 0;
@@ -198,14 +198,14 @@ bool perform_collision_detection(
         *pos_y = 0;
         *velocity_y = 0;
     }
-    if (ROOM_X - 1 <= *pos_x)
+    if (ROOM_X - 1 <= *pos_x + size_x)
     {
-        *pos_x = ROOM_X - 1;
+        *pos_x = ROOM_X - 1 - size_x;
         *velocity_x = 0;
     }
-    if (ROOM_Y - 1 <= *pos_y)
+    if (ROOM_Y - 1 <= *pos_y + size_y)
     {
-        *pos_y = ROOM_Y - 1;
+        *pos_y = ROOM_Y - 1 - size_y;
         *velocity_y = 0;
     }
 

@@ -317,7 +317,12 @@ static bool step(void)
     uint32_t elapsed = plat_millis() - run.t0;   /* wrap-safe */
 
     if (kind == STEP_WAIT_IRQ) {
-        if (transport_ready_count() != run.irq_mark) {
+        /* Done = a READY edge since the transfer began AND the line high
+         * now. A glitch while the FPGA is busy (edge, but the line back
+         * low) is then not taken as "done"; we wait for the real rising
+         * edge, and the ACK latched with that one is what counts. Assumes
+         * READY stays high while the FPGA is idle (it isn't a short pulse). */
+        if (transport_ready_count() != run.irq_mark && plat_fpga_ready_pin()) {
             ready_used++;
             last_status = transport_ready_status();
             if (last_status != FPGA_STATUS_OK) {

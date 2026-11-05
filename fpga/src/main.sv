@@ -20,6 +20,16 @@ module main (
 
     inout wire acknack,
 
+    // PSRAM pins (Infineon S70KL1283, octal xSPI)
+    output wire mem_out_clk,
+    mem_out_clk_n,
+    mem_cs_n,
+    mem_reset_n,
+
+    inout wire [7:0] mem_dq,
+
+    inout wire mem_rwds,
+
     output wire [3:0] led,
 
     output wire led0_r,
@@ -31,25 +41,24 @@ module main (
     in_almost_full,
     in_full
 );
-  logic active_area, pixel_pulse;
+  logic active_area, pixel_pulse, v_blank, h_blank, frame_start, line_end, near_frame_end;
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
 
   // Sim running
-  logic sim_running;
+  logic sim_running = 1'b1; // Temporarily 1
 
   // Memory signals
-  logic mem_busy, mem_data_on_wire, mem_toggle;
-  logic [31:0] mem_addr;
-  logic [15:0]  mem_len;
-  logic [7:0] mem_in, mem_out;
-  memory_pkg::transaction_e mem_transaction;
+  logic spi_mem_toggle;
+  logic [31:0] spi_mem_addr;
+  memory_pkg::message_length_t spi_mem_len;
+  logic [7:0] spi_mem_in, mem_out;
+  memory_pkg::transaction_e spi_mem_transaction;
 
-  localparam int unsigned NumLayers  = 3;
+  localparam int unsigned NumLayers  = 2;
   localparam int unsigned LayerCells = 0;
-  localparam int unsigned LayerGol   = 1;
-  localparam int unsigned LayerHud   = 2;
+  localparam int unsigned LayerHud   = 1;
 
   layer_pkg::layer_px_t layers[NumLayers];
 
@@ -69,25 +78,56 @@ module main (
       .vga_r(vga_r),
       .vga_g(vga_g),
       .vga_b(vga_b),
-      .color(color)
+      .color(color),
+      .v_blank(v_blank),
+      .h_blank(h_blank),
+      .frame_start(frame_start),
+      .near_frame_end(near_frame_end)
   );
 
-  cells cell_controller (
-      .clk(clk),
-      .sw(sw),
-      .active_area(active_area),
-      .pixel_pulse(pixel_pulse),
-      .coord_x(coord_x),
-      .coord_y(coord_y),
-      .pixel(layers[LayerCells])
-  );
 
-  gol gol_controller (
+//   layer_pkg::layer_px_t cells_pixel_unused;
+//   cells cell_controller (
+//       .clk(clk),
+//       .sw(sw),
+//       .sim_running(sim_running),
+//       .active_area(active_area),
+//       .pixel_pulse(pixel_pulse),
+//       .coord_x(coord_x),
+//       .coord_y(coord_y),
+//       .pixel(cells_pixel_unused) // Temporary for implementing frame buffer
+//   );
+
+  // Framebuffer
+  logic fb_sel;
+  assign fb_sel = 1'b0;
+
+  logic fb_underrun;
+  logic fb_mem_toggle;
+  memory_pkg::transaction_e fb_mem_transaction;
+  memory_pkg::address_t fb_mem_address;
+  memory_pkg::message_length_t fb_mem_length;
+
+  fb_scanout fb_display (
       .clk(clk),
       .reset(sw[3]),
       .active_area(active_area),
-      .pixel_pulse(pixel_pulse),
-      .pixel(layers[LayerGol])
+      .coord_x(coord_x),
+      .coord_y(coord_y),
+      .line_end(line_end),
+      .near_frame_end(near_frame_end),
+      .fb_sel(fb_sel),
+
+      .mem_toggle(fb_mem_toggle),
+      .mem_transaction(fb_mem_transaction),
+      .mem_address(fb_mem_address),
+      .mem_length(fb_mem_length),
+      .mem_busy(mem_client_busy[memory_pkg::MemClientScanoutID]),
+      .mem_data_on_cable(mem_client_data_on_cable[memory_pkg::MemClientScanoutID]),
+      .mem_read_data(mem_out),
+
+      .pixel(layers[LayerCells]),
+      .underrun(fb_underrun)
   );
 
   // TODO: Implement HUD layer. Temporarily always transparent. Remove after implementing the HUD layer.
@@ -115,7 +155,7 @@ module main (
       .clk(clk),
       .req_valid(sprite_req_valid),
       .sprite_mem_id(sprite_mem_id),
-      .sprite_w_mem_addr(mem_addr),
+      .sprite_w_mem_addr(spi_mem_addr),
       .sprite_req_op(sprite_req_op),
       .sprite_req_body(sprite_req_body),
       .spriteLUT(spriteLUT),
@@ -123,6 +163,74 @@ module main (
       .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),
       .write_sprite_valid(write_sprite_valid)
+  );
+
+  // Controls who is allowed the external memory bus
+  logic [memory_pkg::NumMemClients-1:0] mem_allow;
+  mem_access_policy access_policy (
+      .v_blank(v_blank),
+      .near_frame_end(near_frame_end),
+      .sim_running(sim_running),
+      .allow(mem_allow)
+  );
+
+  logic [memory_pkg::NumMemClients-1:0] mem_client_toggle;
+  memory_pkg::transaction_e mem_client_transaction[memory_pkg::NumMemClients];
+  memory_pkg::address_t mem_client_address[memory_pkg::NumMemClients];
+  memory_pkg::message_length_t mem_client_length_burst[memory_pkg::NumMemClients];
+  logic [7:0] mem_client_write_data[memory_pkg::NumMemClients];
+  logic [memory_pkg::NumMemClients-1:0] mem_client_busy;
+  logic [memory_pkg::NumMemClients-1:0] mem_client_data_on_cable;
+  logic [memory_pkg::NumMemClients-1:0] mem_client_grant; // Used by testbenches
+
+  always_comb begin
+    mem_client_toggle = '0;
+    for (int unsigned i = 0; i < memory_pkg::NumMemClients; i++) begin
+      mem_client_transaction[i] = memory_pkg::NONE;
+      mem_client_address[i]     = '0;
+      mem_client_length_burst[i]      = '0;
+      mem_client_write_data[i]  = '0;
+    end
+
+    // SPI
+    mem_client_toggle[memory_pkg::MemClientSpiID]      = spi_mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientSpiID] = spi_mem_transaction;
+    mem_client_address[memory_pkg::MemClientSpiID]     = spi_mem_addr;
+    mem_client_length_burst[memory_pkg::MemClientSpiID]= spi_mem_len;
+    mem_client_write_data[memory_pkg::MemClientSpiID]  = spi_mem_in;
+
+    // Scan-out fb
+    mem_client_toggle[memory_pkg::MemClientScanoutID]       = fb_mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientScanoutID]  = fb_mem_transaction;
+    mem_client_address[memory_pkg::MemClientScanoutID]      = fb_mem_address;
+    mem_client_length_burst[memory_pkg::MemClientScanoutID] = fb_mem_length;
+
+    // TODO: Add the other clients here when they implement the external SRAM
+  end
+
+  memory memory_subsystem (
+      .clk(clk),
+      .reset(sw[3]),
+      .enable(sw[2]),
+
+      .client_toggle(mem_client_toggle),
+      .client_next_transaction(mem_client_transaction),
+      .client_address(mem_client_address),
+      .client_length(mem_client_length_burst),
+      .client_write_data(mem_client_write_data),
+      .client_allow(mem_allow),
+
+      .client_busy(mem_client_busy),
+      .client_data_on_cable(mem_client_data_on_cable),
+      .client_grant(mem_client_grant),
+      .read_data(mem_out),
+
+      .out_clk(mem_out_clk),
+      .out_clk_n(mem_out_clk_n),
+      .cs_n(mem_cs_n),
+      .reset_n(mem_reset_n),
+      .dq(mem_dq),
+      .rwds(mem_rwds)
   );
 
   spi spi_controller (
@@ -143,18 +251,18 @@ module main (
       .in_almost_full(in_almost_full),
       .in_full(in_full),
 
-      // Sim running
+//       // Sim running
       .sim_running(sim_running),
 
       // Memory module fall-through signals
-      .mem_in(mem_in),
+      .mem_in(spi_mem_in),
       .mem_out(mem_out),
-      .mem_len(mem_len),
-      .mem_addr(mem_addr),
-      .mem_transaction(mem_transaction),
-      .mem_busy(mem_busy),
-      .mem_data_on_wire(mem_data_on_wire),
-      .mem_toggle(mem_toggle),
+      .mem_len(spi_mem_len),
+      .mem_addr(spi_mem_addr),
+      .mem_transaction(spi_mem_transaction),
+      .mem_busy(mem_client_busy[memory_pkg::MemClientSpiID]),
+      .mem_data_on_wire(mem_client_data_on_cable[memory_pkg::MemClientSpiID]),
+      .mem_toggle(spi_mem_toggle),
 
       // Sprite LUT transaction signals
       .sprite_available_id(sprite_available_id),

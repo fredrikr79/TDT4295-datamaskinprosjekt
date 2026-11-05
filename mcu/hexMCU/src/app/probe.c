@@ -39,7 +39,7 @@
 #define STATUS_EVERY_MS   100u  /* status line redrawn at most this often     */
 #define READY_WAIT_MS     100u  /* READY not steady this long: a failed try   */
 
-typedef enum { P_WAIT, P_ECHO, P_INFO, P_INFO_WAIT, P_DONE } phase_t;
+typedef enum { P_WAIT, P_ECHO, P_INFO, P_INFO_WAIT, P_DONE, P_STOPPED } phase_t;
 
 static struct {
     phase_t    ph;              /* starts as P_WAIT                       */
@@ -180,6 +180,18 @@ void probe_start(void)
     rdy.init = false;                   /* READY must be steady again first */
 }
 
+void probe_stop(void)
+{
+    /* An ECHO / INFO still in flight finishes, but its callback sees the
+     * phase has changed and ignores it (no status line, no retry). */
+    if (p.ph != P_STOPPED && p.ph != P_DONE && p.tries)
+        LOG_INFO("probing stopped after %lu failed tr%s", (unsigned long)p.tries,
+                 p.tries == 1 ? "y" : "ies");
+    p.ph = P_STOPPED;
+    p.tries = 0;
+    cli_status(NULL);
+}
+
 probe_status_t probe_poll(void)
 {
     uint32_t now = plat_millis();
@@ -218,6 +230,8 @@ probe_status_t probe_poll(void)
         break;                          /* the done callback moves on */
     case P_DONE:
         return PROBE_DONE;
+    case P_STOPPED:
+        break;                          /* probe_stop(): until probe_start() */
     }
     return PROBE_BUSY;
 }

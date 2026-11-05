@@ -691,7 +691,7 @@ static void cmd_loading(int argc, char **argv)
         log_raw("usage: loading [on|off]\r\n");
         return;
     }
-    log_raw("loading: %s\r\n", game_loading() ? "on" : "off (game holds after the handshake)");
+    log_raw("loading: %s\r\n", game_loading() ? "on" : "off (the game holds, no probing)");
 }
 
 static void cmd_trace(int argc, char **argv)
@@ -753,7 +753,7 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
-    { "loading", cmd_loading,  "loading [on|off]    off: the game stops after the handshake, the FPGA is yours" },
+    { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },

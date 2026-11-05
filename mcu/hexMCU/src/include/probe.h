@@ -23,6 +23,7 @@
 typedef enum { PROBE_BUSY, PROBE_DONE } probe_status_t;
 
 void           probe_start(void);
+void           probe_stop(void);    /* give up now (status line cleared) until probe_start() */
 probe_status_t probe_poll(void);
 
 #endif

@@ -44,11 +44,11 @@ typedef enum { S_PROBE, S_SAVE, S_LOAD, S_RUN, S_HOLD } state_t;
 static const char *const state_names[] = { "probe", "save", "load", "run", "hold" };
 
 #ifndef GAME_LOADING
-#define GAME_LOADING 1          /* 0: start with loading off (HOLD after the handshake) */
+#define GAME_LOADING 1          /* 0: start with loading off: HOLD, no probing */
 #endif
-static bool loading = GAME_LOADING;
+static bool     loading = GAME_LOADING;
 
-static state_t  state = S_PROBE;
+static state_t  state = GAME_LOADING ? S_PROBE : S_HOLD;
 static state_t  resume_to = S_LOAD; /* where a resync goes back to (same session) */
 static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
@@ -347,9 +347,10 @@ static void connected(void)
 }
 
 /* ---- loading on / off (console) -----------------------------------------
- * Off: after the next handshake -- or right away, if the game is past it --
- * the game holds (HOLD) and sends nothing, so the console can test the
- * FPGA by hand. Commands the game already queued still finish.
+ * Off: the game holds (HOLD) right away and sends nothing, so the console
+ * can test the FPGA by hand -- also in the middle of the handshake, which
+ * then stops trying. Commands the game already queued still finish.
+ * Built with GAME_LOADING 0 it starts like that: HOLD, no probing at all.
  * On: from HOLD, a new handshake (the console may have changed anything),
  * then on as after a resync: same session -> carry on where it was, new
  * session -> load everything again. */
@@ -367,8 +368,8 @@ void game_set_loading(bool on)
 {
     loading = on;
     if (!on) {
-        if (state != S_PROBE && state != S_HOLD) hold();
-        else if (state == S_PROBE) LOG_INFO("loading is off: holding once the handshake is done");
+        if (state == S_PROBE) probe_stop();     /* no more tries: the console takes over now */
+        if (state != S_HOLD) hold();
         return;
     }
     if (state != S_HOLD) return;        /* already going */
@@ -402,7 +403,15 @@ void game_poll(void)
     if (demo_busy()) { paused = true; demo_poll(); return; }
     if (paused) { paused = false; if (state == S_RUN) run_enter(); }
 
-    if (state == S_HOLD) return;        /* the console's turn: not even a resync */
+    if (state == S_HOLD) {              /* the console's turn: not even a resync */
+        static bool told;
+        if (!told && !GAME_LOADING) {
+            told = true;
+            LOG_INFO("loading is off (GAME_LOADING 0): no probing, the FPGA is the "
+                     "console's ('loading on' to start)");
+        }
+        return;
+    }
     if (failed) { resync(); return; }
 
     switch (state) {

@@ -139,15 +139,15 @@ module spi #(
 
   always_ff @(posedge clk) begin
     if (error_critical)
-      error_event.code <= CRITICAL_ERROR;
-    if (fsm_error_valid)
-      error_event.code <= fsm_error_code;
+      error_code <= CRITICAL_ERROR;
+    else if (fsm_error_valid)
+      error_code <= fsm_error_code;
     else if (rx_error_valid)
-      error_event.code <= rx_error_code;
+      error_code <= rx_error_code;
     else if (tx_error_valid)
-      error_event.code <= tx_error_code;
+      error_code <= tx_error_code;
     else if (processor_error_valid)
-      error_event.code <= processor_error_code;
+      error_code <= processor_error_code;
   end
 
   assign error_event = '{valid: error_event_valid, code: error_code};

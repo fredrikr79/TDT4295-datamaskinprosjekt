@@ -30,7 +30,8 @@ module spi_fsm #(
 
       error_valid <= 0;
       if (error_event.valid && state != ST_FAILED
-          && !(state == ST_BUSY && opcode == FAILED)) begin
+          && !(state == ST_BUSY && opcode == FAILED)
+      ) begin
         state <= ST_FAILED;            // error wins over everything below
       end else begin
 

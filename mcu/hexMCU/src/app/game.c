@@ -114,7 +114,7 @@ static void load_resume(void)
 static struct {
     uint32_t sync_seen;         /* SYNC count we last started a frame at */
     int32_t  cx, cy;            /* cursor position, follows the mouse    */
-    input_t  keys;              /* latest input, for held keys in run_frame */
+    input_t  keys;              /* this frame's input (taken once per frame) */
 } run;
 
 /* State machine for run, handels if we are showing menu or doing other actions. */
@@ -209,6 +209,8 @@ static uint32_t frames_due(void)
 
 static void run_enter(void)
 {
+    input_t stale;
+    input_take(&stale);         /* input from loading / a demo / HOLD doesn't count */
     run.sync_seen = frame_sync_count();
     frames.last_sync_ms  = plat_millis();     /* give SYNC a chance first */
     frames.next_frame_ms = plat_millis();
@@ -294,22 +296,23 @@ static void run_frame(uint32_t n)
 
 static void run_poll(void)
 {
-    /* Input every poll, not just on frames: the mouse adds up in between. */
-    const fpga_info_t *scr = fpga_link_info();
-    input_t in;
-    input_take(&in);
-    /* input_log(&in); */
-    run.keys = in;              /* held keys are "down right now", so the latest copy is enough */
-    run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
-    run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - cursor_h());
-
-    if (key_pressed(&in, KEY_ESCAPE))
-        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
-        
-
     if (!sprite_poll()) { failed = true; return; }
     uint32_t n = frames_due();
-    if (n) run_frame(n);
+    if (n == 0) return;
+
+    /* Input once per frame: usb_input adds up presses, releases and mouse
+     * movement between takes, so nothing that happened in between is lost
+     * (taking every poll would throw presses away before a frame saw them). */
+    const fpga_info_t *scr = fpga_link_info();
+    input_take(&run.keys);
+    /* input_log(&run.keys); */
+    run.cx = clamp32(run.cx + run.keys.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
+    run.cy = clamp32(run.cy + run.keys.mouse_dy, 0, (int32_t)scr->height - cursor_h());
+
+    if (key_pressed(&run.keys, KEY_ESCAPE))
+        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
+
+    run_frame(n);
 }
 
 /* Leave the current room: save it, then load `to`.

@@ -17,7 +17,7 @@
  * | READ_CONS     | 40 | X 2B, Y 2B, N 2B                              | -        | N bytes
  * | WRITE_BOX     | 50 | X 2B, Y 2B, W 2B, H 2B                        | IDs      | -
  * | READ_BOX      | 60 | X 2B, Y 2B, W 2B, H 2B                        | -        | IDs
- * | WRITE_SPRITE  | 70 | N 2B                                          | pixels   | memID 2B
+ * | WRITE_SPRITE  | 70 | LEN 2B (payload size, FPGA_SPRITE_LEN_UNIT)   | pixels   | memID 2B
  * | SPRITE_WRITE  | 80 | memID 2B, active, X 2B, Y 2B, W 2B, H 2B      | -        | spriteID 2B
  * | SPRITE_UPDATE | 90 | spriteID 2B, active, X 2B, Y 2B               | -        | -
  * | SPRITE_DELETE | A0 | spriteID 2B                                   | -        | -
@@ -114,6 +114,13 @@
 #define WRITE_BOX_OPCODE        0x50u
 #define READ_BOX_OPCODE         0x60u
 #define WRITE_SPRITE_OPCODE     0x70u
+
+/* WRITE_SPRITE's LEN field (2 bytes, MSB first, right after the opcode)
+ * counts the payload in these units: 1 = bytes, 2 = pixels (RGB565).
+ * PROTOCOL: check which one the FPGA expects. */
+#ifndef FPGA_SPRITE_LEN_UNIT
+#define FPGA_SPRITE_LEN_UNIT    1u
+#endif
 #define SPRITE_WRITE_OPCODE     0x80u
 #define SPRITE_UPDATE_OPCODE    0x90u
 #define SPRITE_DELETE_OPCODE    0xA0u

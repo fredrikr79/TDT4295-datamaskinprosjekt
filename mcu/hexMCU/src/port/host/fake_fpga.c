@@ -295,8 +295,17 @@ static bool sprite_used(unsigned id) { return id < MAX_SPRITES && ff.sprite[id].
  * that spans several uploads in a row may use all of them. */
 static uint32_t bytes_from(uint16_t mem_id) { return ff.mem_used - ff.image[mem_id].off; }
 
-static int32_t write_sprite(const uint8_t *data, uint16_t len, uint8_t *status)
+static int32_t write_sprite(const transport_hdr_t *h, const uint8_t *data, uint16_t len,
+                            uint8_t *status)
 {
+    /* LEN (alt bytes) must say how much payload follows */
+    if (!expect_fields(h, TRANSPORT_F_ALT16, "write_sprite", status)) return READY_US;
+    uint32_t said = (uint16_t)h->alt * FPGA_SPRITE_LEN_UNIT;
+    if (said != len) {
+        LOG_WARN("write_sprite: LEN says %lu bytes, %u came", (unsigned long)said, len);
+        return fail(status, said > len ? FPGA_FAIL_MISSING_PARAMETER
+                                       : FPGA_FAIL_TOO_MANY_PARAMETERS, "write_sprite");
+    }
     if (len == 0 || len % PIXEL_BYTES)
         return fail(status, FPGA_FAIL_ILLEGAL_VALUE, "write_sprite");
     if (ff.n_images + 1u >= MAX_IMAGES || ff.mem_used + len > SPRITE_MEM)
@@ -428,7 +437,7 @@ int32_t fake_fpga_write(const transport_hdr_t *h, const uint8_t *data,
         box_read(x, y, w, hh);
         break;
 
-    case WRITE_SPRITE_OPCODE:  return write_sprite(data, len, status);
+    case WRITE_SPRITE_OPCODE:  return write_sprite(h, data, len, status);
     case SPRITE_WRITE_OPCODE:  return sprite_write(data, len, status);
     case SPRITE_UPDATE_OPCODE: return sprite_update(data, len, status);
     case SPRITE_DELETE_OPCODE: return sprite_delete(data, len, status);

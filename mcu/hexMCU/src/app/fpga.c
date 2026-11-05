@@ -184,8 +184,13 @@ static void finish(fpga_err_t err)
     if (err != FPGA_ERR_NONE)
         LOG_DBG("op 0x%02X failed at step %u/%u: %s", q[q_head].hdr.opcode,
                 run.idx + 1, run.n, fpga_err_str(err));
-    if (err != FPGA_ERR_NONE && err != FPGA_ERR_ABORTED)
-        note_failure(&q[q_head].hdr, step_names[run.steps[run.idx]], err);
+    if (err != FPGA_ERR_NONE && err != FPGA_ERR_ABORTED) {
+        /* After the last step (a NACK's code read, an ECHO compare, INFO
+         * parse) run.idx is past the end of run.steps[]. */
+        const char *at = run.idx < run.n ? step_names[run.steps[run.idx]]
+                       : err == FPGA_ERR_STATUS ? "ack" : "check";
+        note_failure(&q[q_head].hdr, at, err);
+    }
 
     pop_and_report(err);
     if (err != FPGA_ERR_NONE)
@@ -466,8 +471,10 @@ uint16_t fpga_max_payload(uint8_t opcode)
         h.fields = TRANSPORT_F_XY | TRANSPORT_F_ALT16; break;
     case WRITE_BOX_OPCODE: case READ_BOX_OPCODE:
         h.fields = TRANSPORT_F_XY | TRANSPORT_F_ALT32; break;
+    case WRITE_SPRITE_OPCODE:
+        h.fields = TRANSPORT_F_ALT16; break;  /* the LEN field */
     default:
-        break;                              /* opcode only (WRITE_SPRITE...) */
+        break;                              /* opcode only (ECHO...) */
     }
     uint32_t hdr = wire_bytes(&h);          /* h.len == 0: header only */
     return info.max_cmd > hdr ? (uint16_t)(info.max_cmd - hdr) : 0u;
@@ -556,9 +563,10 @@ static uint8_t *put16(uint8_t *p, uint16_t v)
 
 fpga_cmd_t fpga_cmd_write_sprite(const uint8_t *pixels, uint16_t len)
 {
-    /* No size field: the FPGA takes the opcode, then the whole payload as
-     * the image, like ECHO. Answers the memID. */
-    return (fpga_cmd_t){ .hdr = { .opcode = WRITE_SPRITE_OPCODE, .len = len },
+    /* opcode, LEN (2 bytes, in the alt-bytes phase, MSB first), then the
+     * pixels. Answers the memID. */
+    return (fpga_cmd_t){ .hdr = { .opcode = WRITE_SPRITE_OPCODE, .fields = TRANSPORT_F_ALT16,
+                                  .alt = (uint32_t)(len / FPGA_SPRITE_LEN_UNIT), .len = len },
                          .tx = pixels, .rx_len = 2, .answer_rx = true,
                          .kind = FPGA_KIND_READ };
 }

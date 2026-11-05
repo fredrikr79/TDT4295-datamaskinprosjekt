@@ -8,6 +8,9 @@
 float move_force = 0;
 bool jump_next_frame = false;
 
+uint16_t ticks_since_last_damage = 0;
+uint16_t ticks_since_last_heal = 0;
+
 static bool tile_has_collision(uint8_t id)
 {
     return id == STONE || id == SAND || id == GOL;
@@ -45,6 +48,23 @@ static void perform_jump(
     else if (is_grounded && -JUMP_AIR < player.velocity_y) player.velocity_y = -JUMP_AIR;
 }
 
+void damage_player(player_t player, uint16_t amount)
+{
+    if (amount < player.health)
+        player.health -= amount;
+    else player.health = 0;
+    ticks_since_last_damage = PLAYER_DAMAGE_TO_HEAL_DELAY;
+
+    // TODO: Check if dead
+}
+
+void heal_player(player_t player, uint16_t amount)
+{
+    if (player.health + amount < PLAYER_MAX_HEALTH)
+        player.health += amount;
+    else player.health = PLAYER_MAX_HEALTH;
+}
+
 void update_player(
     player_t player,
     uint8_t *box,
@@ -77,9 +97,14 @@ void update_player(
             else if (id == GOL) in_air++;
             else if (id == EXPLOSION) in_air++;
         }
+    
+    // Breathing
+    if (!in_air && 0 < player.breath_meter) player.breath_meter--;
+    else if (in_air && player.breath_meter < 250) player.breath_meter++;
 
     // Check if on ground
     bool on_ground = velocity_box.box.y1 + velocity_box.box.y2 + 1 == ROOM_Y;
+    bool on_radiation = false;
     if (!on_ground)
     {
         uint16_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
@@ -90,6 +115,7 @@ void update_player(
         )
         {
             if (tile_has_collision(box[x + y*velocity_box.box.x2])) on_ground = true;
+            if (tile_has_raditation(box[x + y*velocity_box.box.x2])) on_radiation = true;
         }
     }
 
@@ -306,6 +332,25 @@ void update_player(
     // Apply second half of velocity
     player.velocity_x += force_x / 2;
     player.velocity_y += force_y / 2;
+
+    // Heal
+    if (ticks_since_last_damage) ticks_since_last_damage--;
+    else if (ticks_since_last_heal) ticks_since_last_heal--;
+    else
+    {
+        ticks_since_last_heal = PLAYER_HEAL_DELAY;
+        player.health += PLAYER_HEAL_AMOUNT;
+    }
+
+    // Damage
+    if (in_stone) damage_player(player, 1);
+    if (in_sand) damage_player(player, 1);
+    if (in_lava) damage_player(player, 5);
+    if (in_acid) damage_player(player, 3);
+    if (in_gol) damage_player(player, 2);
+    if (in_explosion) damage_player(player, 5);
+    if (on_radiation) damage_player(player, 2);
+    if (player.breath_meter == 0) damage_player(player, 5);
 
     // Check if player is overlapping with a portal
     int overlap = pos_in_portal(player.x, player.y, portals);

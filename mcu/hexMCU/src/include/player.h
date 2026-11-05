@@ -18,6 +18,12 @@
 #define PLAYER_SIZE_X 8
 #define PLAYER_SIZE_Y 16
 
+#define PLAYER_MAX_HEALTH 500
+#define PLAYER_DAMAGE_TO_HEAL_DELAY 1000
+#define PLAYER_HEAL_DELAY 1
+#define PLAYER_HEAL_AMOUNT 5
+#define PLAYER_MAX_BREATH 500
+
 typedef struct
 {
     float x;
@@ -25,7 +31,8 @@ typedef struct
     float velocity_x;
     float velocity_y;
 
-    uint8_t health;
+    uint16_t health;
+    uint16_t breath_meter;
 } player_t;
 
 typedef struct

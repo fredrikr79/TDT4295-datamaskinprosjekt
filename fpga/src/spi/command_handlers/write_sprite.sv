@@ -29,7 +29,7 @@ module write_sprite #(
   import memory_pkg::*;
 
   logic [15:0] total_bytes = 16'd0;
-  logic [7:0] written_bytes = 8'd0;
+  logic [7:0] written_bytes = 16'd0;
   logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
@@ -89,22 +89,22 @@ module write_sprite #(
             // Read N bytes from in_queue to mem_in
             if(write_sprite_r_en) begin
               mem_in <= in_fifo;
-              written_bytes <= written_bytes + 8'd1;
+              written_bytes <= written_bytes + 16'd1;
               tx_index <= tx_index + 16'd1;
 
               if (tx_index >= total_bytes - 1) begin
                 // Clean up transaction state
                 write_sprite_r_en <= 1'b0;
-                written_bytes <= 8'd0;
+                written_bytes <= 16'd0;
                 tx_index <= 16'd0;
                 write_sprite_valid <= 1'b1;
                 write_sprite_mem_id  <= next_id;
                 state <= MEM_RETURN_TOP;
 
-              end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
+              end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength - 1)) begin
                 mem_addr <= mem_addr + 32'(memory_pkg::MaxMessageLength);
                 write_sprite_r_en <= 1'b0;
-                written_bytes <= 8'd0;
+                written_bytes <= 16'd0;
                 state <= MEM_INIT_REQ;
               end
 

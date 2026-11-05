@@ -1,10 +1,10 @@
 package hud_pkg;
 
     localparam int SpriteMemDepth = 1024; // Number of sprites we can keep on memory.
-    typedef bit [$clog2(SpriteMemDepth)-1:0] sprite_mem_id;
+    typedef bit [15:0] sprite_mem_id;
 
     localparam int SpriteLutDepth = 1024; // Number of sprites we can keep track of in the system.
-    typedef bit [$clog2(SpriteLutDepth)-1:0] sprite_lut_id;
+    typedef bit [15:0] sprite_lut_id;
 
 
     typedef struct packed {

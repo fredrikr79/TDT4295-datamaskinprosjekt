@@ -7,9 +7,10 @@ package spi_pck;
     ST_RX      = 8'b00010111,
     ST_DECODE  = 8'b00011011,
     ST_BUSY    = 8'b00110101,
-    ST_TX_IDLE = 8'b00111001,
-    ST_TX_SEND = 8'b01010001,
-    ST_MEMORY  = 8'b01011001,
+    ST_FINISH  = 8'b00111011,
+    ST_TX_IDLE = 8'b01000001,
+    ST_TX_SEND = 8'b01001001,
+    ST_MEMORY  = 8'b01010001,
     ST_FAILED  = 8'b11111100
   } state_e;
 

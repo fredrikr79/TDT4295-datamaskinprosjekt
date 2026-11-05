@@ -49,7 +49,7 @@ module memory_onboard #(
     // Transaction registers
     // ----------------------------------------
 
-    logic previous_toggle;
+    logic previous_toggle = 1'b0;
 
     memory_pkg::transaction_e transaction_type;
 

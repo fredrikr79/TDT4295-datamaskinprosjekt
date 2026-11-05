@@ -1,4 +1,5 @@
 module spi_tx #(
+  parameter int TurnaroundCycles = 3
 ) (
     input wire clk,
     ck_sck,
@@ -51,103 +52,84 @@ module spi_tx #(
       .rd_rst_busy(out_rd_rst_busy)
   );
 
-  reg [7:0] tx_out;
+  reg [7:0] tx_buf [2];
   assign out_ready = ~out_wr_rst_busy && ~out_rd_rst_busy && ~out_full;
 
 
-  // Synchronization for event driven TX (event = ck_SCK pulse)
-  reg        tx_event = 1'b0;
-  reg  [2:0] tx_event_sync = 3'b000;
+  reg rd_window = 1'b0;
 
+  always @(posedge clk) begin
+    if(reset_s) rd_window <= 1'b0;
+    else rd_window <= (state == ST_TX_IDLE || state == ST_TX_SEND);
+  end
+
+  localparam int FirstData = TurnaroundCycles + 1;
+
+  reg [15:0] sck_cnt = 16'd0;
+  always @(posedge ck_sck or posedge ck_ss) begin
+    if(ck_ss) sck_cnt <= 16'd0;
+    else if (sck_cnt != '1) sck_cnt <= sck_cnt + 1'b1;
+  end
+
+  reg tx_event = 1'b0;
+  always @(negedge ck_sck) begin
+    if(rd_window && sck_cnt >= 16'(FirstData + 1)) tx_event <= ~tx_event;
+  end
+
+
+  reg flush = 1'b0;
+  always @(posedge clk) begin
+    if(reset_s) flush <= 1'b0;
+    else flush <= (state == ST_READY || state == ST_FAILED);
+  end
+
+
+  reg drive = 1'b0;
+  always @(negedge ck_sck or posedge ck_ss_s) begin
+    if(ck_ss_s) drive <= 1'b0;
+    else if(rd_window && sck_cnt >= 16'(FirstData)) drive <= 1'b1;
+  end
+
+  // Synchronization for event driven TX (event = ck_SCK pulse)
+  reg  [2:0] tx_event_sync = 3'b000;
   wire       tx_event_trigger = tx_event_sync[2] ^ tx_event_sync[1];
-  wire       tx_stage_allowed = (state == ST_TX_SEND);
-  wire       tx_rd_gate = (~ck_ss) && tx_stage_allowed;
 
   always @(posedge clk) begin
     if (reset_s) tx_event_sync <= 3'b000;
     else tx_event_sync <= {tx_event_sync[1:0], tx_event};
   end
 
-  // TX handshake
-  reg [2:0] tx_armed_sync = 3'b000;
 
-  // TX arming
-  wire tx_armed_s = tx_armed_sync[2];
-
-  always @(posedge clk) begin
-    if (reset) begin
-      tx_armed_sync <= 3'b000;
-    end else tx_armed_sync <= {tx_armed_sync[1:0], tx_armed};
-  end
-
-  // CDC synchronizations CK_SCK -> CLK
-  always @(posedge ck_sck) begin
-    if (reset_s) begin
-      tx_event <= 1'b0;
-    end else begin
-      if (tx_rd_gate) begin
-        tx_event <= ~tx_event;
-      end
-
-    end
-  end
-
-  // initialize outgoing event driven buffer, and set conditions for preloading during TX handshake
-  reg  tx_first_loaded = 1'b0;
-  wire tx_load = state == ST_TX_SEND && !out_empty_s && !tx_first_loaded && !out_empty && in_empty;
+  reg [1:0] loaded = 2'd0;
+  wire preload = rd_window && (loaded != 2'd2) && !out_empty;
+  wire advance = rd_window && (loaded == 2'd2) && tx_event_trigger;
 
   always @(posedge clk) begin
     if (reset_s) begin
-      tx_out <= 8'h00;
-      tx_first_loaded <= 1'b0;
-      tx_armed <= 1'b0;
+      tx_buf[0] <= 8'h00;
+      tx_buf[1] <= 8'h00;
+      loaded <= 1'b0;
     end
-    if (tx_load) begin
-      tx_out <= out_data;
-      tx_first_loaded <= 1'b1;
-    end else if (tx_event_trigger) begin
-      tx_out <= out_data;
-    end
-    if (state == (ST_TX_SEND) && !ck_ss_s && !out_empty_s && in_empty) tx_armed <= 1'b1;
-    else if (state == (ST_TX_SEND) && ck_ss_s && in_empty) begin
-      tx_armed <= 1'b0;
-      tx_first_loaded <= 1'b0;
+    if (!rd_window) begin
+      loaded <= 1'b0;
+    end else if (preload) begin
+      tx_buf[tx_event_sync[2] ^ loaded[0]] <= out_data;
+      loaded <= loaded + 1'b1;
+    end else if (advance) begin
+      tx_buf[tx_event_sync[2]] <= out_data;
     end
   end
 
   always_ff @(posedge clk) begin
-    if (reset_s) begin
-        tx_r_en <= 1'b0;
-    end else begin
-      error_valid <= 1'b0;
-      tx_r_en <= 1'b0;
-
-      case (state)
-
-        ST_TX_IDLE: begin
-          if (~ck_ss_s && ~in_empty) begin
-            tx_r_en <= 1'b1;  // TX byte consumed
-          end
-        end
-
-        ST_TX_SEND: begin
-          if (ck_ss_s && ~in_empty) begin
-            tx_r_en <= 1'b1;
-          end
-        end
-
-        default: begin
-          // Do nothing...?
-        end
-
-      endcase
-    end
+    tx_r_en <= 1'b0;
+    error_valid <= 1'b0;
+    error_code <= 8'h00;
   end
 
   // MCU READ CONDITIONS
-  assign out_r_en = (tx_load || tx_event_trigger) && ~out_empty;
+  assign out_r_en = (preload || advance || flush) && ~out_empty;
 
   // OCTO_SPI
-  assign octo_spi = (~ck_ss && tx_armed_s) ? tx_out : 8'hzz;
+  assign octo_spi = drive ? tx_buf[tx_event] : 8'hzz;
 
 endmodule

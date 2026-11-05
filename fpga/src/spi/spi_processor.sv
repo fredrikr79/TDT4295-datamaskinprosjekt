@@ -94,7 +94,8 @@ module spi_processor #(
       write_sprite_done,
       sprite_write_done,
       sprite_update_done,
-      sprite_delete_done;
+      sprite_delete_done,
+      fail_done = 1'b0;
 
   assign proc_done = echo_done |
     info_done                  |
@@ -107,7 +108,8 @@ module spi_processor #(
     write_sprite_done          |
     sprite_write_done          |
     sprite_update_done         |
-    sprite_delete_done;
+    sprite_delete_done         |
+    fail_done;
 
   // Run signals
   logic
@@ -119,7 +121,8 @@ module spi_processor #(
       send_write_sprite = 1'b0,
       send_sprite_write = 1'b0,
       send_sprite_update = 1'b0,
-      send_sprite_delete = 1'b0;
+      send_sprite_delete = 1'b0,
+      fail_sent = 1'b0;
 
   // Output buffer muxing
   logic [7:0] info_fifo,
@@ -220,11 +223,9 @@ module spi_processor #(
 
   always_ff @(posedge clk) begin
     case (opcode)
-      ECHO: begin
-        // No implemented error detection for echo
-      end
-      INFO: begin
-        // No implemented error detection for info
+      ECHO, INFO, UNSET, START_SIM, STOP_SIM, FAILED: begin
+        error_code <= NO_ERROR;
+        error_valid <= 1'b0;
       end
       WRITE_CONS: begin
         error_code <= write_cons_error_code;
@@ -258,12 +259,6 @@ module spi_processor #(
         error_code <=  sprite_delete_error_code;
         error_valid <= sprite_delete_error_valid;
       end
-      START_SIM: begin
-        // No error detection for START_SIM
-      end
-      STOP_SIM: begin
-        // No error detection for STOP_SIM
-      end
       default: begin
         if (state == ST_BUSY) begin
           error_code <= UNKNOWN_COMMAND_ERROR;
@@ -296,6 +291,8 @@ module spi_processor #(
       send_info <= 1'b0;
       send_write_cons <= 1'b0;
       send_read_cons <= 1'b0;
+      send_read_box <= 1'b0;
+      send_write_box <= 1'b0;
       send_write_sprite <= 1'b0;
       send_sprite_write <= 1'b0;
       send_sprite_update <= 1'b0;
@@ -303,6 +300,8 @@ module spi_processor #(
       echo_done <= 1'b0;
       start_sim_done <= 1'b0;
       stop_sim_done <= 1'b0;
+      fail_done <= 1'b0;
+      fail_sent <= 1'b0;
     end else begin
 
       // Most signals are handled by respective submodules
@@ -314,11 +313,21 @@ module spi_processor #(
       echo_done      <= 1'b0;
       start_sim_done <= 1'b0;
       stop_sim_done  <= 1'b0;
-      error_valid <= 1'b0;
+      fail_done      <= 1'b0;
 
       case (state)
         ST_FAILED: begin
           opcode <= FAILED;
+          fail_sent <= 1'b0;
+          send_info <= 1'b0;
+          send_read_cons <= 1'b0;
+          send_write_cons <= 1'b0;
+          send_read_box <= 1'b0;
+          send_write_box <= 1'b0;
+          send_write_sprite <= 1'b0;
+          send_sprite_write <= 1'b0;
+          send_sprite_update <= 1'b0;
+          send_sprite_delete <= 1'b0;
         end
 
         ST_DECODE: begin
@@ -329,7 +338,7 @@ module spi_processor #(
         end
 
         ST_BUSY: begin
-          unique case (spi_pck::opcode_e'(opcode)) // Default case handled by ERROR MUX
+          case (spi_pck::opcode_e'(opcode)) // Default case handled by ERROR MUX
 
             // Register command handler here. they should own their own read/write signals.
             // Register these in the in_r_en / out_w_en MUX assignments.
@@ -339,12 +348,14 @@ module spi_processor #(
             // Any shared non-timing-sensitive signals should be set in case blocks below.
 
             ECHO: begin
-              if (!out_full && !in_empty) begin
+              if (cmd_r_en || echo_r_en) begin
+                // Pop cmd
+              end else if(in_empty) begin
+                echo_done <= 1'b1;
+              end else if (!out_full) begin
                 proc_fifo_reg <= in_fifo;
                 echo_w_en <= 1'b1;
                 echo_r_en <= 1'b1;
-              end else begin
-                echo_done <= 1'b1;
               end
             end
 
@@ -429,22 +440,28 @@ module spi_processor #(
             end
 
             FAILED: begin
-              if (!out_full) begin
-                if (!in_empty) begin
+              if (fail_sent || fail_r_en) begin
+                // Done or pop in flight
+              end else if (!in_empty) begin
                   fail_r_en <= 1'b1;
-                end else begin
+              end else if (!out_full) begin
                   proc_fifo_reg <= error_event.code;
                   fail_w_en <= 1'b1;
-                  opcode <= UNSET;
-                end
+                  fail_r_en <= 1'b1;
+                  fail_sent <= 1'b1;
+                  fail_done <= 1'b1;
               end
             end
+
+            default : opcode <= UNSET;
           endcase
         end
         default:; // Error handled by spi_fsm
       endcase
     end
   end
+
+  wire cmd_handler_rst = reset_s || (state == ST_FAILED);
 
   info info_cmd_processor (
       .clk(clk),
@@ -457,7 +474,7 @@ module spi_processor #(
 
   write_cons write_cons_cmd_processor (
     .clk(clk),
-    .ck_rst(reset_s),
+    .ck_rst(cmd_handler_rst),
     .in_empty(in_empty),
     .send_write_cons(send_write_cons),
     .mem_data_on_wire(mem_data_on_wire),
@@ -475,7 +492,7 @@ module spi_processor #(
 
   read_cons read_cons_cmd_processor (
     .clk(clk),
-    .ck_rst(reset_s),
+    .ck_rst(cmd_handler_rst),
     .in_empty(in_empty),
     .send_read_cons(send_read_cons),
     .mem_data_on_wire(mem_data_on_wire),
@@ -495,7 +512,7 @@ module spi_processor #(
 
   read_box read_box_handler (
     .clk(clk),
-    .ck_rst(reset_s),
+    .ck_rst(cmd_handler_rst),
     .in_fifo(in_fifo),
     .in_empty(in_empty),
     .send_read_box(send_read_box),
@@ -515,7 +532,7 @@ module spi_processor #(
 
   write_box write_box_handler (
     .clk(clk),
-    .ck_rst(reset_s),
+    .ck_rst(cmd_handler_rst),
     .in_empty(in_empty),
     .in_fifo(in_fifo),
     .send_write_box(send_write_box),
@@ -533,7 +550,7 @@ module spi_processor #(
 
   write_sprite write_sprite_cmd_processor (
       .clk(clk),
-      .ck_rst(reset_s),
+      .ck_rst(cmd_handler_rst),
       .in_empty(in_empty),
       .mem_data_on_wire(mem_data_on_wire),
       .send_write_sprite(send_write_sprite),
@@ -555,7 +572,7 @@ module spi_processor #(
 
   sprite_write sprite_write_cmd_processor (
     .clk(clk),
-    .ck_rst(reset_s),
+    .ck_rst(cmd_handler_rst),
     .in_empty(in_empty),
     .send_sprite_write(send_sprite_write),
     .sprite_write_done(sprite_write_done),
@@ -573,7 +590,7 @@ module spi_processor #(
 
   sprite_update sprite_update_cmd_processor (
       .clk(clk),
-      .ck_rst(reset_s),
+      .ck_rst(cmd_handler_rst),
       .in_empty(in_empty),
       .send_sprite_update(send_sprite_update),
       .sprite_update_done(sprite_update_done),
@@ -588,7 +605,7 @@ module spi_processor #(
 
   sprite_delete sprite_delete_cmd_processor (
       .clk(clk),
-      .ck_rst(reset_s),
+      .ck_rst(cmd_handler_rst),
       .in_empty(in_empty),
       .send_sprite_delete(send_sprite_delete),
       .sprite_delete_done(sprite_delete_done),

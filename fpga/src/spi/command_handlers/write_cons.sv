@@ -25,7 +25,7 @@ module write_cons #(
   import memory_pkg::*;
 
   logic [15:0] total_bytes = 16'b0;
-  logic [7:0] written_bytes = 8'd0;
+  logic [15:0] written_bytes = 16'd0;
   logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
@@ -103,7 +103,7 @@ module write_cons #(
             if (write_cons_r_en) begin
               // Capture data once write_cons is visible to fifo.
               mem_in <= in_fifo;
-              written_bytes <= written_bytes + 8'd1;
+              written_bytes <= written_bytes + 16'd1;
               tx_index <= tx_index + 16'd1;
 
               if (tx_index >= total_bytes - 1) begin
@@ -111,12 +111,12 @@ module write_cons #(
                 write_cons_r_en <= 1'b0;
                 write_cons_done <= 1'b1;
                 tx_index <= 16'd0;
-                written_bytes <= 8'd0;
+                written_bytes <= 16'd0;
                 state <= MEM_DONE;
-              end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
+              end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength - 1)) begin
                 // Transaction timeout, issue new where we finished.
                 write_cons_r_en <= 1'b0;
-                written_bytes <= 8'd0;
+                written_bytes <= 16'd0;
                 state <= MEM_GET_MEM_ADDR;
               end else begin
                 write_cons_r_en <= mem_data_on_wire;

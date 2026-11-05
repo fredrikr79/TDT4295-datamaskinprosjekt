@@ -56,9 +56,6 @@ module spi #(
   spi_pck::opcode_e opcode;
   reg proc_done;
 
-  // READY
-  assign ready = (state == ST_READY) || (state == ST_TX_IDLE);
-
   // BOOT CONDITION
   wire in_ready;
   wire out_ready;
@@ -96,6 +93,14 @@ module spi #(
   wire reset = ~ck_rst || rst_en;
   wire reset_s = ~ck_rst_s || rst_en;
 
+ // READY
+  reg ready_r = 1'b0;
+  always @(posedge clk) begin
+    if(reset_s) ready_r <= 1'b0;
+    else ready_r <= (state == ST_READY) || (state == ST_TX_IDLE);
+  end
+  assign ready = ready_r;
+
   // Error detection
   logic error_valid,
     fsm_error_valid,
@@ -103,7 +108,19 @@ module spi #(
     tx_error_valid,
     processor_error_valid;
 
-  assign acknack = ~error_valid;
+  logic nack = 1'b0;
+  always_ff @(posedge clk) begin
+    if(reset_s) begin
+      nack <= 1'b0;
+    end else if (state == ST_FAILED) begin
+      nack <= 1'b1;
+    end else if (state == ST_DECODE) begin
+      nack <= 1'b0;
+    end
+  end
+
+  assign error_valid = nack;
+  assign acknack = ~nack;
 
   spi_pck::error_event_t error_event;
   assign error_event.valid = error_critical  |
@@ -125,7 +142,7 @@ module spi #(
     else if (rx_error_valid)
       error_event.code <= rx_error_code;
     else if (tx_error_valid)
-      error_event.code <= rx_error_code;
+      error_event.code <= tx_error_code;
     else if (processor_error_valid)
       error_event.code <= processor_error_code;
   end
@@ -172,7 +189,6 @@ module spi #(
       .in_r_en(in_r_en),
       .rx_r_en(rx_r_en),
       .state(state),
-      .acknack(acknack),
       .in_empty(in_empty),
       .in_ready(in_ready),
       .in_full(in_full),

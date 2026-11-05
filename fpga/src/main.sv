@@ -55,6 +55,8 @@ module main #(
 
   // Critical error detection (unrecoverable errors arising outside the SPI module)
   wire error_critical;
+  // TODO drive from submodules
+  assign error_critical = 1'b0;
 
   // vga vga_controller (
   //     .clk(clk),
@@ -94,19 +96,19 @@ module main #(
   wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
   hud_pkg::sprite_lut_id sprite_available_id;
 
-  // hud hud_controller (
-  //     .clk(clk),
-  //     .req_valid(sprite_req_valid),
-  //     .sprite_mem_id(sprite_mem_id),
-  //     .sprite_w_mem_addr(mem_addr),
-  //     .sprite_req_op(sprite_req_op),
-  //     .sprite_req_body(sprite_req_body),
-  //     .spriteLUT(spriteLUT),
-  //     .sprite_id_bitmap(sprite_id_bitmap),
-  //     .sprite_available_id(sprite_available_id),
-  //     .sprite_id_found(sprite_id_found),
-  //     .write_sprite_valid(write_sprite_valid)
-  // );
+  hud hud_controller (
+      .clk(clk),
+      .req_valid(sprite_req_valid),
+      .sprite_mem_id(sprite_mem_id),
+      .sprite_w_mem_addr(mem_addr),
+      .sprite_req_op(sprite_req_op),
+      .sprite_req_body(sprite_req_body),
+      .spriteLUT(spriteLUT),
+      .sprite_id_bitmap(sprite_id_bitmap),
+      .sprite_available_id(sprite_available_id),
+      .sprite_id_found(sprite_id_found),
+      .write_sprite_valid(write_sprite_valid)
+  );
 
   spi spi_controller (
       .clk(clk),
@@ -167,7 +169,7 @@ module main #(
   if(ON_BOARD_MEMORY) begin : g_mem
     memory_onboard memory (
       .clk(clk),
-      .reset(ck_rst),
+      .reset(~ck_rst),
       .enable(1'b1),
       .transaction_toggle(mem_toggle),
 

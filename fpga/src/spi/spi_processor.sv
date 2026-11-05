@@ -271,6 +271,24 @@ module spi_processor #(
       endcase
   end
 
+  // Sprite req comb
+  always_comb begin
+    case (opcode)
+      SPRITE_UPDATE: begin
+        sprite_req_body = sprite_u_body;
+        sprite_req_op = LUT_UPDATE;
+      end
+      SPRITE_DELETE: begin
+        sprite_req_body = sprite_d_body;
+        sprite_req_op = LUT_DELETE;
+      end
+      default: begin
+        sprite_req_body = sprite_w_body;
+        sprite_req_op = LUT_DELETE;
+      end
+    endcase
+  end
+
 
   always_ff @(posedge clk) begin
 
@@ -408,24 +426,18 @@ module spi_processor #(
             SPRITE_WRITE: begin
               if (!sprite_write_done) begin
                 send_sprite_write <= 1'b1;
-                sprite_req_op <= LUT_WRITE;
-                sprite_req_body <= sprite_w_body;
               end else send_sprite_write <= 1'b0;
             end
 
             SPRITE_UPDATE: begin
               if (!sprite_update_done) begin
                 send_sprite_update <= 1'b1;
-                sprite_req_op <= LUT_UPDATE;
-                sprite_req_body <= sprite_u_body;
               end else send_sprite_update <= 1'b0;
             end
 
             SPRITE_DELETE: begin
               if (!sprite_delete_done) begin
                 send_sprite_delete <= 1'b1;
-                sprite_req_op <= LUT_DELETE;
-                sprite_req_body <= sprite_d_body;
               end else send_sprite_delete <= 1'b0;
             end
 
@@ -447,7 +459,6 @@ module spi_processor #(
               end else if (!out_full) begin
                   proc_fifo_reg <= error_event.code;
                   fail_w_en <= 1'b1;
-                  fail_r_en <= 1'b1;
                   fail_sent <= 1'b1;
                   fail_done <= 1'b1;
               end

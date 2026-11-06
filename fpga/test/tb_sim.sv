@@ -1,13 +1,14 @@
-`timescale 1ns/1ps
-
-module tb;
+module tb_sim #(
+    parameter int NUM_GENERATIONS = 100,
+    parameter string DUMPDIR = "",
+    parameter string DUMPFILENAME = ""  // these parameter are overwritten when compiling with make
+);
   import sim_pkg::*;
 
   localparam int W = CellGridWidth;
   localparam int H = CellGridHeight;
   localparam int MAX_ROW_WAIT_CYCLES  = 100_000;
   localparam int MAX_PAIR_WAIT_CYCLES = 100_000;
-  localparam int NUM_GENERATIONS = 100;
 
   logic clk = 1'b0;
   logic pulse_new_row = 1'b0;
@@ -249,7 +250,7 @@ endtask
     integer px, py;
     logic [23:0] rgb;
     begin
-      $sformat(filename, "frame_%04d.ppm", frame_id);
+      $sformat(filename, "%s/frame_%04d.ppm", DUMPDIR, frame_id);
       fd = $fopen(filename, "w");
       if (fd == 0) $fatal(1, "Could not open %s", filename);
       $fwrite(fd, "P3\n%0d %0d\n255\n", W, H);

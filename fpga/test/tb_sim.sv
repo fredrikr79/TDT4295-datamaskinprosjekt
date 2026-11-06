@@ -1,7 +1,8 @@
 module tb_sim #(
     parameter int NUM_GENERATIONS = 100,
     parameter string DUMPDIR = "",
-    parameter string DUMPFILENAME = ""  // these parameter are overwritten when compiling with make
+    parameter string DUMPFILENAME = "", // these parameters can be overwritten when compiling with make
+    parameter string GRID_FILE = ""
 );
   import sim_pkg::*;
 
@@ -22,6 +23,7 @@ module tb_sim #(
   // Full 8-bit cell values: material ID [7:4], counter/age [3:0].
   logic [7:0] current_grid [0:H-1][0:W-1];
   logic [7:0] next_grid    [0:H-1][0:W-1];
+  logic [7:0] input_bytes  [0:W*H-1];
 
   integer frame_number = 0;
   integer x, y, phase;
@@ -246,6 +248,28 @@ endtask
     end
   endtask
 
+  task automatic load_world_file(input string path);
+    integer input_fd, bytes_read, px, py;
+    begin
+      input_fd = $fopen(path, "rb");
+      if (input_fd == 0)
+        $fatal(1, "Could not open grid file %s", path);
+
+      bytes_read = $fread(input_bytes, input_fd);
+      if (bytes_read != W*H || $fgetc(input_fd) != -1)
+        $fatal(1, "Grid file %s must contain exactly %0d bytes (read %0d)",
+               path, W*H, bytes_read);
+      $fclose(input_fd);
+
+      for (py = 0; py < H; py = py + 1)
+        for (px = 0; px < W; px = px + 1) begin
+          current_grid[py][px] = input_bytes[py*W + px];
+          next_grid[py][px] = {MatAir, 4'h0};
+        end
+      $display("Loaded initial grid from %s", path);
+    end
+  endtask
+
   task automatic write_ppm(input integer frame_id);
     integer px, py;
     logic [23:0] rgb;
@@ -316,7 +340,10 @@ endtask
     for (x = 0; x < 3; x = x + 1)
       buffers[x] = '0;
 
-    initialize_world();
+    if (GRID_FILE != "")
+      load_world_file(GRID_FILE);
+    else
+      initialize_world();
     repeat (5) @(negedge clk);
     sim_running = 1'b1;
 

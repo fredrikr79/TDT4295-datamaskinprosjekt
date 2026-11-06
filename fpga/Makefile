@@ -28,7 +28,7 @@ PKG_SOURCES := $(filter %_pkg.sv,$(ALL_SOURCES))
 OTHER_SOURCES := $(filter-out %_pkg.sv,$(ALL_SOURCES))
 SOURCES := $(PKG_SOURCES) $(OTHER_SOURCES)
 
-.PHONY: dump vga lint clean vivado-all vivado-build vivado-program
+.PHONY: dump dump-movie vga lint clean vivado-all vivado-build vivado-program
 
 # Simulation
 lint: $(SOURCES) lint/spi_fifo_stubs.sv

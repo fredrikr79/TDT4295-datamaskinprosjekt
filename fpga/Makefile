@@ -11,7 +11,7 @@ DUMP_DIR := dump-data
 VCD_DUMP := $(TOP_MODULE).vcd
 DUMP_MOVIE_NAME := movie.mp4
 DUMP_MOVIE_FPS := 10
-DUMP_MOVIE_MAX_FRAME := 100
+DUMP_MOVIE_MAX_FRAME ?= 300
 DUMP_FRAMES := $(foreach n,$(shell seq -f '%04g' 0 $(DUMP_MOVIE_MAX_FRAME)),$(DUMP_DIR)/frame_$(n).ppm)
 
 DUMP_FLAGS :=
@@ -19,8 +19,14 @@ ifneq ($(filter $(TOP_MODULE),tb_main tb_sim),)
 DUMP_FLAGS += -GDUMPFILENAME=\"$(VCD_DUMP)\"
 DUMP_FLAGS += -GDUMPDIR=\"$(DUMP_DIR)\"
 endif
+ifneq ($(filter $(TOP_MODULE),tb_main),)
+DUMP_OUTPUTS := $(DUMP_DIR)/$(VCD_DUMP)
+endif
 ifneq ($(filter $(TOP_MODULE),tb_sim),)
+GRID_FILE ?= resources/test_grid_1.bmp
 DUMP_FLAGS += -GNUM_GENERATIONS=$(DUMP_MOVIE_MAX_FRAME)
+DUMP_FLAGS += -GGRID_FILE=\"$(GRID_FILE)\"
+DUMP_OUTPUTS := $(DUMP_FRAMES)
 endif
 
 ALL_SOURCES := $(shell find $(SOURCE_DIRECTORIES) \-type f \( -name "*.v" -o -name "*.sv" \) ! -path "src/config_pkg.sv") src/config_pkg.sv
@@ -35,14 +41,16 @@ lint: $(SOURCES) lint/spi_fifo_stubs.sv
 	verilator \
 		--lint-only --Wall \
 		$(SOURCES) lint/spi_fifo_stubs.sv
-$(DUMP_DIR)/$(DUMP_MOVIE_NAME) dump-movie &: $(DUMP_FRAMES)
+dump-movie: $(DUMP_DIR)/$(DUMP_MOVIE_NAME)
+$(DUMP_DIR)/$(DUMP_MOVIE_NAME): $(DUMP_FRAMES)
 	ffmpeg \
 		-framerate $(DUMP_MOVIE_FPS) \
 		-i $(DUMP_DIR)/frame_%04d.ppm \
 		-c:v libopenh264 \
 		-pix_fmt yuv420p \
 		$(DUMP_DIR)/movie.mp4
-$(DUMP_FRAMES) $(DUMP_DIR)/$(VCD_DUMP) dump &: $(SIM_BINARY) | $(DUMP_DIR)
+dump: $(DUMP_OUTPUTS)
+$(DUMP_OUTPUTS) &: $(SIM_BINARY) $(GRID_FILE) | $(DUMP_DIR)
 	./$(SIM_BINARY)
 vga: $(VGA_SIM_BINARY)
 	./$(VGA_SIM_BINARY)

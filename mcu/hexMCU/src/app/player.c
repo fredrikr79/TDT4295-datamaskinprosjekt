@@ -71,7 +71,7 @@ void update_player(
 
     // Check consistency of player box
     uint16_t in_air = 0;
-    uint16_t in_stone = 0;
+    uint16_t in_stone = 0;  // TODO: Move player up when inside collision
     uint16_t in_sand = 0;
     uint16_t in_water = 0;
     uint16_t in_lava = 0;
@@ -161,6 +161,7 @@ void update_player(
         &player.x, &player.y,
         &player.velocity_x, &player.velocity_y,
         PLAYER_SIZE_X, PLAYER_SIZE_Y,
+        PLAYER_STEP_ALLOWANCE, 1,
         velocity_box, box
     );
 

@@ -1,4 +1,5 @@
 #include "collision.h"
+#include "player.h"
 #include "rooms.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -39,13 +40,24 @@ bool perform_object_movement(
     float *pos_x, float *pos_y,
     float *velocity_x, float *velocity_y,
     uint8_t size_x, uint8_t size_y,
+    uint8_t step_allowance, uint8_t slide_ease,
     velocity_box_t velocity_box, uint8_t *box
 )
 {
+    // Set up read direction and origins
+    bool x_is_right = 0 < *velocity_x;
+    bool y_is_down = 0 < *velocity_y;
+    uint8_t base_x = velocity_box.rel_x - 1;
+    if (x_is_right) base_x += size_x + 1;
+    uint8_t base_y = velocity_box.rel_y - 1;
+    if (y_is_down) base_y += size_y + 1;
+    int dir_x = (!x_is_right) ? -1 : 1;
+    int dir_y = (!y_is_down) ? -1 : 1;
+
     // Calculate boundaries for collision detection
     uint8_t last_end_x = velocity_box.rel_x;
     uint8_t last_start_x = last_end_x + (int) floorf(*velocity_x);
-    if (*velocity_x > 0)
+    if (x_is_right)
     {
         last_start_x = last_end_x + size_x;
         last_end_x = last_start_x + (int) ceilf(*velocity_x);
@@ -53,7 +65,7 @@ bool perform_object_movement(
     }
     uint8_t last_end_y = velocity_box.rel_y;
     uint8_t last_start_y = last_end_y + (int) floorf(*velocity_y);
-    if (*velocity_y > 0)
+    if (y_is_down)
     {
         last_start_y = last_end_y + size_y;
         last_end_y = last_start_y + (int) ceilf(*velocity_y);
@@ -72,17 +84,17 @@ bool perform_object_movement(
     // Progression data
     int vertical_progress = 0;
     int horizontal_progress = 0;
-    int vertical_end = (*velocity_y < 0)
+    int vertical_end = (!y_is_down)
         ? (int) floorf(*velocity_y)
         : (int) ceilf(*velocity_y);
-    int vertical_max = (*velocity_y < 0)
+    int vertical_max = (!y_is_down)
         ? -velocity_box.rel_y
         : velocity_box.box.y2 - velocity_box.rel_y - size_y;
     if (abs(vertical_max) < abs(vertical_end)) vertical_end = vertical_max;
-    int horizontal_end = (*velocity_x < 0)
+    int horizontal_end = (!x_is_right)
         ? (int) floorf(*velocity_x)
         : (int) ceilf(*velocity_x);
-    int horizontal_max = (*velocity_x < 0)
+    int horizontal_max = (!x_is_right)
         ? -velocity_box.rel_x
         : velocity_box.box.x2 - velocity_box.rel_x - size_x;
     if (abs(horizontal_max) < abs(horizontal_end)) horizontal_end = horizontal_max;
@@ -91,31 +103,80 @@ bool perform_object_movement(
     bool vertical_collision = false;
     bool horizontal_collision = false;
 
-    // Set up read direction and origins
-    uint8_t base_x = velocity_box.rel_x - 1;
-    if (*velocity_x > 0) base_x += size_x + 1;
-    uint8_t base_y = velocity_box.rel_y - 1;
-    if (*velocity_y > 0) base_y += size_y + 1;
-    int dir_x = (*velocity_x < 0) ? -1 : 1;
-    int dir_y = (*velocity_y < 0) ? -1 : 1;
-
     // Perform step wise checking for collision
     while (vertical_done && horizontal_done)
     {
         if (current_axis_x)
         {
-            for (
-                uint8_t x = velocity_box.rel_x + horizontal_progress;
-                x < velocity_box.rel_x + size_x + horizontal_progress;
-                x++
-            )
+            uint8_t x_start = velocity_box.rel_x + horizontal_progress;
+            uint8_t x_target = velocity_box.rel_x + size_x + horizontal_progress;
+            uint8_t slide_start = 0;
+            uint8_t slide_end = 0;
+            for (uint8_t x = x_start; x < x_target; x++)
             {
-                if (tile_has_collision(box[x + (base_y + vertical_progress)*velocity_box.box.x2]))
+                uint8_t id = box[x + (base_y + vertical_progress)*velocity_box.box.x2];
+                if (tile_has_collision(id))
                 {
+                    if (y_is_down && id == SAND)
+                    {
+                        if (x < slide_ease)
+                        {
+                            slide_start = x + 1;
+                            continue;
+                        }
+                        else if (x_target - x - 1 < slide_ease)
+                        {
+                            slide_end = x_target - x;
+                            continue;
+                        }
+                    }
                     vertical_done = true;
                     vertical_collision = true;
                     vertical_progress -= dir_y;
                     break;
+                }
+            }
+            if (!vertical_done && y_is_down)
+            {
+                if (slide_start && slide_end)
+                {
+                    vertical_done = true;
+                    vertical_collision = true;
+                    vertical_progress -= dir_y;
+                }
+                else if (slide_start ^ slide_end)
+                {
+                    uint8_t slide_amount = 0;
+                    bool hit_wall = false;
+                    uint8_t y_start = velocity_box.rel_y + vertical_progress + 1;
+                    uint8_t y_end = y_start + size_y;
+                    uint8_t x = velocity_box.rel_x - 1 + horizontal_progress;
+                    uint8_t x_end;
+                    if (slide_start)
+                    {
+                        x += PLAYER_SIZE_X;
+                        x_end = x + slide_start;
+                    }
+                    else x_end = x - slide_end;
+                    while (x == x_end)
+                    {
+                        for (uint8_t y = y_start; y < y_end; y++)
+                        {
+                            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
+                            {
+                                hit_wall = true;
+                                break;
+                            }
+                        }
+                        if (hit_wall) break;
+                        x += slide_start ? 1 : -1;
+                        slide_amount++;
+                    }
+                    if (0 < slide_amount)
+                    {
+                        if (!(slide_end ^ x_is_right)) horizontal_done = true;
+                        horizontal_progress += slide_start ? slide_amount : -slide_amount;
+                    }
                 }
             }
             vertical_progress += dir_y;
@@ -129,18 +190,70 @@ bool perform_object_movement(
 
         else
         {
-            for (
-                uint8_t y = velocity_box.rel_y + vertical_progress;
-                y < velocity_box.rel_y + size_y + vertical_progress;
-                y++
-            )
+            uint8_t y_start = velocity_box.rel_y + vertical_progress;
+            uint8_t y_target = velocity_box.rel_y + size_y + vertical_progress;
+            uint8_t step_start = 0;
+            uint8_t step_end = 0;
+            for (uint8_t y = y_start; y < y_target; y++)
             {
                 if (tile_has_collision(box[base_x + horizontal_progress + y*velocity_box.box.x2]))
                 {
+                    if (y < step_allowance)
+                    {
+                        step_start = y + 1;
+                        continue;
+                    }
+                    else if (y_target - y - 1 < step_allowance)
+                    {
+                        step_end = y_target - y;
+                        continue;
+                    }
                     horizontal_done = true;
                     horizontal_collision = true;
                     horizontal_progress -= dir_x;
                     break;
+                }
+            }
+            if (!horizontal_done)
+            {
+                if (step_start && step_end)
+                {
+                    horizontal_done = true;
+                    horizontal_collision = true;
+                    horizontal_progress -= dir_x;
+                }
+                else if (step_start == 0 && 0 < step_end)
+                {
+                    uint8_t step_amount = 0;
+                    bool hit_roof = false;
+                    uint8_t x_start = velocity_box.rel_x + horizontal_progress - 1;
+                    uint8_t x_end = x_start + size_x;
+                    if (x_is_right)
+                    {
+                        x_start += 2;
+                        x_end += 2;
+                    }
+                    uint8_t y = velocity_box.rel_x - 1 + vertical_progress;
+                    uint8_t y_end = y - step_end;
+                    while (y < y_end)
+                    {
+                        for (uint8_t x = x_start; x < x_end; x++)
+                        {
+                            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
+                            {
+                                hit_roof = true;
+                                break;
+                            }
+                        }
+                        if (hit_roof) break;
+                        y--;
+                        step_amount++;
+                    }
+                    if (0 < step_amount)
+                    {
+                        if (y_is_down) vertical_done = true;
+                        vertical_progress -= step_amount;
+                    }
                 }
             }
             horizontal_progress += dir_x;

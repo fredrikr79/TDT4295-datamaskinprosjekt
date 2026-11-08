@@ -1,4 +1,7 @@
 #include "fpga.h"
+#include <stdint.h>
+
+#pragma once
 
 bool tile_has_collision(uint8_t id);
 
@@ -19,5 +22,6 @@ bool perform_object_movement(
     float *pos_x, float *pos_y,
     float *velocity_x, float *velocity_y,
     uint8_t size_x, uint8_t size_y,
+    uint8_t step_allowance, uint8_t slide_ease,
     velocity_box_t velocity_box, uint8_t *box
 );

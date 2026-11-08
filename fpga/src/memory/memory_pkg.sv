@@ -104,6 +104,6 @@ package memory_pkg;
   localparam int unsigned MemClientScanoutID = 0;  // highest priority
   localparam int unsigned MemClientHudID = 1;
   localparam int unsigned MemClientSpiID = 2;
-  localparam int unsigned MemClientCellsID = 3;  // lowest priority, elastic
+  localparam int unsigned MemClientSimID = 3;  // lowest priority, elastic
 
 endpackage

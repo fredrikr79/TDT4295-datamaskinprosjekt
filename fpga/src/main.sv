@@ -82,7 +82,8 @@ module main (
       .v_blank(v_blank),
       .h_blank(h_blank),
       .frame_start(frame_start),
-      .near_frame_end(near_frame_end)
+      .near_frame_end(near_frame_end),
+      .line_end(line_end)
   );
 
 
@@ -97,6 +98,49 @@ module main (
 //       .coord_y(coord_y),
 //       .pixel(cells_pixel_unused) // Temporary for implementing frame buffer
 //   );
+
+  logic pulse_new_row;
+  sim_pkg::row_buffer_t sim_window [3];
+  logic pulse_transaction_pair_done, pulse_row_done; // pulse_row_done flytt inn ny rad, pulse_transaction_pair_done
+  sim_pkg::row_buffer_t sim_res_buffer [2];
+
+  logic sim_mem_toggle;
+  logic [31:0] sim_mem_addr;
+  memory_pkg::message_length_t sim_mem_len;
+  logic [7:0] sim_mem_in;
+  memory_pkg::transaction_e sim_mem_transaction;
+
+  sim_buffers sim_line_memory_reader(
+    .clk(clk),
+    .reset(sw[3]),
+    .sim_running(sim_running),
+
+    .pulse_new_row(pulse_new_row),
+    .buffers(sim_window),
+    .pulse_transaction_pair_done(pulse_transaction_pair_done),
+    .pulse_row_done(pulse_row_done),
+    .res_buffer(sim_res_buffer),
+
+    .mem_toggle(sim_mem_toggle),
+    .mem_transaction(sim_mem_transaction),
+    .mem_address(sim_mem_addr),
+    .mem_length(sim_mem_len),
+    .mem_write_data(sim_mem_in),
+    .mem_busy(mem_client_busy[memory_pkg::MemClientSimID]),
+    .mem_data_on_cable(mem_client_data_on_cable[memory_pkg::MemClientSimID]),
+    .mem_read_data(mem_out)
+  );
+
+
+  simulator sim_controller (
+    .clk(clk),
+    .pulse_new_row(pulse_new_row),
+    .sim_running(sim_running),
+    .buffers(sim_window),
+    .pulse_transaction_pair_done(pulse_transaction_pair_done),
+    .pulse_row_done(pulse_row_done),
+    .res_buffer(sim_res_buffer)
+  );
 
   // Framebuffer
   logic fb_sel;
@@ -204,6 +248,13 @@ module main (
     mem_client_transaction[memory_pkg::MemClientScanoutID]  = fb_mem_transaction;
     mem_client_address[memory_pkg::MemClientScanoutID]      = fb_mem_address;
     mem_client_length_burst[memory_pkg::MemClientScanoutID] = fb_mem_length;
+
+    // Sim
+    mem_client_toggle[memory_pkg::MemClientSimID]      = sim_mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientSimID] = sim_mem_transaction;
+    mem_client_address[memory_pkg::MemClientSimID]     = sim_mem_addr;
+    mem_client_length_burst[memory_pkg::MemClientSimID]= sim_mem_len;
+    mem_client_write_data[memory_pkg::MemClientSimID]  = sim_mem_in;
 
     // TODO: Add the other clients here when they implement the external SRAM
   end

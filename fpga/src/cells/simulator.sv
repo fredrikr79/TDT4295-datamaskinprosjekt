@@ -3,7 +3,7 @@ module simulator #(
 )(
     input wire clk, pulse_new_row, sim_running,
     input sim_pkg::row_buffer_t buffers [3],
-    output logic pulse_transaction_pair_done, pulse_row_done,
+    output logic pulse_transaction_pair_done, pulse_row_done, // pulse_row_done flytt inn ny rad, pulse_transaction_pair_done = lagre i ram
     output sim_pkg::row_buffer_t res_buffer [2]
 );
 

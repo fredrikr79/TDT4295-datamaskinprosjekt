@@ -40,7 +40,7 @@ module tb_mem_access_policy #(
     near_frame_end = nfe;
     sim_running = sr;
     #1;
-    check({name, " / cells"}, allow[MemClientCellsID], want_cells);
+    check({name, " / cells"}, allow[MemClientSimID], want_cells);
     check({name, " / spi"}, allow[MemClientSpiID], want_spi);
     // The display path is unconditional in every phase, so it is asserted on
     // every case rather than given rows of its own.
@@ -80,7 +80,7 @@ module tb_mem_access_policy #(
       #1;
       check($sformatf("scanout always allowed (case %0d)", i), allow[MemClientScanoutID], 1'b1);
       check($sformatf("hud always allowed (case %0d)", i), allow[MemClientHudID], 1'b1);
-      check($sformatf("cells always allowed (case %0d)", i), allow[MemClientCellsID], 1'b1);
+      check($sformatf("cells always allowed (case %0d)", i), allow[MemClientSimID], 1'b1);
       // SPI is the only conditional client; restate its rule independently of
       // the table above so a change to the policy has to break both.
       check($sformatf("spi matches its rule (case %0d)", i), allow[MemClientSpiID],

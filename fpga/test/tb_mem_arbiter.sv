@@ -203,12 +203,12 @@ module tb_mem_arbiter #(
     client_allow = '1;
     client_allow[memory_pkg::MemClientScanoutID] = 1'b0;
     request(memory_pkg::MemClientScanoutID);
-    request(memory_pkg::MemClientCellsID);
+    request(memory_pkg::MemClientSimID);
     grant_count = 0;
 
     wait (grant_count == 1);
     check("denied top client did not block the lower one",
-          grant_order[0] == memory_pkg::MemClientCellsID);
+          grant_order[0] == memory_pkg::MemClientSimID);
 
     if (errors != 0) $fatal(1, "tb_mem_arbiter: %0d check(s) failed", errors);
     $display("tb_mem_arbiter: all checks passed");

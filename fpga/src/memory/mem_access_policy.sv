@@ -11,7 +11,7 @@ module mem_access_policy (
     allow[memory_pkg::MemClientScanoutID] = 1'b1;
     allow[memory_pkg::MemClientHudID] = 1'b1;
     allow[memory_pkg::MemClientSpiID] = !sim_running || (v_blank && !near_frame_end);
-    allow[memory_pkg::MemClientCellsID] = 1'b1;
+    allow[memory_pkg::MemClientSimID] = 1'b1;
   end
 
 endmodule

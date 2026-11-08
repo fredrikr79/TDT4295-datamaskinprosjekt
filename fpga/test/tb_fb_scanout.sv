@@ -53,7 +53,7 @@ module tb_fb_scanout #(
   // --- memory -------------------------------------------------------------
   localparam int unsigned N = memory_pkg::NumMemClients;
   localparam int unsigned Scan = memory_pkg::MemClientScanoutID;
-  localparam int unsigned Hog = memory_pkg::MemClientCellsID;  // lowest priority
+  localparam int unsigned Hog = memory_pkg::MemClientSimID;  // lowest priority
 
   logic [N-1:0] client_toggle;
   memory_pkg::transaction_e client_transaction[N];

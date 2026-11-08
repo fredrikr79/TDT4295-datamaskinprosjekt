@@ -312,6 +312,7 @@ module main (
       .mem_addr(spi_mem_addr),
       .mem_transaction(spi_mem_transaction),
       .mem_busy(mem_client_busy[memory_pkg::MemClientSpiID]),
+      .mem_allow(mem_allow[memory_pkg::MemClientSpiID]),
       .mem_data_on_wire(mem_client_data_on_cable[memory_pkg::MemClientSpiID]),
       .mem_toggle(spi_mem_toggle),
 

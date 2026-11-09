@@ -1,9 +1,9 @@
 ## This file is a general .xdc for the Arty A7-35 Rev. D and Rev. E
 
 ## RGB LED
-set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_b]
-set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g]
-set_property -dict {PACKAGE_PIN B6 IOSTANDARD LVCMOS15} [get_ports led_r]
+set_property -dict {PACKAGE_PIN B9 IOSTANDARD LVCMOS15} [get_ports led_b_n]
+set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g_n]
+set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_r_n]
 
 # User button
 set_property -dict {PACKAGE_PIN A10 IOSTANDARD LVCMOS15} [get_ports user_btn]
@@ -19,8 +19,8 @@ set_property -dict {PACKAGE_PIN H14 IOSTANDARD LVCMOS15} [get_ports octo_spi[4]]
 set_property -dict {PACKAGE_PIN G15 IOSTANDARD LVCMOS15} [get_ports octo_spi[5]]
 set_property -dict {PACKAGE_PIN J15 IOSTANDARD LVCMOS15} [get_ports octo_spi[6]]
 set_property -dict {PACKAGE_PIN J16 IOSTANDARD LVCMOS15} [get_ports octo_spi[7]]
-set_property -dict {PACKAGE_PIN G14 IOSTANDARD LVCMOS15} [get_ports ready]
-set_property -dict {PACKAGE_PIN F14 IOSTANDARD LVCMOS15} [get_ports acknack]
+set_property -dict {PACKAGE_PIN H16 IOSTANDARD LVCMOS15} [get_ports ready]
+set_property -dict {PACKAGE_PIN G16 IOSTANDARD LVCMOS15} [get_ports acknack]
 
 # Fallback SPI
 # set_property -dict {PACKAGE_PIN D16 IOSTANDARD LVCMOS15} [get_ports spi_mosi]

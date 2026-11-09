@@ -67,6 +67,7 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+extern void myMain(void);
 
 /* USER CODE END 0 */
 
@@ -105,6 +106,8 @@ int main(void)
   MX_FileX_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  // main main is also a while loop so it will take over the execution form here
+  myMain(); // call main form my main
 
   /* USER CODE END 2 */
 

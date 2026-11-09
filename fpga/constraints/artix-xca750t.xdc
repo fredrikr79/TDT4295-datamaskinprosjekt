@@ -19,23 +19,23 @@ set_property -dict {PACKAGE_PIN H14 IOSTANDARD LVCMOS15} [get_ports octo_spi[4]]
 set_property -dict {PACKAGE_PIN G15 IOSTANDARD LVCMOS15} [get_ports octo_spi[5]]
 set_property -dict {PACKAGE_PIN J15 IOSTANDARD LVCMOS15} [get_ports octo_spi[6]]
 set_property -dict {PACKAGE_PIN J16 IOSTANDARD LVCMOS15} [get_ports octo_spi[7]]
+set_property -dict {PACKAGE_PIN F14 IOSTANDARD LVCMOS15} [get_ports ck_rst]
+set_property -dict {PACKAGE_PIN G14 IOSTANDARD LVCMOS15} [get_ports sync]
 set_property -dict {PACKAGE_PIN H16 IOSTANDARD LVCMOS15} [get_ports ready]
 set_property -dict {PACKAGE_PIN G16 IOSTANDARD LVCMOS15} [get_ports acknack]
 
 # Fallback SPI
 # set_property -dict {PACKAGE_PIN D16 IOSTANDARD LVCMOS15} [get_ports spi_mosi]
 # set_property -dict {PACKAGE_PIN F15 IOSTANDARD LVCMOS15} [get_ports spi_miso]
-# set_property -dict {PACKAGE_PIN E15 IOSTANDARD LVCMOS15} [get_ports spi_sck]
-# set_property -dict {PACKAGE_PIN H16 IOSTANDARD LVCMOS15} [get_ports spi_ready]
+# set_property -dict {PACKAGE_PIN E13 IOSTANDARD LVCMOS15} [get_ports spi_sck]
 # set_property -dict {PACKAGE_PIN D11 IOSTANDARD LVCMOS15} [get_ports spi_cs]
-# set_property -dict {PACKAGE_PIN G16 IOSTANDARD LVCMOS15} [get_ports spi_acknack]
 
 # Extra unallocated IO
+# set_property -dict {PACKAGE_PIN h14 IOSTANDARD LVCMOS15} [get_ports unallocated_io]
 # set_property -dict {PACKAGE_PIN H13 IOSTANDARD LVCMOS15} [get_ports unallocated_io]
 # set_property -dict {PACKAGE_PIN H12 IOSTANDARD LVCMOS15} [get_ports unallocated_io]
 # set_property -dict {PACKAGE_PIN G12 IOSTANDARD LVCMOS15} [get_ports unallocated_io]
 # set_property -dict {PACKAGE_PIN H11 IOSTANDARD LVCMOS15} [get_ports unallocated_io]
-
 
 # Memory
 set_property -dict {PACKAGE_PIN M6  IOSTANDARD LVCMOS33} [get_ports mem_data_bus[0]]

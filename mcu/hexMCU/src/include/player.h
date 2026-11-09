@@ -49,4 +49,6 @@ void move_right();
 void move_stop();
 void start_jump();
 
+int player_in_portal(player_t player, portal_t *portals);
+
 void player_init();

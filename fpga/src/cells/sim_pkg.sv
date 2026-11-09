@@ -90,7 +90,7 @@ package sim_pkg;
     return color_pkg::color_t'(rgb);
   endfunction
 
-  localparam int GolRefreshDelay = 'd10000;
+  localparam int GolRefreshDelay = 'd100;
 
   // Lookup table for materials
   function automatic material_props_t props(material_t m);

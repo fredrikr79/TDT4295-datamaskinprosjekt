@@ -11,9 +11,8 @@
 #include "frame_sync.h"
 #include "game.h"
 #include "usb_input.h"
-#include "hud.h"                    /* sprites; PX_BYTES, HUD_CLEAR, RGB565 */
-#include "font.h"
-#include "text.h"
+#include "sprite.h"
+#include "assets.h"
 #include "funny_man.h"
 
 /* tuning */
@@ -21,11 +20,6 @@
 #define PROBE_RETRY_MS  200u
 #define FIRST_ROOM_X    0u
 #define FIRST_ROOM_Y    0u
-#define CURSOR_SIZE     8
-#define CURSOR_COLOUR   RGB565(255, 255, 255)
-#define TEST_FONT       font_kiwisoda
-#define TEST_SCALE      1           /* 8 px font -> 16 px letters */
-#define TEST_TEXT       "Hei verden! Lagre spill? æøå ÆØÅ"
 
 /* ======================================================================
  * The state machine
@@ -58,14 +52,10 @@ static int room_y = FIRST_ROOM_Y;   /* the y-coordinate of the current room */
 static int next_room_x;             /* the x-coordinate of the next room */
 static int next_room_y;             /* the y-coordinate of the next room */
 
-static bool receiving_room_from_fpga = false;
-static bool sending_room_from_fpga = false;
-
 static player_t player;
 
 static portal_t portals[MAX_PORTALS] = {0};
 
-static uint8_t room_tiles[ROOM_X*ROOM_Y] = {0};
 static uint8_t *box;
 
 static void run_enter(void);
@@ -95,67 +85,39 @@ static void probe_done(const fpga_cmd_t *cmd, fpga_err_t err)
 
 static void info_done(const fpga_cmd_t *cmd, fpga_err_t err);
 
-/* SAVE: current room -> storage
- * Runs when we leave a room, before the next one is loaded.
- * Done callbacks set `failed` on any error; that triggers a resync. */
+/* SAVE: the current room, FPGA -> card (rooms.c reads it back row by row,
+ * then writes the file).
+ * Runs when we leave a room, before the next one is loaded. A failed
+ * command makes room_poll() say ROOM_FAILED; that triggers a resync. */
 static void save_start(void)
 {
-    LOG_INFO("saving room %d, %d", room_x, room_y);
-    receiving_room_from_fpga = true;
-    /* TODO: reset save progress */
-    read_room_from_fpga(room_tiles);
+    room_save_start(room_x, room_y);
     go(S_SAVE);
 }
 
-/* Same FPGA session, SAVE was interrupted: carry on where it stopped. */
+/* Same FPGA session, SAVE was interrupted: the grid is still there, so
+ * carry on reading it from the first row not done yet. */
 static void save_resume(void)
 {
-    /* TODO: continue from the first failed command */
+    if (!room_resume()) room_save_start(room_x, room_y);
     go(S_SAVE);
 }
 
-/* Change variable to indicate that all the data from the FPGA has be received */
-void save_finish(void)
-{
-    receiving_room_from_fpga = false;
-}
-
-/* Returns true once everything is saved and no commands are in flight. */
-static bool save_poll(void)
-{
-    return !receiving_room_from_fpga;
-}
-
-/* LOAD: scene for `room` -> FPGA
- * Done callbacks set `failed` on any error; that triggers a resync. */
+/* LOAD: room (room_x, room_y), card -> FPGA (rooms.c reads the file, then
+ * sends it row by row). */
 static void load_start(void)
 {
-    LOG_INFO("loading room %d, %d", room_x, room_y);
-    sending_room_from_fpga = true;
-    /* TODO: reset load progress */
     room_enter();
-    read_room(room_x, room_y, room_tiles);
-    send_room_to_fpga(room_tiles);
+    room_load_start(room_x, room_y);
     go(S_LOAD);
 }
 
-/* Same FPGA session, LOAD was interrupted: carry on where it stopped. */
+/* Same FPGA session, LOAD was interrupted: carry on from the first row
+ * not done yet (without resetting the game state room_enter() sets). */
 static void load_resume(void)
 {
-    /* TODO: continue from the first failed command */
+    if (!room_resume()) room_load_start(room_x, room_y);
     go(S_LOAD);
-}
-
-/* Change variable to indicate that all the data has been sendt to the FPGA */
-void load_finish(void)
-{
-    sending_room_from_fpga = false;
-}
-
-/* Returns true once the scene is loaded and no commands are in flight. */
-static bool load_poll(void)
-{
-    return !sending_room_from_fpga;
 }
 
 /* RUN: the game itself  */
@@ -172,16 +134,40 @@ static const char *const run_state_names[] =
 
 static run_state_t  run_state = RS_SIM;
 
+struct {
+    sprite_t *menu_bg;
+    sprite_t *menu_paused;
+    sprite_t *menu_save;
+    sprite_t *menu_load;             
+} menu;
+
+
 static void r_go(run_state_t s)
 {
     if (s != run_state) LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
     run_state = s;
+    switch (run_state) {
+        case RS_SIM: // exit menu
+            sprite_show(menu.menu_bg, false);
+            sprite_show(menu.menu_load, false);
+            sprite_show(menu.menu_paused, false);
+            sprite_show(menu.menu_save, false);
+        break;
+        case RS_MENU: // enter menu
+            sprite_show(menu.menu_bg, true);
+            sprite_show(menu.menu_load, true);
+            sprite_show(menu.menu_paused, true);
+            sprite_show(menu.menu_save, true);
+        break;
+    }
 }
-/* HUD: the cursor sprite and a test sentence (sprites, see hud.h) */
-static uint8_t      cursor_px[CURSOR_SIZE * CURSOR_SIZE * PX_BYTES];
-static hud_image_t  cursor_img;
-static hud_sprite_t cursor;
-static text_t       test_text;
+/* HUD: the cursor, a test sentence and a demo animation (sprite.h) */
+static sprite_t     *cursor;
+static sprite_t     *title;
+static sprite_ani_t *spinner;       /* only if sprites/spinner.spr is on the card */
+
+static int32_t cursor_w(void) { return sprite_img_w(assets.cursor); }
+static int32_t cursor_h(void) { return sprite_img_h(assets.cursor); }
 
 static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
 {
@@ -196,35 +182,51 @@ static void run_enter(void)
     run.sync_seen = frame_sync_count();
 }
 
-/* The HUD's sprites, made once. hud_poll() sends them, and sends them
- * again after a resync or a new FPGA session. */
-static void hud_setup(void)
+/* setup things for the menu */
+static void menu_setup(void)
+{
+    menu.menu_bg     = sprite_new(sprite_img_solid(200, 400, RGB565(19, 5, 30)), 200, 50, false);
+    menu.menu_paused = sprite_new(assets.paused,200, 50, false);
+    menu.menu_save   = sprite_new(assets.save_game,200, 100, false);
+    menu.menu_load   = sprite_new(assets.load_game,200, 150, false);
+}
+
+
+/* Images and the HUD's sprites, made once, on the first load. From here
+ * on sprite_poll() uploads the images in the background, and sends
+ * everything again after a resync or a new FPGA session. */
+static void sprites_setup(void)
 {
     static bool done;
     if (done) return;
     done = true;
 
-    const fpga_info_t *scr = fpga_link_info();
-    hud_fill(cursor_px, CURSOR_SIZE, CURSOR_SIZE, CURSOR_COLOUR);
-    hud_image_init(&cursor_img, cursor_px, CURSOR_SIZE, CURSOR_SIZE);
-    hud_sprite_init(&cursor, &cursor_img, (int16_t)run.cx, (int16_t)run.cy, true);
+    sprite_init();
+    assets_init();              /* reads the sprite files' headers from the card */
 
+    const fpga_info_t *scr = fpga_link_info();
+    player_init(100, 100);      /* start position for the room */
 
     /* test: a sentence centred near the top */
-    int32_t w = font_text_width(&TEST_FONT, TEST_TEXT) * TEST_SCALE;
+    int32_t w = sprite_img_w(assets.title);
     int32_t x = w < scr->width ? (scr->width - w) / 2 : 0;
-    text_draw(&test_text, (int16_t)x, 16, &TEST_FONT, TEST_TEXT,
-              RGB565(255, 220, 0), TEST_SCALE);
+    title = sprite_new(assets.title, (int16_t)x, 16, true);
+
+    /* demo: an animation from the card, top-left, 10 frames a second */
+    spinner = sprite_ani_file("sprites/spinner.spr", 6, 8, 8, true);
+
+    menu_setup();
+    cursor = sprite_new(assets.cursor, 0, 0, true);
 }
 
 /* Per-room game state: from load_start(), once per room. */
 static void room_enter(void)
 {
+    sprites_setup();
     const fpga_info_t *scr = fpga_link_info();
-    run.cx = (scr->width  - CURSOR_SIZE) / 2;
-    run.cy = (scr->height - CURSOR_SIZE) / 2;
-    hud_setup();
-    player_init(100, 100);      /* start position for the room */
+    run.cx = (scr->width  - cursor_w()) / 2;
+    run.cy = (scr->height - cursor_h()) / 2;
+    sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -249,7 +251,8 @@ static void run_frame(uint32_t n)
     
     /* TODO: update + draw */
 
-    hud_sprite_move(&cursor, (int16_t)run.cx, (int16_t)run.cy);   /* hud_poll sends it */
+    sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);   /* sprite_poll sends it */
+    sprite_frame(n);            /* animations step */
 
     switch (run_state) {
     case RS_SIM:  player_frame(&run.keys, n); break;
@@ -265,14 +268,14 @@ static void run_poll(void)
     input_take(&in);
     /* input_log(&in); */
     run.keys = in;              /* held keys are "down right now", so the latest copy is enough */
-    run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - CURSOR_SIZE);
-    run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - CURSOR_SIZE);
+    run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
+    run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - cursor_h());
 
     if (key_pressed(&in, KEY_ESCAPE))
         r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
         
 
-    if (!hud_poll()) { failed = true; return; }
+    if (!sprite_poll()) { failed = true; return; }
     uint32_t n = frame_sync_take(&run.sync_seen);
     if (n) run_frame(n);
 }
@@ -309,7 +312,7 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
          * here drops the room change; the player is still in `room`. */
         have_session = true;
         session      = in->session;
-        hud_forget();                   /* its sprites are gone: send them again */
+        sprite_forget();                /* its sprites are gone: send them again */
         load_start();
     }
 }
@@ -321,7 +324,7 @@ static void resync(void)
     if (state == S_SAVE || state == S_LOAD || state == S_RUN)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */
-    hud_lost();                  /* ...so this comes after them      */
+    sprite_lost();               /* ...so this comes after them      */
     failed   = false;
     retry_at = plat_millis();
     go(S_PROBE);
@@ -351,16 +354,24 @@ void game_poll(void)
     case S_INFO_WAIT:
         break;                   /* the done callback moves us on */
     case S_SAVE:
-        if (save_poll())
-        {
-            save_room(room_x, room_y, room_tiles);
+        switch (room_poll()) {
+        case ROOM_FAILED: failed = true; break;
+        case ROOM_DONE:                         /* saved: on to the next room */
             room_x = next_room_x;
             room_y = next_room_y;
             load_start();
+            break;
+        default: break;
         }
         break;
     case S_LOAD:
-        if (load_poll()) go(S_RUN);
+        /* sprites upload alongside the room */
+        if (!sprite_poll()) { failed = true; break; }
+        switch (room_poll()) {
+        case ROOM_FAILED: failed = true; break;
+        case ROOM_DONE:   go(S_RUN);     break;
+        default: break;
+        }
         break;
     case S_RUN:
         run_poll();

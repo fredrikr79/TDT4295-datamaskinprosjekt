@@ -1,4 +1,5 @@
-/* Translation layer: HID boot reports in, per-frame input_t out.
+/* Translation layer: HID boot reports (and controller states) in,
+ * per-frame input_t out.
  *
  * Both backends hand over raw boot reports (the SDL backend fakes them), so
  * this file is what actually runs on the MCU even when testing on the host.
@@ -27,12 +28,14 @@ static struct {                 /* what the devices say right now */
     uint8_t held[KEYMAP_BYTES];
     uint8_t mouse_held;
     uint8_t keyboards, mice;    /* how many are connected */
+    pad_t   pad[INPUT_PADS];    /* pressed/released unused here */
 } cur;
 
 static struct {                 /* collected since the last input_take() */
-    uint8_t pressed[KEYMAP_BYTES], released[KEYMAP_BYTES];
-    uint8_t mouse_pressed, mouse_released;
-    int32_t dx, dy, wheel, pan;
+    uint8_t  pressed[KEYMAP_BYTES], released[KEYMAP_BYTES];
+    uint8_t  mouse_pressed, mouse_released;
+    int32_t  dx, dy, wheel, pan;
+    uint32_t pad_pressed[INPUT_PADS], pad_released[INPUT_PADS];
 } acc;
 
 void usb_init(void)
@@ -61,6 +64,11 @@ void input_take(input_t *out)
     out->pan            = acc.pan;
     out->keyboard       = cur.keyboards > 0;
     out->mouse          = cur.mice > 0;
+    for (unsigned p = 0; p < INPUT_PADS; p++) {
+        out->pad[p]          = cur.pad[p];
+        out->pad[p].pressed  = acc.pad_pressed[p];
+        out->pad[p].released = acc.pad_released[p];
+    }
     memset(&acc, 0, sizeof acc);
 }
 
@@ -105,11 +113,48 @@ static void mouse_set_buttons(uint8_t b)
 void usb_input_mouse_report(const uint8_t *r, uint16_t len)
 {
     if (len < 3) return;
-    mouse_set_buttons(r[0]);
-    acc.dx += (int8_t)r[1];
-    acc.dy += (int8_t)r[2];
-    if (len >= 4) acc.wheel += (int8_t)r[3];
-    if (len >= 5) acc.pan   += (int8_t)r[4];
+    usb_input_mouse_motion(r[0], (int8_t)r[1], (int8_t)r[2],
+                           len >= 4 ? (int8_t)r[3] : 0, len >= 5 ? (int8_t)r[4] : 0);
+}
+
+void usb_input_mouse_motion(uint8_t buttons, int32_t dx, int32_t dy, int32_t wheel, int32_t pan)
+{
+    mouse_set_buttons(buttons);
+    acc.dx    += dx;
+    acc.dy    += dy;
+    acc.wheel += wheel;
+    acc.pan   += pan;
+}
+
+/* ---- controllers ------------------------------------------------------------ */
+void usb_input_gamepad(uint8_t p, const usb_gamepad_t *g)
+{
+    if (p >= INPUT_PADS || !cur.pad[p].connected) return;
+    pad_t *c = &cur.pad[p];
+    acc.pad_pressed[p]  |= g->buttons & ~c->held;
+    acc.pad_released[p] |= c->held & ~g->buttons;
+    c->held = g->buttons;
+    c->lx = g->lx; c->ly = g->ly; c->rx = g->rx; c->ry = g->ry;
+    c->lt = g->lt; c->rt = g->rt;
+    if (g->touch_valid) {
+        for (unsigned f = 0; f < 2; f++) {
+            c->touch[f].down = g->touch[f].down;
+            if (g->touch[f].down) {             /* keep the last position after lifting */
+                c->touch[f].x = g->touch[f].x;
+                c->touch[f].y = g->touch[f].y;
+            }
+        }
+    }
+}
+
+void usb_input_gamepad_connected(uint8_t p, bool connected)
+{
+    if (p >= INPUT_PADS) return;
+    if (!connected && cur.pad[p].connected) {
+        const usb_gamepad_t idle = { .touch_valid = true };
+        usb_input_gamepad(p, &idle);            /* release everything */
+    }
+    cur.pad[p].connected = connected;
 }
 
 /* ---- plug / unplug ---------------------------------------------------------
@@ -125,7 +170,7 @@ void usb_input_connected(usb_device_kind_t kind, bool connected)
             cur.keyboards--;
             keyboard_set(none);
         }
-    } else {
+    } else if (kind == USB_MOUSE) {
         if (connected) {
             cur.mice++;
         } else if (cur.mice) {
@@ -173,6 +218,71 @@ static const char *button_name(uint8_t bit)
     }
 }
 
+/* "SOUTH L1 UP" for every PAD_* bit set; returns the length */
+static int list_pad(uint32_t bits, char *out, size_t size)
+{
+    static const char *const name[] = {
+        "SOUTH", "EAST", "WEST", "NORTH", "L1", "R1", "L2", "R2", "SELECT", "START",
+        "L3", "R3", "HOME", "TOUCH", "UP", "DOWN", "LEFT", "RIGHT",
+    };
+    int n = 0;
+    out[0] = 0;
+    for (unsigned b = 0; b < sizeof name / sizeof name[0] && (size_t)n < size; b++)
+        if (bits & (1u << b))
+            n += snprintf(out + n, size - (size_t)n, "%s%s", n ? " " : "", name[b]);
+    return n;
+}
+
+static int absdiff(int a, int b) { return a > b ? a - b : b - a; }
+
+/* Controller: connect, buttons, and sticks/triggers when they moved enough. */
+static void pad_log(unsigned p, const pad_t *pad)
+{
+    static bool     was[INPUT_PADS];
+    static pad_t    shown[INPUT_PADS];
+    static uint32_t last[INPUT_PADS];
+    char list[96];
+
+    if (pad->connected != was[p]) LOG_INFO("pad %u %s", p, pad->connected ? "connected" : "gone");
+    was[p] = pad->connected;
+    if (!pad->connected) return;
+
+    if (list_pad(pad->pressed, list, sizeof list))  LOG_INFO("pad %u down: %s", p, list);
+    if (list_pad(pad->released, list, sizeof list)) LOG_INFO("pad %u up:   %s", p, list);
+
+    for (unsigned f = 0; f < 2; f++) {
+        const pad_touch_t *t = &pad->touch[f], *was_t = &shown[p].touch[f];
+        if (t->down != was_t->down) {
+            LOG_INFO("pad %u finger %u %s at %u,%u", p, f, t->down ? "down" : "up", t->x, t->y);
+            shown[p].touch[f] = *t;                     /* don't log it again as a slide */
+        }
+    }
+
+    const pad_t *s = &shown[p];
+    bool moved = absdiff(pad->lx, s->lx) > 8 || absdiff(pad->ly, s->ly) > 8 ||
+                 absdiff(pad->rx, s->rx) > 8 || absdiff(pad->ry, s->ry) > 8 ||
+                 absdiff(pad->lt, s->lt) > 8 || absdiff(pad->rt, s->rt) > 8;
+    bool slid = false;
+    for (unsigned f = 0; f < 2; f++)
+        if (pad->touch[f].down && (absdiff(pad->touch[f].x, s->touch[f].x) > 32 ||
+                                   absdiff(pad->touch[f].y, s->touch[f].y) > 32))
+            slid = true;
+    uint32_t now = plat_millis();
+    if ((moved || slid) && now - last[p] >= MOVE_LOG_MS) {
+        if (moved)
+            LOG_INFO("pad %u sticks L %+4d,%+4d  R %+4d,%+4d  triggers %3u %3u", p,
+                     pad->lx, pad->ly, pad->rx, pad->ry, pad->lt, pad->rt);
+        for (unsigned f = 0; f < 2; f++)
+            if (slid && pad->touch[f].down)
+                LOG_INFO("pad %u finger %u at %u,%u", p, f, pad->touch[f].x, pad->touch[f].y);
+        shown[p] = *pad;
+        last[p] = now;
+    } else {
+        for (unsigned f = 0; f < 2; f++)                /* finger up/down is logged at once above */
+            shown[p].touch[f].down = pad->touch[f].down;
+    }
+}
+
 /* "W LSHIFT" for every bit set in a key map; returns the length */
 static int list_keys(const uint8_t map[32], char *out, size_t size)
 {
@@ -210,6 +320,8 @@ void input_log(const input_t *in)
     }
     if (in->wheel) LOG_INFO("wheel %+ld", (long)in->wheel);
     if (in->pan)   LOG_INFO("pan %+ld",   (long)in->pan);
+
+    for (unsigned p = 0; p < INPUT_PADS; p++) pad_log(p, &in->pad[p]);
 
     dx += in->mouse_dx;
     dy += in->mouse_dy;

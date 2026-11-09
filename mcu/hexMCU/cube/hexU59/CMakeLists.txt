@@ -6,6 +6,9 @@ cmake_minimum_required(VERSION 3.22)
 #
 # User is free to modify the file as much as necessary
 #
+# The final board: STM32U595ZJT6. Its own CubeMX project (Core/, Drivers/,
+# startup, linker script) plus our code from ../../cmake/stm32u5.cmake --
+# the same files as the Nucleo build in the project root.
 
 # Setup compiler settings
 set(CMAKE_C_STANDARD 11)
@@ -42,15 +45,14 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
-# Add sources to executable
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
-)
-
-# Add include paths
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
-)
+# ---------------------------------------------------------------------
+# hexMCU: our code, the STM32 port and TinyUSB (../../cmake/stm32u5.cmake)
+# U595: USB OTG_HS with the built-in HS PHY -> dwc2. CC lines on UCPD1.
+# ---------------------------------------------------------------------
+set(USB_IP dwc2)
+set(HEXMCU_USB_USE_UCPD 1)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/stm32u5.cmake)
+hexmcu_stm32u5_setup(${CMAKE_PROJECT_NAME})
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

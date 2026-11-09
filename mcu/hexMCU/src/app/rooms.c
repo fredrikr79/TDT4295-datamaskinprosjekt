@@ -483,11 +483,11 @@ void init_empty_portals(portal_t *portals, uint8_t n_portals)
   for (uint8_t i = 0; i < n_portals; i++)
   {
     portal_t prt = {
-      false,
-      0, 0,
-      0, 0,
-      false, false,
-      0
+      .active=false,
+      .x1=0, .y1=0,
+      .x2=0, .y2=0,
+      .dest_room_x=0, .dest_room_y=0,
+      .dest_pos_x=0, .dest_pos_y=0
     };
     portals[i] = prt;
   }

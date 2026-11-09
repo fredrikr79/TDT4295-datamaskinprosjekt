@@ -10,8 +10,6 @@
 #define ROOM_X 40
 #define ROOM_Y 60
 #define MAX_PORTALS 8
-#define MAX_PORTAL_EXITS 8
-#define PORTAL_THICKNESS 2
 #define DATA_MAX_SIZE (ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS)
 
 #define AIR 0

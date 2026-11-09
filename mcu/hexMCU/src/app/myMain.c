@@ -12,6 +12,7 @@ void myMain(void)
     cli_init();
     usb_init();
     player_init();
+    portals_init();
 
     while(1) {
         transport_poll();   /* fake FPGA timing on host; no-op on hardware */

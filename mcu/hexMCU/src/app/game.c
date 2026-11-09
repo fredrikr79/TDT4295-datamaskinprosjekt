@@ -277,6 +277,11 @@ void set_player(player_t plr)
     player = plr;
 }
 
+void portals_init()
+{
+    init_empty_portals(portals, MAX_PORTALS);
+}
+
 /* Set the next velocity box */
 void set_next_velocity_box(velocity_box_t *vb)
 {

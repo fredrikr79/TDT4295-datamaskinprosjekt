@@ -19,6 +19,7 @@
 #include "transport.h"
 #include "fpga.h"
 #include "demo.h"
+#include "led.h"
 #include "game.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
@@ -680,6 +681,26 @@ static void cmd_demo(int argc, char **argv)
     demo_list();
 }
 
+static void cmd_led(int argc, char **argv)
+{
+    static const struct { const char *name; uint8_t rgb; } colours[] = {
+        { "off", LED_OFF }, { "r", LED_RED }, { "g", LED_GREEN }, { "b", LED_BLUE },
+        { "y", LED_YELLOW }, { "c", LED_CYAN }, { "m", LED_MAGENTA }, { "w", LED_WHITE },
+    };
+    if (argc == 2 && !strcmp(argv[1], "auto")) {
+        led_auto();
+    } else if (argc == 2) {
+        unsigned i;
+        for (i = 0; i < sizeof colours / sizeof colours[0]; i++)
+            if (!strcmp(argv[1], colours[i].name)) { led_test(colours[i].rgb); break; }
+        if (i == sizeof colours / sizeof colours[0]) {
+            log_raw("usage: led [r|g|b|y|c|m|w|off|auto]\r\n");
+            return;
+        }
+    }
+    log_raw("led: %s\r\n", led_now());
+}
+
 static void cmd_reset(int argc, char **argv)
 {
     if (argc == 1)                          game_reset_all();
@@ -761,6 +782,7 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "led",     cmd_led,      "led [r|g|b|y|c|m|w|off|auto]  test a colour / back to the status" },
     { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },

@@ -63,7 +63,7 @@
 #define OUT_FIFO      1024u         /* answer FIFO                         */
 #define PIXEL_BYTES   2u            /* RGB565, MSB first                   */
 #define READY_US      200           /* command -> READY pulse              */
-#define FRAME_HZ      30u           /* SYNC pulses: one per finished frame */
+#define FRAME_HZ      FPGA_FRAME_HZ /* SYNC pulses: one per finished frame (fpga.h) */
 #define FRAME_NS      (1000000000ull / FRAME_HZ)
 
 /* The real FPGA has 16 MB; memIDs run out long before 2 MB is used

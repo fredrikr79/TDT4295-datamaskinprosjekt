@@ -16,6 +16,7 @@
 #include "funny_man.h"
 #include "demo.h"
 #include "probe.h"
+#include "led.h"
 #include "cli.h"
 
 /* tuning */
@@ -176,12 +177,12 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
  * so nothing here may reset the game. Frames that went by while probing
  * or loading don't count as missed. */
 /* ---- frames: the FPGA's SYNC, or a timer while there is none -------------
- * RUN steps once per SYNC (30 Hz from the FPGA). If no SYNC has come for
+ * RUN steps once per SYNC (FPGA_FRAME_HZ, 25 Hz). If no SYNC has come for
  * SYNC_LOST_MS, frames come from a FRAME_MS timer instead, so the game
  * still runs while the FPGA doesn't send SYNC (yet). Logged each time it
  * switches. */
 #define SYNC_LOST_MS 200u
-#define FRAME_MS     33u        /* ~30 Hz, like SYNC */
+#define FRAME_MS     (1000u / FPGA_FRAME_HZ)    /* 40 ms at 25 Hz, like SYNC */
 
 static struct {
     uint32_t last_sync_ms;      /* when a SYNC was last seen           */
@@ -335,6 +336,7 @@ static void run_poll(void)
      * (taking every poll would throw presses away before a frame saw them). */
     const fpga_info_t *scr = fpga_link_info();
     input_take(&run.keys);
+    led_set(LED_NO_INPUT, !run.keys.keyboard && !run.keys.mouse);
     /* input_log(&run.keys); */
     run.cx = clamp32(run.cx + run.keys.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
     run.cy = clamp32(run.cy + run.keys.mouse_dy, 0, (int32_t)scr->height - cursor_h());
@@ -352,9 +354,9 @@ static void handle_movement_keys(input_t in)
     bool left_pressed = key_held(&in, KEY_A);
     bool right_pressed = key_held(&in, KEY_D);
 
-    if (left_pressed && !right_pressed) move_left();
-    if (right_pressed && !left_pressed) move_right();
-    else move_stop();
+    if (left_pressed && !right_pressed)      move_left();
+    else if (right_pressed && !left_pressed) move_right();
+    else                                     move_stop();
 
     if (key_held(&in, KEY_SPACE)) start_jump();
 }
@@ -475,6 +477,7 @@ static void fpga_reset_done(void)
 /* the state machine */
 static void resync(void)
 {
+    led_flash(LED_RESYNC, 1000);
     LOG_WARN("command failed in '%s' -> resync: %s", state_names[state], fpga_last_failure());
     if (state == S_SAVE || state == S_LOAD || state == S_RUN)
         resume_to = state;
@@ -491,6 +494,13 @@ void game_poll(void)
      * already queued still finish). Afterwards RUN doesn't count the frames
      * that went by as missed. */
     static bool paused;
+
+    /* the status LED: what the game is doing (led.h has the rest) */
+    led_set(LED_HOLD,    state == S_HOLD);
+    led_set(LED_RUNNING, state == S_RUN);
+    if (state != S_RUN) led_set(LED_NO_INPUT, false);
+    led_poll();
+
     if (state == S_FPGA_RESET) {        /* before anything else: nothing may be sent */
         if ((int32_t)(plat_millis() - fpga_reset_until) >= 0) fpga_reset_done();
         return;

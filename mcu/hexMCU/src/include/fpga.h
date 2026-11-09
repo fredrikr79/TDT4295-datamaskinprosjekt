@@ -115,6 +115,12 @@
 #define READ_BOX_OPCODE         0x60u
 #define WRITE_SPRITE_OPCODE     0x70u
 
+/* Frames a second: the FPGA pulses SYNC once per finished frame. The game
+ * steps on SYNC (or on a timer at this rate while there is none). */
+#ifndef FPGA_FRAME_HZ
+#define FPGA_FRAME_HZ           25u
+#endif
+
 /* The first memID the FPGA hands out (the real FPGA starts at 0). */
 #ifndef FPGA_MEMID_FIRST
 #define FPGA_MEMID_FIRST        0u

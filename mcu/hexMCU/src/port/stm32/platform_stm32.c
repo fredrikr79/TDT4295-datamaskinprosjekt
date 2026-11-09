@@ -13,7 +13,11 @@ uint32_t plat_millis(void)
 
 void plat_led_toggle(void)
 {
+#if defined(LED_GREEN_Pin)                  /* Nucleo */
     HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+#elif defined(LED_R_Pin)                    /* PCB: RGB LED, common anode, low = on */
+    HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin);
+#endif
 }
 
 bool plat_fpga_ready_pin(void)
@@ -42,7 +46,16 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t pin)
 #ifdef FPGA_SYNC_Pin
     if (pin == FPGA_SYNC_Pin)  frame_sync_isr();
 #endif
-    if (pin == B1_Pin) button_pressed = true;
+#ifdef B1_Pin
+    if (pin == B1_Pin) button_pressed = true;           /* Nucleo: active high */
+#endif
+}
+
+void HAL_GPIO_EXTI_Falling_Callback(uint16_t pin)
+{
+#ifdef USER_BUTTON_Pin
+    if (pin == USER_BUTTON_Pin) button_pressed = true;  /* PCB: to GND, pressed = falling */
+#endif
 }
 
 /* call from the main loop */

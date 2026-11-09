@@ -17,8 +17,9 @@ module main (
     ck_rst,
 
     inout wire [7:0] octo_spi,
-
     inout wire acknack,
+    output wire ready,
+    sync,
 
     // PSRAM pins (Infineon S70KL1283, octal xSPI)
     output wire mem_out_clk,
@@ -34,17 +35,15 @@ module main (
 
     output wire led0_r,
     led0_g,
-    led0_b,
-    ready,
-    out_almost_empty,
-    out_empty,
-    in_almost_full,
-    in_full
+    led0_b
 );
   logic active_area, pixel_pulse, v_blank, h_blank, frame_start, line_end, near_frame_end;
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
+
+  // Sync signal
+  assign sync = frame_start;
 
   // Sim running
   logic sim_running = 1'b1; // Temporarily 1

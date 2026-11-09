@@ -40,7 +40,7 @@ typedef struct
 } player_t;
 
 void update_player(
-    player_t player,
+    player_t *player,
     uint8_t *box, velocity_box_t velocity_box,
     portal_t *portals
 );

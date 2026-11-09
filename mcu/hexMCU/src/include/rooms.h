@@ -7,19 +7,19 @@
 
 #include "fpga.h"
 
-#define ROOM_X 40
-#define ROOM_Y 60
+#define ROOM_X 640
+#define ROOM_Y 360
 #define MAX_PORTALS 8
 #define DATA_MAX_SIZE (ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS)
 
 #define AIR 0
-#define STONE 1
-#define SAND 2
-#define WATER 3
-#define LAVA 4
-#define ACID 5
-#define GOL 6
-#define EXPLOSION 7
+#define STONE 16
+#define SAND 17
+#define WATER 18
+#define LAVA 19
+#define ACID 20
+#define GOL 21
+#define EXPLOSION 22
 
 /* false: no card / file / write failed (logged). read_room() then gives
  * an empty room (all tile 0), so the game goes on. */

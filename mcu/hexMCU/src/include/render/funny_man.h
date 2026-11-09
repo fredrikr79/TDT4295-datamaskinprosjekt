@@ -33,4 +33,6 @@ void player_frame(const input_t *keys, uint32_t n);
 int16_t player_x(void);
 int16_t player_y(void);
 
+void funny_man_move(float x, float y);
+
 #endif

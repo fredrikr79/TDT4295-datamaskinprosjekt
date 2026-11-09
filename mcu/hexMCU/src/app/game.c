@@ -304,7 +304,12 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
         return;
     }
 
-    update_player(player, cmd->rx, velocity_box, portals);
+    float old_x = player.x;
+    float old_y = player.y;
+
+    update_player(&player, cmd->rx, velocity_box, portals);
+
+    if(player.x != old_x || player.y != old_y) funny_man_move(player.x, player.y);
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -316,18 +321,17 @@ static void run_frame(uint32_t n)
         velocity_box.box, box, velocity_box.length
     );
     player_box_cmd.done = update_player_callback;
-    // commented out for testing remeber to comment back in!!
-    //fpga_submit(&player_box_cmd);
+    fpga_submit(&player_box_cmd);
     
     /* TODO: update + draw */
 
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);   /* sprite_poll sends it */
     sprite_frame(n);            /* animations step */
 
-    switch (run_state) {
-    case RS_SIM:  player_frame(&run.keys, n); break;
-    case RS_MENU: /* do menu */ break;
-    }
+    // switch (run_state) {
+    // case RS_SIM:  player_frame(&run.keys, n); break;
+    // case RS_MENU: /* do menu */ break;
+    // }
 }
 
 static void run_poll(void)

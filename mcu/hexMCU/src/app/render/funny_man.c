@@ -1,6 +1,7 @@
 /* funny_man.c - the stand-in character (see funny_man.h). */
 
 #include <string.h>
+#include <stdint.h>
 
 #include "funny_man.h"
 #include "fpga.h"
@@ -123,6 +124,10 @@ void player_frame(const input_t *in, uint32_t n)
     x = clamp16(x + dx, 0, (int32_t)scr->width  - (int32_t)PLAYER_SIZE);
     y = clamp16(y + dy, 0, (int32_t)scr->height - (int32_t)PLAYER_SIZE);
     sprite_move(spr, x, y);                 /* sprite_poll() sends it */
+}
+
+void funny_man_move(float x, float y){
+    sprite_move(spr, (int16_t)x, (int16_t)y);
 }
 
 int16_t player_x(void) { return x; }

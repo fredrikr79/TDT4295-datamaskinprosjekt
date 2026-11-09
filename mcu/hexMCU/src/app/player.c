@@ -1,4 +1,5 @@
 #include "player.h"
+#include "log.h"
 #include "rooms.h"
 #include "game.h"
 #include <math.h>
@@ -75,7 +76,7 @@ static bool tile_is_swimmable(uint8_t id)
 }
 
 static void perform_jump(
-    player_t player,
+    player_t *player,
     bool is_grounded,
     uint16_t in_water,
     uint16_t in_lava,
@@ -84,37 +85,39 @@ static void perform_jump(
 {
     jump_next_frame = false;
 
-    if (in_water && -JUMP_WATER < player.velocity_y) player.velocity_y = -JUMP_WATER;
-    else if (in_lava && -JUMP_LAVA < player.velocity_y) player.velocity_y = -JUMP_LAVA;
-    else if (in_acid && -JUMP_ACID < player.velocity_y) player.velocity_y = -JUMP_ACID;
-    else if (is_grounded && -JUMP_AIR < player.velocity_y) player.velocity_y = -JUMP_AIR;
+    if (in_water && -JUMP_WATER < player->velocity_y) player->velocity_y = -JUMP_WATER;
+    else if (in_lava && -JUMP_LAVA < player->velocity_y) player->velocity_y = -JUMP_LAVA;
+    else if (in_acid && -JUMP_ACID < player->velocity_y) player->velocity_y = -JUMP_ACID;
+    else if (is_grounded && -JUMP_AIR < player->velocity_y) player->velocity_y = -JUMP_AIR;
 }
 
-void damage_player(player_t player, uint16_t amount)
+void damage_player(player_t *player, uint16_t amount)
 {
-    if (amount < player.health)
-        player.health -= amount;
-    else player.health = 0;
+    if (amount < player->health)
+        player->health -= amount;
+    else player->health = 0;
     ticks_since_last_damage = PLAYER_DAMAGE_TO_HEAL_DELAY;
 
     // TODO: Check if dead
-    // if (player.health == 0) reset_game()
+    // if (player->health == 0) reset_game()
 }
 
-void heal_player(player_t player, uint16_t amount)
+void heal_player(player_t *player, uint16_t amount)
 {
-    if (player.health + amount < PLAYER_MAX_HEALTH)
-        player.health += amount;
-    else player.health = PLAYER_MAX_HEALTH;
+    if (player->health + amount < PLAYER_MAX_HEALTH)
+        player->health += amount;
+    else player->health = PLAYER_MAX_HEALTH;
 }
 
 void update_player(
-    player_t player,
+    player_t *player,
     uint8_t *box,
     velocity_box_t velocity_box,
     portal_t *portals
 )
 {
+    //LOG_DBG("1 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
+
     float force_x = 0;
     float force_y = 0;
 
@@ -140,13 +143,21 @@ void update_player(
             else if (id == GOL) in_air++;
             else if (id == EXPLOSION) in_air++;
         }
+    //LOG_DBG("in_air: %u", in_air);
+    //LOG_DBG("in_stone: %u", in_stone);
+    //LOG_DBG("in_sand: %u", in_sand);
+    //LOG_DBG("in_water: %u", in_sand);
+    //LOG_DBG("in_lava: %u", in_lava);
+    //LOG_DBG("in_acid: %u", in_acid);
+    //LOG_DBG("in_gol: %u", in_gol);
+    //LOG_DBG("in_explosion: %u", in_explosion);
     
     // Breathing
-    if (!in_air && 0 < player.breath_meter) player.breath_meter--;
-    else if (in_air && player.breath_meter < 250) player.breath_meter++;
+    if (!in_air && 0 < player->breath_meter) player->breath_meter--;
+    else if (in_air && player->breath_meter < 250) player->breath_meter++;
 
     // Check if on ground
-    bool on_ground = velocity_box.box.y1 + velocity_box.box.y2 + 1 == ROOM_Y;
+    bool on_ground = velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y;
     bool on_radiation = false;
     if (!on_ground)
     {
@@ -164,11 +175,11 @@ void update_player(
 
     // Apply friction
     if (on_ground || in_water || in_acid)
-        player.velocity_x *= 0.7;
+        player->velocity_x *= 0.7;
     else if (in_lava)
-        player.velocity_x *= 0.4;
+        player->velocity_x *= 0.4;
     else
-        player.velocity_x *= 0.9;
+        player->velocity_x *= 0.9;
 
     // Jump & swim
     if (jump_next_frame) perform_jump(
@@ -183,40 +194,45 @@ void update_player(
     if (move_force)
     {
         float move_force_from_max = copysignf(
-            fmaxf(PLAYER_MAX_MOVE - fabsf(player.velocity_x), 0),
+            fmaxf(PLAYER_MAX_MOVE - fabsf(player->velocity_x), 0),
             move_force
         );
         if (move_force < move_force_from_max) force_x = move_force;
         else force_x = move_force_from_max;
     }
     // Stop if no input and low velocity
-    else if (fabsf(player.velocity_x) < 0.3) player.velocity_x = 0;
+    else if (fabsf(player->velocity_x) < 0.3) player->velocity_x = 0;
 
     // Calculate gravity with bouyancy included
     float gravity_force = GRAVITY_AIR;
     if (in_lava) gravity_force = GRAVITY_LAVA;
     else if (in_water) gravity_force = GRAVITY_WATER;
     else if (in_acid) gravity_force = GRAVITY_ACID;
-    float gravity_force_from_max = PLAYER_MAX_GRAVITY - player.velocity_y;
+    float gravity_force_from_max = PLAYER_MAX_GRAVITY - player->velocity_y;
     if (gravity_force < gravity_force_from_max) force_y = gravity_force;
     else force_y = gravity_force_from_max;
+    //LOG_DBG("gravity_force: %f, force_y: %f", gravity_force, force_y);
 
     // Apply first half of acceleration
-    player.velocity_y += force_x / 2;
-    player.velocity_y += force_y / 2;
+    player->velocity_x += force_x / 2;
+    player->velocity_y += force_y / 2;
+    //LOG_DBG("2 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
     // Move the player
     perform_object_movement(
-        &player.x, &player.y,
-        &player.velocity_x, &player.velocity_y,
+        &(player->x), &(player->y),
+        &(player->velocity_x), &(player->velocity_y),
         PLAYER_SIZE_X, PLAYER_SIZE_Y,
         PLAYER_STEP_ALLOWANCE, 1,
         velocity_box, box
     );
+    //LOG_DBG("3 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
+
 
     // Apply second half of velocity
-    player.velocity_x += force_x / 2;
-    player.velocity_y += force_y / 2;
+    player->velocity_x += force_x / 2;
+    player->velocity_y += force_y / 2;
+    //LOG_DBG("4 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
     // Heal
     if (ticks_since_last_damage) ticks_since_last_damage--;
@@ -224,35 +240,35 @@ void update_player(
     else
     {
         ticks_since_last_heal = PLAYER_HEAL_DELAY;
-        player.health += PLAYER_HEAL_AMOUNT;
+        player->health += PLAYER_HEAL_AMOUNT;
     }
 
     // Damage
-    if (player.burn_timer)
+    if (player->burn_timer)
     {
         damage_player(player, 1);
-        player.burn_timer--;
+        player->burn_timer--;
     }
     if (in_stone) damage_player(player, 1);
     if (in_sand) damage_player(player, 1);
     if (in_lava)
     {
         damage_player(player, 3);
-        player.burn_timer = PLAYER_BURN_TIME;
+        player->burn_timer = PLAYER_BURN_TIME;
     }
     if (in_acid) damage_player(player, 3);
     if (in_gol) damage_player(player, 2);
     if (in_explosion) damage_player(player, 5);
     if (on_radiation) damage_player(player, 2);
-    if (player.breath_meter == 0) damage_player(player, 5);
+    if (player->breath_meter == 0) damage_player(player, 5);
 
     // Check if player is overlapping with a portal
-    int overlap = player_in_portal(player, portals);
+    int overlap = player_in_portal(*player, portals);
     if (overlap != -1)
     {
         portal_t portal = portals[overlap];
-        player.x = portal.dest_pos_x;
-        player.y = portal.dest_pos_y;
+        player->x = portal.dest_pos_x;
+        player->y = portal.dest_pos_y;
         game_change_room(
             portal.dest_pos_x,
             portal.dest_pos_y
@@ -261,10 +277,11 @@ void update_player(
 
     // Create the next velocity box
     velocity_box_t next_velocity_box = create_velocity_box(
-        player.x, player.y,
+        player->x, player->y,
         PLAYER_SIZE_X, PLAYER_SIZE_Y
     );
     set_next_velocity_box(&next_velocity_box);
+    //LOG_DBG("end vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 }
 
 void move_left()

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+#include "log.h"
 
 
 bool tile_has_collision(uint8_t id)

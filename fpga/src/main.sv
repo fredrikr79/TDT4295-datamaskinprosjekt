@@ -110,6 +110,10 @@ module main (
   logic [7:0] sim_mem_in;
   memory_pkg::transaction_e sim_mem_transaction;
 
+  // Row-commit handshake: sim_buffers -> fb_compositor
+  logic sim_pulse_row_commit, sim_commit_res_buffer, sim_pulse_frame_restart;
+  mem_map_pkg::fb_y_t sim_commit_y;
+
   sim_buffers sim_line_memory_reader(
     .clk(clk),
     .reset(sw[3]),
@@ -120,6 +124,13 @@ module main (
     .pulse_transaction_pair_done(pulse_transaction_pair_done),
     .pulse_row_done(pulse_row_done),
     .res_buffer(sim_res_buffer),
+
+    .fb_ready(fb_ready_for_frame),
+
+    .pulse_row_commit(sim_pulse_row_commit),
+    .commit_y(sim_commit_y),
+    .commit_res_buffer(sim_commit_res_buffer),
+    .pulse_frame_restart(sim_pulse_frame_restart),
 
     .mem_toggle(sim_mem_toggle),
     .mem_transaction(sim_mem_transaction),
@@ -142,9 +153,29 @@ module main (
     .res_buffer(sim_res_buffer)
   );
 
-  // Framebuffer
   logic fb_sel;
-  assign fb_sel = 1'b0;
+  logic fb_swap_pending;
+  logic fb_frame_done;
+  logic fb_frame_idle;
+
+  // Swaps between fb0 and fb1, only when the compositor together with simulator has finished a frame.
+  // If it has not, the scanout just renders the same fb again.
+  always_ff @(posedge clk) begin
+    if (sw[3]) begin
+      fb_sel <= 1'b0;
+      fb_swap_pending <= 1'b0;
+    end else begin
+      if (fb_frame_done) fb_swap_pending <= 1'b1;
+      if (frame_start && fb_swap_pending) begin
+        fb_sel <= ~fb_sel;
+        fb_swap_pending <= 1'b0;
+      end
+    end
+  end
+
+  // The simulation may start simulating a frame only when the compositor is ready for it.
+  logic fb_ready_for_frame;
+  assign fb_ready_for_frame = fb_frame_idle && !fb_swap_pending && !fb_frame_done;
 
   logic fb_underrun;
   logic fb_mem_toggle;
@@ -174,8 +205,60 @@ module main (
       .underrun(fb_underrun)
   );
 
-  // TODO: Implement HUD layer. Temporarily always transparent. Remove after implementing the HUD layer.
+  // TODO: Implement HUD layer. Temporarily always transparent.
+  // Take in:
+  // .hud_x(fb_hud_x),
+  // .hud_y(fb_hud_y),
+
+  // and output on these wires based on the hud-element at the coords above:
+  // .hud_opaque(fb_hud_opaque),
+  // .hud_index(fb_hud_index),
   assign layers[LayerHud] = layer_pkg::TransparentPixel;
+
+  mem_map_pkg::fb_x_t fb_hud_x;
+  mem_map_pkg::fb_y_t fb_hud_y;
+  logic fb_hud_opaque;
+  palette_pkg::palette_index_t fb_hud_index;
+  logic fb_compositor_overrun;
+
+  assign fb_hud_opaque = 1'b0;
+  assign fb_hud_index  = '0;
+
+  logic fb_wr_mem_toggle;
+  memory_pkg::transaction_e fb_wr_mem_transaction;
+  memory_pkg::address_t fb_wr_mem_address;
+  memory_pkg::message_length_t fb_wr_mem_length;
+  logic [7:0] fb_wr_mem_in;
+
+  fb_compositor fb_writer (
+      .clk(clk),
+      .reset(sw[3]),
+
+      .pulse_row_commit(sim_pulse_row_commit),
+      .commit_y(sim_commit_y),
+      .commit_res_buffer(sim_commit_res_buffer),
+      .pulse_frame_restart(sim_pulse_frame_restart),
+      .res_buffer(sim_res_buffer),
+
+      .hud_x(fb_hud_x),
+      .hud_y(fb_hud_y),
+      .hud_opaque(fb_hud_opaque),
+      .hud_index(fb_hud_index),
+
+      .fb_sel(fb_sel),
+      .frame_written(fb_frame_done),
+      .frame_idle(fb_frame_idle),
+
+      .mem_toggle(fb_wr_mem_toggle),
+      .mem_transaction(fb_wr_mem_transaction),
+      .mem_address(fb_wr_mem_address),
+      .mem_length(fb_wr_mem_length),
+      .mem_write_data(fb_wr_mem_in),
+      .mem_busy(mem_client_busy[memory_pkg::MemClientCompositorID]),
+      .mem_data_on_cable(mem_client_data_on_cable[memory_pkg::MemClientCompositorID]),
+
+      .overrun(fb_compositor_overrun)
+  );
 
   compositor #(
       .NumLayers(NumLayers)
@@ -255,6 +338,13 @@ module main (
     mem_client_address[memory_pkg::MemClientSimID]     = sim_mem_addr;
     mem_client_length_burst[memory_pkg::MemClientSimID]= sim_mem_len;
     mem_client_write_data[memory_pkg::MemClientSimID]  = sim_mem_in;
+
+    // Framebuffer compositor
+    mem_client_toggle[memory_pkg::MemClientCompositorID]      = fb_wr_mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientCompositorID] = fb_wr_mem_transaction;
+    mem_client_address[memory_pkg::MemClientCompositorID]     = fb_wr_mem_address;
+    mem_client_length_burst[memory_pkg::MemClientCompositorID]= fb_wr_mem_length;
+    mem_client_write_data[memory_pkg::MemClientCompositorID]  = fb_wr_mem_in;
 
     // TODO: Add the other clients here when they implement the external SRAM
   end

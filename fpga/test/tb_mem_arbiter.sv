@@ -165,8 +165,12 @@ module tb_mem_arbiter #(
     grant_count = 0;
 
     wait (grant_count == N);
-    $display("tb_mem_arbiter: grant order was %0d %0d %0d %0d (expected 0 1 2 3)",
-             grant_order[0], grant_order[1], grant_order[2], grant_order[3]);
+    begin
+      string got;
+      got = "";
+      for (int unsigned i = 0; i < N; i++) got = {got, $sformatf("%0d ", grant_order[i])};
+      $display("tb_mem_arbiter: grant order was %s(expected 0..%0d in order)", got, N - 1);
+    end
     for (int unsigned i = 0; i < N; i++)
       check($sformatf("grant %0d went to client %0d", i, i), grant_order[i] == i);
 

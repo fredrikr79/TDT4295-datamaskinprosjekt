@@ -4,6 +4,7 @@ module sim_buffers #(
     input logic clk,
     input logic reset,
     input logic sim_running,
+    input logic fb_ready,
 
     output logic pulse_new_row,
     output sim_pkg::row_buffer_t buffers[3],
@@ -11,6 +12,12 @@ module sim_buffers #(
     input logic pulse_transaction_pair_done, // pulse_transaction_pair_done: save res_row to memory
     input logic pulse_row_done, // pulse_row_done: fetch new row from memory
     input sim_pkg::row_buffer_t res_buffer[2],
+
+    // Row-commit handshake for the framebuffer compositor.
+    output logic pulse_row_commit,
+    output mem_map_pkg::fb_y_t commit_y,
+    output logic commit_res_buffer,
+    output logic pulse_frame_restart,
 
     output logic mem_toggle,
     output memory_pkg::transaction_e mem_transaction,
@@ -71,9 +78,14 @@ module sim_buffers #(
   always_ff @(posedge clk) begin
     pulse_new_row <= 1'b0;
     start_xfer <= 1'b0;
+    pulse_row_commit <= 1'b0;
+    pulse_frame_restart <= 1'b0;
 
     if (reset) begin
       state <= FRAME_START;
+      pulse_frame_restart <= 1'b1;
+      commit_y <= '0;
+      commit_res_buffer <= 1'b0;
       row_index <= '0;
       single_row_edgecase <= 1'b1;
       write_lower <= 1'b0;
@@ -135,11 +147,14 @@ module sim_buffers #(
           buffers[1] <= '0;
           buffers[2] <= '0;
 
-          // Writes first row to buffer[2] next pulse
-          start_xfer <= 1'b1;
-          start_is_write <= 1'b0;
-          start_row <= row_idx_t'(0);
-          state <= PRIME_FIRST;
+          // Wait until compositor is ready to write a new frame
+          if (fb_ready) begin
+            // Writes first row to buffer[2] next pulse
+            start_xfer <= 1'b1;
+            start_is_write <= 1'b0;
+            start_row <= row_idx_t'(0);
+            state <= PRIME_FIRST;
+          end
         end
 
         PRIME_FIRST: begin
@@ -178,17 +193,22 @@ module sim_buffers #(
             if (pulse_transaction_pair_done) begin
               start_xfer <= 1'b1;
               start_is_write <= 1'b1;
+              pulse_row_commit <= 1'b1;
 
               if (!single_row_edgecase) begin
                 start_row <= row_index - row_idx_t'(1);
                 start_buffer <= 1'b1;
                 write_lower <= 1'b1;
+                commit_y <= mem_map_pkg::fb_y_t'(row_index - row_idx_t'(1));
+                commit_res_buffer <= 1'b1;
               end else begin
                 // When odd_major_evaluation, row 0 and 359 don't get the pair treatment.
                 // Therefore we just write back the single row
                 start_row <= row_index;
                 start_buffer <= row_index[0];
                 write_lower <= 1'b0;
+                commit_y <= mem_map_pkg::fb_y_t'(row_index);
+                commit_res_buffer <= row_index[0];
               end
 
               single_row_edgecase <= 1'b1;
@@ -214,6 +234,9 @@ module sim_buffers #(
               start_is_write <= 1'b1;
               start_row <= xfer_row + row_idx_t'(1);
               start_buffer <= 1'b0;
+              pulse_row_commit <= 1'b1;
+              commit_y <= mem_map_pkg::fb_y_t'(xfer_row + row_idx_t'(1));
+              commit_res_buffer <= 1'b0;
             end else begin
               if (32'(row_index) + 2 < GridHeight) begin
                 start_xfer <= 1'b1;
@@ -227,15 +250,20 @@ module sim_buffers #(
 
         PREFETCH: begin
           if (xfer_idle) begin
-            if (32'(row_index) >= GridHeight - 1) state <= FRAME_START;
-            else begin
+            if (32'(row_index) >= GridHeight - 1) begin
+              state <= FRAME_START;
+              pulse_frame_restart <= 1'b1;
+            end else begin
               row_index <= row_index + row_idx_t'(1);
               state <= START_ROW;
             end
           end
         end
 
-        default: state <= FRAME_START;
+        default: begin
+          state <= FRAME_START;
+          pulse_frame_restart <= 1'b1;
+        end
       endcase
     end
   end

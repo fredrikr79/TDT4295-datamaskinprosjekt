@@ -46,6 +46,7 @@ module tb_mem_access_policy #(
     // every case rather than given rows of its own.
     check({name, " / scanout"}, allow[MemClientScanoutID], 1'b1);
     check({name, " / hud"}, allow[MemClientHudID], 1'b1);
+    check({name, " / compositor"}, allow[MemClientCompositorID], 1'b1);
   endtask
 
   initial begin
@@ -80,6 +81,8 @@ module tb_mem_access_policy #(
       #1;
       check($sformatf("scanout always allowed (case %0d)", i), allow[MemClientScanoutID], 1'b1);
       check($sformatf("hud always allowed (case %0d)", i), allow[MemClientHudID], 1'b1);
+      check($sformatf("compositor always allowed (case %0d)", i),
+            allow[MemClientCompositorID], 1'b1);
       check($sformatf("cells always allowed (case %0d)", i), allow[MemClientSimID], 1'b1);
       // SPI is the only conditional client; restate its rule independently of
       // the table above so a change to the policy has to break both.

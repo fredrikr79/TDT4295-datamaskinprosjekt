@@ -84,13 +84,23 @@ module tb_sim_memory #(
   memory_pkg::message_length_t sim_mem_length;
   logic [7:0] sim_mem_write_data;
 
+  logic commit_valid, sim_commit_res_buffer, frame_restart;
+  mem_map_pkg::fb_y_t commit_y;
+
   sim_buffers dut (
       .clk(clk), .reset(reset), .sim_running(sim_running),
+      // No renderer here, so the generation gate is always open. Pacing against
+      // the display is tb_fb_compositor's subject, not this one's.
+      .fb_ready(1'b1),
       .pulse_new_row(pulse_new_row),
       .buffers(window),
       .pulse_transaction_pair_done(pulse_pair_done),
       .pulse_row_done(pulse_row_done),
       .res_buffer(res),
+      // Row-commit handshake: exercised by tb_fb_compositor, observed here only
+      // so the instantiation stays complete.
+      .pulse_row_commit(commit_valid), .commit_y(commit_y), .commit_res_buffer(sim_commit_res_buffer),
+      .pulse_frame_restart(frame_restart),
       .mem_toggle(sim_mem_toggle), .mem_transaction(sim_mem_transaction),
       .mem_address(sim_mem_address), .mem_length(sim_mem_length),
       .mem_write_data(sim_mem_write_data),

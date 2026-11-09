@@ -100,10 +100,12 @@ package memory_pkg;
   // 0 - differential clock
   localparam bit MemoryClockType = 0;
 
-  localparam int unsigned NumMemClients = 4;
+  // Fixed priority, lowest index first.
+  localparam int unsigned NumMemClients = 5;
   localparam int unsigned MemClientScanoutID = 0;  // highest priority
   localparam int unsigned MemClientHudID = 1;
   localparam int unsigned MemClientSpiID = 2;
-  localparam int unsigned MemClientSimID = 3;  // lowest priority, elastic
+  localparam int unsigned MemClientCompositorID = 3;
+  localparam int unsigned MemClientSimID = 4;  // lowest priority, elastic
 
 endpackage

@@ -277,15 +277,33 @@ void set_next_velocity_box(velocity_box_t *vb)
     velocity_box = *vb;
 }
 
+static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
+{
+    if (err != FPGA_ERR_NONE)
+    {
+        LOG_WARN(
+            "read box, x %d, y %d, dx %d, dy %d: %s",
+            velocity_box.box.x1,
+            velocity_box.box.y1,
+            velocity_box.box.x2,
+            velocity_box.box.y2,
+            fpga_err_str(err)
+        );
+        return;
+    }
+
+    update_player(player, cmd->rx, velocity_box, portals);
+}
+
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
 static void run_frame(uint32_t n)
 {
     (void)n;
 
-    update_player(player, box, velocity_box, portals);
     fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
         velocity_box.box, box, velocity_box.length
     );
+    player_box_cmd.done = update_player_callback;
     fpga_submit(&player_box_cmd);
     
     /* TODO: update + draw */

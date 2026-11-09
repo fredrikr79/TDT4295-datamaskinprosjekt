@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.22)
 #
 # User is free to modify the file as much as necessary
 #
+# The Nucleo-U545RE-Q build. The final board (STM32U595ZJT6) is
+# cube/hexU59/; both get our code from cmake/stm32u5.cmake.
 
 # Setup compiler settings
 set(CMAKE_C_STANDARD 11)
@@ -28,19 +30,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
-# ---------------------------------------------------------------------
-# USB controller: fsdev = U535/U545 (Nucleo), dwc2 = U595/U5A5 (OTG_HS)
-# ---------------------------------------------------------------------
-set(USB_IP fsdev)
-# set(USB_IP dwc2)
-
-message("Filesystem backend: " ${FS_BACKEND})
-
-# Include sources.cmake
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/sources.cmake)
-# TinyUSB dwc2 fixes (low-speed devices behind a hub), applied to a copy
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tinyusb_patches.cmake)
-
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
@@ -55,72 +44,17 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
-# Add sources to executable
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    ${APP_SOURCES}
-    src/port/stm32/io_uart.c
-    src/port/stm32/platform_stm32.c
-    src/port/stm32/transport_ospi.c
-    src/port/stm32/storage_filex.c
-)
-
-# Add include paths
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
-    ${APP_INCLUDES}
-    src/port/stm32/
-)
-
-
 # ---------------------------------------------------------------------
-# USB host: TinyUSB + our backend
+# hexMCU: our code, the STM32 port and TinyUSB (cmake/stm32u5.cmake)
+# USB controller: fsdev = U535/U545 (this Nucleo), dwc2 = U595/U5A5
 # ---------------------------------------------------------------------
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    ${TINYUSB_SOURCES}
-    src/port/stm32/usb/usb_backend_tinyusb.c
-    src/port/stm32/usb/hid_mouse.c          # mouse report layout (wheel)
-    src/port/stm32/usb/usb_port_stm32u5.c
-)
-# TinyUSB fixes in usb_backend_tinyusb.c, instead of patching third_party/:
-#   hcd_setup_send  hub descriptor request (hub.c)
-#   hcd_edpt_xfer   lost periodic transfer race (hcd_dwc2.c)
-target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -Wl,--wrap=hcd_setup_send -Wl,--wrap=hcd_edpt_xfer)
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    ${TINYUSB_INCLUDES}
-    src/port/stm32/usb          # tusb_config.h, usb_backend.h, hid_mouse.h
-)
-
-if(USB_IP STREQUAL "fsdev")
-    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/hcd_stm32_fsdev.c
-        ${TINYUSB_ROOT}/src/portable/st/stm32_fsdev/fsdev_common.c
-    )
-elseif(USB_IP STREQUAL "dwc2")
-    # patched copy of hcd_dwc2.c in the build folder, see cmake/tinyusb_patches.cmake
-    hexmcu_tinyusb_hcd_dwc2(HCD_DWC2)
-    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        ${HCD_DWC2}
-        ${TINYUSB_ROOT}/src/portable/synopsys/dwc2/dwc2_common.c
-        src/port/stm32/usb/usb_dwc2_debug.c     # event counters + register dump (usb_debug_dump)
-    )
-    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        ${HEXMCU_HCD_DWC2_INCLUDE}  # the copy includes dwc2_common.h etc. from here
-    )
-    # OTG_HS with the built-in high-speed PHY: without this TinyUSB sets the
-    # core up for an external full-speed PHY and the port stays dead
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE CFG_TUH_MAX_SPEED=OPT_MODE_HIGH_SPEED)
-    # J8's CC1/CC2 go straight to UCPD1 (PA15/PB15): VBUS only comes on once
-    # a device is plugged in. 0 = VBUS on from start (CC not wired to UCPD).
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE USB_USE_UCPD=1)
-else()
-    message(FATAL_ERROR "USB_IP must be fsdev or dwc2, got '${USB_IP}'")
-endif()
-
+set(USB_IP fsdev)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/stm32u5.cmake)
+hexmcu_stm32u5_setup(${CMAKE_PROJECT_NAME})
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
-    LOG_LEVEL=LOG_LEVEL_INFO
 )
 
 # Remove wrong libob.a library dependency when using cpp files

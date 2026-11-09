@@ -12,3 +12,8 @@ bool plat_exit(int code);
 
 void plat_fpga_reset(bool hold);   /* true: reset pin low */
 void plat_mcu_reset(void);         /* doesn't return */
+
+void plat_led_rgb(bool r, bool g, bool b);
+bool plat_fpga_done(void);          /* true: the FPGA has loaded its design */
+void plat_fpga_program(bool hold);  /* true: PROGRAM_B low (wipes the FPGA) */
+bool plat_button_pressed(void);     /* true once per press                  */

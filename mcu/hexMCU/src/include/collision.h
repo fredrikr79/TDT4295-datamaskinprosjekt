@@ -3,6 +3,9 @@
 
 #pragma once
 
+#define VELOCITY_BOX_X 20
+#define VELOCITY_BOX_Y 30
+
 bool tile_has_collision(uint8_t id);
 
 typedef struct

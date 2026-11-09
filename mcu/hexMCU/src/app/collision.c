@@ -16,8 +16,8 @@ velocity_box_t create_velocity_box(
     uint8_t size_x, uint8_t size_y
 )
 {
-    int dx = 20;
-    int dy = 30;
+    int dx = VELOCITY_BOX_X;
+    int dy = VELOCITY_BOX_Y;
     int rel_x = (dx - size_x) / 2;
     int rel_y = (dy - size_y) / 2;
 

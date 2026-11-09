@@ -68,7 +68,7 @@ static player_t player;
 
 static portal_t portals[MAX_PORTALS] = {0};
 
-static uint8_t *box;
+static uint8_t box[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
 static velocity_box_t velocity_box;
 
 static void run_enter(void);

@@ -24,7 +24,7 @@
 #endif
 
 /* Put it at x, y (top-left). The first call also makes its image. */
-void player_init(int16_t x, int16_t y);
+void player_init_old(int16_t x, int16_t y);
 
 /* Move by the held keys. n = frames since the last call, so it keeps its
  * speed when the game falls behind. Stays on the screen. */

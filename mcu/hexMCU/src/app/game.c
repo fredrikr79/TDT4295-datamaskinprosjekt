@@ -247,7 +247,7 @@ static void sprites_setup(void)
     assets_init();              /* reads the sprite files' headers from the card */
 
     const fpga_info_t *scr = fpga_link_info();
-    player_init(100, 100);      /* start position for the room */
+    player_init_old(100, 100);      /* start position for the room */
 
     /* test: a sentence centred near the top */
     int32_t w = sprite_img_w(assets.title);
@@ -269,6 +269,12 @@ static void room_enter(void)
     run.cx = (scr->width  - cursor_w()) / 2;
     run.cy = (scr->height - cursor_h()) / 2;
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);
+}
+
+/* Set the next velocity box */
+void set_player(player_t plr)
+{
+    player = plr;
 }
 
 /* Set the next velocity box */

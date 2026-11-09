@@ -48,3 +48,5 @@ void move_left();
 void move_right();
 void move_stop();
 void start_jump();
+
+void player_init();

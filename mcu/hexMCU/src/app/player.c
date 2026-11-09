@@ -237,3 +237,23 @@ void start_jump()
 {
     jump_next_frame = true;
 }
+
+void player_init()
+{
+    // Init the player struct
+    player_t player = (player_t) {
+        .x = 318, .y = 120,
+        .velocity_x = 0, .velocity_y = 0,
+        .health = PLAYER_MAX_HEALTH,
+        .breath_meter = PLAYER_MAX_BREATH,
+        .burn_timer = 0
+    };
+    set_player(player);
+
+    // Create the next velocity box
+    velocity_box_t next_velocity_box = create_velocity_box(
+        player.x, player.y,
+        PLAYER_SIZE_X, PLAYER_SIZE_Y
+    );
+    set_next_velocity_box(&next_velocity_box);
+}

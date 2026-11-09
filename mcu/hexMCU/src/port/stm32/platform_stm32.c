@@ -125,6 +125,7 @@ bool plat_button_pressed(void)
 {
     if (!button_pressed) return false;
     button_pressed = false;
+    LOG_WARN("Button goes gangdamstyle");
     return true;
 }
 

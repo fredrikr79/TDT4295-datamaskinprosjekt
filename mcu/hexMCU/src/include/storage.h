@@ -71,4 +71,23 @@ storage_status_t storage_rename(const char *from, const char *to);
 
 const char *storage_status_str(storage_status_t st);
 
+/* ---- status, for the console ("sd", "sd ls") -------------------------------
+ * storage_info(): tries to mount right away if not mounted (the console
+ * asked: no STORAGE_RETRY_MS wait), then says
+ * what's there. `note` is the last thing that happened, in words ("SD card
+ * mounted", "no SD card (init failed after 2 ms, error 0x00000004)"...).
+ * total / free are bytes, 0 if not known. */
+typedef struct {
+    bool        mounted;
+    uint64_t    total, free;
+    const char *where;          /* "SD card" / the host folder              */
+    const char *note;
+} storage_info_t;
+
+storage_status_t storage_info(storage_info_t *info);
+
+/* Every entry in folder dir ("" = the root), "." and ".." left out. */
+typedef void (*storage_list_fn)(void *ctx, const char *name, uint32_t size, bool is_dir);
+storage_status_t storage_list(const char *dir, storage_list_fn fn, void *ctx);
+
 #endif

@@ -51,6 +51,7 @@ static bool     mounted;        /* fx_media_open() succeeded              */
 static bool     tried;
 static uint32_t last_try;
 static bool     no_hw;          /* SDMMC1 can't work (not clocked): stop trying */
+static char     note[96] = "not tried yet";     /* storage_info(): the last thing that happened */
 
 #define SD_INIT_SLOW_MS 3000u   /* an init this slow is a setup problem, not a card */
 
@@ -71,6 +72,7 @@ static bool sd_init(void)
     if (!__HAL_RCC_SDMMC1_IS_CLK_ENABLED()) {
         LOG_ERR("SDMMC1 has no clock: HAL_SD_MspInit() isn't generated (enable SDMMC1 "
                 "in CubeMX, keep only its init call off). SD card disabled.");
+        snprintf(note, sizeof note, "SDMMC1 has no clock (CubeMX): SD card disabled");
         no_hw = true;
         return false;
     }
@@ -82,9 +84,13 @@ static bool sd_init(void)
         HAL_SD_DeInit(&hsd1);   /* back to RESET, so the next try starts clean (clears the error) */
         LOG_WARN("no SD card (init failed after %lu ms, error 0x%08lX)",
                  (unsigned long)ms, (unsigned long)err);
+        snprintf(note, sizeof note, "no SD card (init failed after %lu ms, error 0x%08lX)",
+                 (unsigned long)ms, (unsigned long)err);
         if (ms >= SD_INIT_SLOW_MS) {
             LOG_ERR("SD init took %lu ms: SDMMC1 clock or pins not set up? SD card disabled.",
                     (unsigned long)ms);
+            snprintf(note, sizeof note, "SD init took %lu ms: disabled (clock or pins?)",
+                     (unsigned long)ms);
             no_hw = true;
         }
         return false;
@@ -115,11 +121,13 @@ static storage_status_t mount(void)
                             media_memory, sizeof media_memory);
     if (st != FX_SUCCESS) {
         LOG_ERR("SD card: no FAT file system? (fx_media_open 0x%02X)", st);
+        snprintf(note, sizeof note, "card found, but no FAT file system (fx_media_open 0x%02X)", st);
         drop();
         return STORAGE_NO_CARD;
     }
     mounted = true;
     LOG_INFO("SD card mounted");
+    snprintf(note, sizeof note, "SD card mounted");
     return STORAGE_OK;
 }
 
@@ -138,6 +146,7 @@ static storage_status_t result(UINT st)
     case FX_ACCESS_ERROR:  return STORAGE_ERROR;     /* our mistake, card fine */
     default:
         LOG_ERR("SD card error 0x%02X -- remounting next time", st);
+        snprintf(note, sizeof note, "card error 0x%02X: dropped, mounts again next time", st);
         drop();
         return STORAGE_ERROR;
     }
@@ -276,6 +285,53 @@ storage_status_t storage_rename(const char *from, const char *to)
     }
     if (st == FX_SUCCESS) st = fx_media_flush(&media);
     return result(st);
+}
+
+storage_status_t storage_info(storage_info_t *info)
+{
+    memset(info, 0, sizeof *info);
+    tried = false;                  /* asked for: try now, not after the retry wait */
+    info->where = "SD card (SDMMC1)";
+    storage_status_t s = mount();
+    info->mounted = mounted;
+    info->note    = note;
+    if (s != STORAGE_OK) return s;
+
+    info->total = (uint64_t)media.fx_media_total_clusters * media.fx_media_sectors_per_cluster *
+                  media.fx_media_bytes_per_sector;
+    ULONG64 avail = 0;
+    UINT st = fx_media_extended_space_available(&media, &avail);
+    if (st != FX_SUCCESS) return result(st);
+    info->free = (uint64_t)avail;
+    return STORAGE_OK;
+}
+
+/* FileX lists the "default directory": set it to dir, list, set it back to
+ * the root (FX_NULL), so every other call keeps working from the root. */
+storage_status_t storage_list(const char *dir, storage_list_fn fn, void *ctx)
+{
+    static CHAR name[FX_MAX_LONG_NAME_LEN];
+    CHAR p[PATH_MAX_LEN];
+    UINT attr = 0;
+    ULONG size = 0;
+
+    storage_status_t s = mount();
+    if (s != STORAGE_OK) return s;
+    if (!dir || !*dir) dir = "/";
+    if (!copy_path(dir, p)) return STORAGE_ERROR;
+
+    UINT st = fx_directory_default_set(&media, p);
+    if (st != FX_SUCCESS) return result(st);
+    st = fx_directory_first_full_entry_find(&media, name, &attr, &size,
+                                            FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL);
+    while (st == FX_SUCCESS) {
+        if (strcmp((char *)name, ".") != 0 && strcmp((char *)name, "..") != 0)
+            fn(ctx, (const char *)name, (uint32_t)size, (attr & FX_DIRECTORY) != 0);
+        st = fx_directory_next_full_entry_find(&media, name, &attr, &size,
+                                               FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL);
+    }
+    fx_directory_default_set(&media, FX_NULL);
+    return st == FX_NO_MORE_ENTRIES ? STORAGE_OK : result(st);
 }
 
 const char *storage_status_str(storage_status_t st)

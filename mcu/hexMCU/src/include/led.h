@@ -50,10 +50,26 @@ void led_set(led_state_t s, bool on);
 void led_flash(led_state_t s, uint32_t ms);   /* on now, off by itself after ms */
 void led_poll(void);                          /* main loop: updates the LED    */
 
-/* Console: show a fixed colour (to check which pin is which), or go back to
- * the states. led_now() names what's shown. */
+/* ---- console tests ----------------------------------------------------------
+ * These take the LED over from the states until led_auto(); they work with
+ * no FPGA at all (no DONE, no READY, loading off), since led_poll() runs
+ * every main-loop pass whatever the game is doing.
+ *   led_test(rgb)   a fixed colour, to check which pin is which
+ *   led_show(s)     one state's colour and pattern, as if it were on top
+ *   led_cycle()     every state in turn, LED_CYCLE_MS each, named on the
+ *                   console as it comes up
+ * led_now() names what's shown; led_id()/led_name() are for listing the
+ * states ("led list"); led_find() is the state with that id, -1 if none. */
+#define LED_CYCLE_MS 4000u      /* two rounds of a 2 s pattern */
+
 void        led_test(uint8_t rgb);
+void        led_show(led_state_t s);
+void        led_cycle(void);
 void        led_auto(void);
 const char *led_now(void);
+
+const char *led_id(led_state_t s);      /* short: "storm", "nosd", ...     */
+const char *led_name(led_state_t s);    /* long:  "READY storm", ...      */
+int         led_find(const char *id);
 
 #endif

@@ -20,6 +20,7 @@
 #include "fpga.h"
 #include "demo.h"
 #include "led.h"
+#include "storage.h"
 #include "game.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
@@ -689,16 +690,75 @@ static void cmd_led(int argc, char **argv)
     };
     if (argc == 2 && !strcmp(argv[1], "auto")) {
         led_auto();
+    } else if (argc == 2 && !strcmp(argv[1], "list")) {
+        for (unsigned i = 0; i < LED_COUNT; i++)          /* in priority order */
+            log_raw("  %-9s %s\r\n", led_id((led_state_t)i), led_name((led_state_t)i));
+    } else if (argc == 2 && !strcmp(argv[1], "cycle")) {
+        led_cycle();
+    } else if (argc == 3 && !strcmp(argv[1], "show")) {
+        int s = led_find(argv[2]);
+        if (s < 0) {
+            log_raw("no state '%s' (led list)\r\n", argv[2]);
+            return;
+        }
+        led_show((led_state_t)s);
     } else if (argc == 2) {
         unsigned i;
         for (i = 0; i < sizeof colours / sizeof colours[0]; i++)
             if (!strcmp(argv[1], colours[i].name)) { led_test(colours[i].rgb); break; }
         if (i == sizeof colours / sizeof colours[0]) {
-            log_raw("usage: led [r|g|b|y|c|m|w|off|auto]\r\n");
+            log_raw("usage: led [r|g|b|y|c|m|w|off | list | show <state> | cycle | auto]\r\n");
             return;
         }
     }
     log_raw("led: %s\r\n", led_now());
+}
+
+/* sd                status: mounted?, size, free, the last thing that happened
+ * sd ls [<folder>]  what's in a folder (the root if none) */
+static void print_bytes(const char *what, uint64_t b)
+{
+    if (b >= 1024ull * 1024 * 1024)
+        log_raw("  %-6s %lu.%02lu GB\r\n", what, (unsigned long)(b >> 30),
+                (unsigned long)(((b & ((1ull << 30) - 1)) * 100) >> 30));
+    else
+        log_raw("  %-6s %lu MB\r\n", what, (unsigned long)(b >> 20));
+}
+
+static void sd_ls_entry(void *ctx, const char *name, uint32_t size, bool is_dir)
+{
+    unsigned *n = ctx;
+    (*n)++;
+    if (is_dir) log_raw("  %-24s <dir>\r\n", name);
+    else        log_raw("  %-24s %lu\r\n", name, (unsigned long)size);
+}
+
+static void cmd_sd(int argc, char **argv)
+{
+    if (argc >= 2 && !strcmp(argv[1], "ls")) {
+        const char *dir = argc >= 3 ? argv[2] : "";
+        unsigned n = 0;
+        storage_status_t st = storage_list(dir, sd_ls_entry, &n);
+        if (st != STORAGE_OK)
+            log_raw("sd ls '%s': %s\r\n", *dir ? dir : "/", storage_status_str(st));
+        else
+            log_raw("%u %s in '%s'\r\n", n, n == 1 ? "entry" : "entries", *dir ? dir : "/");
+        return;
+    }
+    if (argc != 1) {
+        log_raw("usage: sd [ls [<folder>]]\r\n");
+        return;
+    }
+    storage_info_t in;
+    storage_status_t st = storage_info(&in);
+    log_raw("sd: %s, %s\r\n", in.where, in.mounted ? "mounted" : "NOT mounted");
+    log_raw("  last:  %s\r\n", in.note);
+    if (in.mounted && in.total) {
+        print_bytes("size:", in.total);
+        print_bytes("free:", in.free);
+    }
+    if (st != STORAGE_OK && in.mounted)
+        log_raw("  error: %s\r\n", storage_status_str(st));
 }
 
 static void cmd_reset(int argc, char **argv)
@@ -782,7 +842,8 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
-    { "led",     cmd_led,      "led [r|g|b|y|c|m|w|off|auto]  test a colour / back to the status" },
+    { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | auto]  test the LED, no FPGA needed" },
+    { "sd",      cmd_sd,       "sd [ls [<folder>]]  SD card status (mounts now if it can) / list a folder" },
     { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },

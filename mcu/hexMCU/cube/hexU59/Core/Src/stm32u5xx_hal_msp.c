@@ -117,6 +117,7 @@ void HAL_OSPI_MspInit(OSPI_HandleTypeDef* hospi)
     __HAL_RCC_GPIOF_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
     /**OCTOSPI1 GPIO Configuration
     PF6     ------> OCTOSPIM_P1_IO3
     PF7     ------> OCTOSPIM_P1_IO2
@@ -124,10 +125,10 @@ void HAL_OSPI_MspInit(OSPI_HandleTypeDef* hospi)
     PF9     ------> OCTOSPIM_P1_IO1
     PF10     ------> OCTOSPIM_P1_CLK
     PC0     ------> OCTOSPIM_P1_IO7
-    PC1     ------> OCTOSPIM_P1_IO4
-    PC2     ------> OCTOSPIM_P1_IO5
     PC3     ------> OCTOSPIM_P1_IO6
     PA2     ------> OCTOSPIM_P1_NCS
+    PD4     ------> OCTOSPIM_P1_IO4
+    PD5     ------> OCTOSPIM_P1_IO5
     */
     GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
@@ -150,7 +151,7 @@ void HAL_OSPI_MspInit(OSPI_HandleTypeDef* hospi)
     GPIO_InitStruct.Alternate = GPIO_AF3_OCTOSPI1;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
+    GPIO_InitStruct.Pin = GPIO_PIN_3;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -163,6 +164,13 @@ void HAL_OSPI_MspInit(OSPI_HandleTypeDef* hospi)
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF10_OCTOSPI1;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF10_OCTOSPI1;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
     /* OCTOSPI1 DMA Init */
     /* GPDMA1_REQUEST_OCTOSPI1 Init */
@@ -227,17 +235,19 @@ void HAL_OSPI_MspDeInit(OSPI_HandleTypeDef* hospi)
     PF9     ------> OCTOSPIM_P1_IO1
     PF10     ------> OCTOSPIM_P1_CLK
     PC0     ------> OCTOSPIM_P1_IO7
-    PC1     ------> OCTOSPIM_P1_IO4
-    PC2     ------> OCTOSPIM_P1_IO5
     PC3     ------> OCTOSPIM_P1_IO6
     PA2     ------> OCTOSPIM_P1_NCS
+    PD4     ------> OCTOSPIM_P1_IO4
+    PD5     ------> OCTOSPIM_P1_IO5
     */
     HAL_GPIO_DeInit(GPIOF, GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9
                           |GPIO_PIN_10);
 
-    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3);
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0|GPIO_PIN_3);
 
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2);
+
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_4|GPIO_PIN_5);
 
     /* OCTOSPI1 DMA DeInit */
     HAL_DMA_DeInit(hospi->hdma);

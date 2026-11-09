@@ -51,12 +51,15 @@ extern "C" {
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
+void MX_SDMMC1_SD_Init(void);
 
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LED_R_Pin GPIO_PIN_2
+#define LED_R_GPIO_Port GPIOE
 #define USER_BUTTON_Pin GPIO_PIN_13
 #define USER_BUTTON_GPIO_Port GPIOC
 #define USER_BUTTON_EXTI_IRQn EXTI13_IRQn
@@ -74,6 +77,14 @@ void Error_Handler(void);
 #define Drive_VBUS_GPIO_Port GPIOA
 #define fault_signal_Pin GPIO_PIN_5
 #define fault_signal_GPIO_Port GPIOA
+#define FPGA_PROGRAM_B_Pin GPIO_PIN_0
+#define FPGA_PROGRAM_B_GPIO_Port GPIOD
+#define FPGA_DONE_Pin GPIO_PIN_1
+#define FPGA_DONE_GPIO_Port GPIOD
+#define LED_B_Pin GPIO_PIN_0
+#define LED_B_GPIO_Port GPIOE
+#define LED_G_Pin GPIO_PIN_1
+#define LED_G_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
 

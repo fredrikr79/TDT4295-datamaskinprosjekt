@@ -1,7 +1,7 @@
+#pragma once
+
 #include "fpga.h"
 #include <stdint.h>
-
-#pragma once
 
 #define VELOCITY_BOX_X 20
 #define VELOCITY_BOX_Y 30

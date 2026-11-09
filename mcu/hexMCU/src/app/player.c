@@ -10,6 +10,55 @@ bool jump_next_frame = false;
 uint16_t ticks_since_last_damage = 0;
 uint16_t ticks_since_last_heal = 0;
 
+/*
+@brief This function checks if a position overlaps with a portal.
+
+@param x: The x-coordinate of the position to check
+@param y: The y-coordinate of the position to check
+@param *portals: The array of portals to check against
+
+@return Returns -1 if position doesn't overlap with a portal.
+        Otherwise, the index of the portal will be returned.
+*/
+int player_in_portal(player_t player, portal_t *portals)
+{
+  // Player edges
+  uint16_t px1 = player.x;
+  uint16_t px2 = player.x + PLAYER_SIZE_X;
+  uint16_t py1 = player.y;
+  uint16_t py2 = player.y + PLAYER_SIZE_Y;
+
+  // Check every active portal until hit
+  for (uint8_t i = 0; i < MAX_PORTALS; i++)
+  {
+    if (!portals[i].active) break;
+
+    // Portal edges
+    uint16_t x1 = portals[i].x1;
+    uint16_t y1 = portals[i].y1;
+    uint16_t x2 = portals[i].x2;
+    uint16_t y2 = portals[i].y2;
+
+    bool x_overlap = false;
+    if (x1 <= px1 || px1 <= x2) x_overlap = true;
+    if (x1 <= px2 || px2 <= x2) x_overlap = true;
+    if (px1 <= x1 || x1 <= px2) x_overlap = true;
+    if (px1 <= x2 || x2 <= px2) x_overlap = true;
+    bool y_overlap = false;
+    if (y1 <= py1 || py1 <= y2) y_overlap = true;
+    if (y1 <= py2 || py2 <= y2) y_overlap = true;
+    if (py1 <= y1 || y1 <= py2) y_overlap = true;
+    if (py1 <= y2 || y2 <= py2) y_overlap = true;
+
+    if (x_overlap && y_overlap)
+    {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
 static bool tile_has_damage(uint8_t id)
 {
     return id == LAVA || id == ACID || id == EXPLOSION;
@@ -198,7 +247,7 @@ void update_player(
     if (player.breath_meter == 0) damage_player(player, 5);
 
     // Check if player is overlapping with a portal
-    int overlap = pos_in_portal(player.x, player.y, portals);
+    int overlap = player_in_portal(player, portals);
     if (overlap != -1)
     {
         portal_t portal = portals[overlap];

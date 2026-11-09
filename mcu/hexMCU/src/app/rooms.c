@@ -2,6 +2,7 @@
  * Portable: the files go through storage.h (SD card on the MCU, a local
  * folder on the PC). */
 
+#include "player.h"
 #define LOG_TAG "rooms"
 
 #include <stdint.h>
@@ -482,42 +483,12 @@ void init_empty_portals(portal_t *portals, uint8_t n_portals)
   for (uint8_t i = 0; i < n_portals; i++)
   {
     portal_t prt = {
-      false,
-      0, 0,
-      0, 0,
-      false, false,
-      0
+      .active=false,
+      .x1=0, .y1=0,
+      .x2=0, .y2=0,
+      .dest_room_x=0, .dest_room_y=0,
+      .dest_pos_x=0, .dest_pos_y=0
     };
     portals[i] = prt;
   }
-}
-
-/*
-@brief This function checks if a position overlaps with a portal.
-
-@param x: The x-coordinate of the position to check
-@param y: The y-coordinate of the position to check
-@param *portals: The array of portals to check against
-
-@return Returns -1 if position doesn't overlap with a portal.
-        Otherwise, the index of the portal will be returned.
-*/
-int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals)
-{
-  for (uint8_t i = 0; i < MAX_PORTALS; i++)
-  {
-    if (!portals[i].active) break;
-
-    if (
-      portals[i].x < x
-      && x < portals[i].x + portals[i].dx
-      && portals[i].y < y
-      && y < portals[i].y + portals[i].dy
-    )
-    {
-      return i;
-    }
-  }
-
-  return -1;
 }

@@ -59,6 +59,17 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define USER_BUTTON_Pin GPIO_PIN_13
 #define USER_BUTTON_GPIO_Port GPIOC
+#define USER_BUTTON_EXTI_IRQn EXTI13_IRQn
+#define FPGA_READY_Pin GPIO_PIN_0
+#define FPGA_READY_GPIO_Port GPIOF
+#define FPGA_READY_EXTI_IRQn EXTI0_IRQn
+#define FPGA_ACK_Pin GPIO_PIN_1
+#define FPGA_ACK_GPIO_Port GPIOF
+#define FPGA_SYNC_Pin GPIO_PIN_2
+#define FPGA_SYNC_GPIO_Port GPIOF
+#define FPGA_SYNC_EXTI_IRQn EXTI2_IRQn
+#define FPGA_RESET_Pin GPIO_PIN_3
+#define FPGA_RESET_GPIO_Port GPIOF
 #define Drive_VBUS_Pin GPIO_PIN_4
 #define Drive_VBUS_GPIO_Port GPIOA
 #define fault_signal_Pin GPIO_PIN_5

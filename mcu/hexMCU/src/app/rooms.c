@@ -19,7 +19,9 @@ static uint8_t file_data[DATA_MAX_SIZE];
 
 /* The room we're in, as tile IDs (row after row: cell x, y is
  * room_tiles[y * ROOM_X + x]). Loaded from the card, then sent to the FPGA;
- * read back from the FPGA, then saved. */
+ * read back from the FPGA, then saved. A tile is the FPGA's cell byte as
+ * it is on the wire (material in the high 4 bits, SIM_CELL() in fpga.h),
+ * passed through unchanged, so room files hold those bytes too. 0 = air. */
 static uint8_t room_tiles[ROOM_X*ROOM_Y];
 
 #define NAME_LEN 32     /* "save/-1000,-1000.dat" fits */
@@ -308,6 +310,8 @@ static struct
   bool sim_stopped;         // STOP_SIM came back OK
   bool sim_started;         // START_SIM came back OK (load)
   bool sim_in_flight;       // a STOP_SIM / START_SIM is on its way
+  bool rows_logged;         // "all rows" is in the log
+  bool rows_announced;      // "sending rows" is in the log (since start / resume)
 } job;
 
 static void sim_done(const fpga_cmd_t *cmd, fpga_err_t err)
@@ -315,13 +319,18 @@ static void sim_done(const fpga_cmd_t *cmd, fpga_err_t err)
   job.sim_in_flight = false;
   if (err != FPGA_ERR_NONE)
   {
-    LOG_WARN("room: %s: %s", cmd->hdr.opcode == STOP_SIM_OPCODE ? "STOP_SIM" : "START_SIM",
-             fpga_err_str(err));
+    // CANCELLED: never sent, because a command queued before it failed;
+    // that one is what the resync line names. Only log real failures.
+    if (err != FPGA_ERR_CANCELLED)
+      LOG_WARN("room %d, %d: %s failed: %s", job.x, job.y,
+               cmd->hdr.opcode == STOP_SIM_OPCODE ? "STOP_SIM" : "START_SIM", fpga_err_str(err));
     job.status = ROOM_FAILED;
     return;
   }
   if (cmd->hdr.opcode == STOP_SIM_OPCODE) job.sim_stopped = true;
   else job.sim_started = true;
+  LOG_INFO("room %d, %d: simulation %s", job.x, job.y,
+           cmd->hdr.opcode == STOP_SIM_OPCODE ? "stopped" : "started");
 }
 
 // Send STOP_SIM (run = false) or START_SIM; the queue being full just
@@ -332,7 +341,11 @@ static void send_sim(bool run)
   fpga_cmd_t cmd = fpga_cmd_sim_run(run);
   cmd.done = sim_done;
   fpga_status_t st = fpga_submit(&cmd);
-  if (st == FPGA_OK) job.sim_in_flight = true;
+  if (st == FPGA_OK)
+  {
+    job.sim_in_flight = true;
+    LOG_DBG("room %d, %d: %s sent", job.x, job.y, run ? "START_SIM" : "STOP_SIM");
+  }
   else if (st != FPGA_EFULL)
   {
     LOG_ERR("room: %s refused: %s", run ? "START_SIM" : "STOP_SIM", fpga_status_str(st));
@@ -345,7 +358,7 @@ static void row_done(const fpga_cmd_t *cmd, fpga_err_t err)
   job.in_flight--;
   if (err != FPGA_ERR_NONE)
   {
-    if (job.status != ROOM_FAILED)
+    if (job.status != ROOM_FAILED && err != FPGA_ERR_CANCELLED)   // see sim_done()
       LOG_WARN("room %s, row %u: %s", job.kind == JOB_LOAD ? "load" : "save",
                cmd->hdr.y, fpga_err_str(err));
     job.status = ROOM_FAILED;  // the game resyncs, then room_resume()
@@ -368,6 +381,8 @@ static void job_start(uint8_t kind, int x, int y)
   job.sim_stopped = false;
   job.sim_started = false;
   job.sim_in_flight = false;
+  job.rows_logged = false;
+  job.rows_announced = false;
 }
 
 void room_load_start(int x, int y)
@@ -394,6 +409,7 @@ bool room_resume(void)
   job.next_row = job.rows_done;
   job.in_flight = 0;
   job.sim_in_flight = false;
+  job.rows_announced = false;
   LOG_INFO("room %d, %d: %s resumed at row %u", job.x, job.y,
            job.kind == JOB_LOAD ? "load" : "save", job.rows_done);
   return true;
@@ -413,6 +429,12 @@ room_status_t room_poll(void)
   // 3. Every row is in (only now -- not when the last row is sent).
   if (job.rows_done == ROOM_Y)
   {
+    if (!job.rows_logged)
+    {
+      job.rows_logged = true;
+      LOG_INFO("room %d, %d: all %u rows %s", job.x, job.y, (unsigned)ROOM_Y,
+               job.kind == JOB_LOAD ? "sent" : "read back");
+    }
     if (job.kind == JOB_LOAD && !job.sim_started)
     {
       send_sim(true);                  // the new room runs from here
@@ -425,6 +447,13 @@ room_status_t room_poll(void)
   }
 
   // 2. The rows.
+  if (!job.rows_announced)
+  {
+    job.rows_announced = true;
+    LOG_INFO("room %d, %d: %s rows %u..%u (%u cells each)", job.x, job.y,
+             job.kind == JOB_LOAD ? "sending" : "reading", job.rows_done,
+             (unsigned)ROOM_Y - 1u, (unsigned)ROOM_X);
+  }
   // Send the next rows, as many as may be in flight.
   while (job.next_row < ROOM_Y && job.in_flight < ROOM_ROWS_IN_FLIGHT)
   {

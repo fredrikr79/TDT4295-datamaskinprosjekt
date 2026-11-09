@@ -9,14 +9,13 @@
  * the sprite functions take NULL and do nothing, so the game runs on. */
 
 #include "sprite.h"
-
-typedef enum { MAT_SAND, MAT_WATER, MAT_LIFE, MAT_COUNT } material_t;
+#include "fpga.h"                           /* material_t, MAT_COUNT (the FPGA's IDs) */
 
 typedef struct {
     sprite_img_t *cursor;                   /* sprites/cursor.spr, or a white square */
     sprite_img_t *title;                    /* test sentence                         */
     sprite_img_t *paused, *save_game, *load_game;
-    sprite_img_t *material[MAT_COUNT];      /* names, for the element picker         */
+    sprite_img_t *material[MAT_COUNT];      /* names, for the element picker, by material_t */
 } assets_t;
 
 extern assets_t assets;

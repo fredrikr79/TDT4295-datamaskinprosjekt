@@ -4,6 +4,8 @@
 
 #include "platform.h"
 #include "host_hooks.h"
+#include "fake_fpga.h"   /* fake_fpga_reset() */
+#include "cli.h"         /* cli_quit()        */
 
 #include <time.h>
 #include <stdbool.h>
@@ -44,3 +46,10 @@ bool plat_exit(int code)
     exit(code);      /* does not return */
     return true;
 }
+
+void plat_fpga_reset(bool hold)
+{
+    if (hold) host_ready_pin = false;
+    else { fake_fpga_reset(); host_ready_pin = true; }   /* a new FPGA: new session, memory empty */
+}
+void plat_mcu_reset(void) { cli_quit("MCU reset: start the program again"); }

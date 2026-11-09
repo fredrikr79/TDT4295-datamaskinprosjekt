@@ -9,3 +9,6 @@ bool     plat_fpga_ready_pin(void);
 /* Terminate the program. Returns false on targets where that makes no
  * sense (there is nothing to return to on bare metal). */
 bool plat_exit(int code);
+
+void plat_fpga_reset(bool hold);   /* true: reset pin low */
+void plat_mcu_reset(void);         /* doesn't return */

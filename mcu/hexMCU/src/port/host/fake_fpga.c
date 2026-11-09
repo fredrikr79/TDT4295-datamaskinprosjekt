@@ -7,12 +7,15 @@
  *     display_host.c (display_layer()), which shows the HUD over the SIM
  *     layer with DISPLAY_HUD_CLEAR pixels see-through. Pixels travel MSB
  *     first, 2 bytes each.
- *   - The grid holds a 4-bit material ID per cell (SIM_AIR, SIM_SAND...,
- *     fpga.h), shown through a colour lookup table (sim_lut) like the real
- *     FPGA's. WRITE/READ_CONS move IDs: N bytes from cell (X, Y) on, row
- *     after row, one or two IDs per byte (FPGA_SIM_IDS_PER_BYTE).
- *   - WRITE/READ_BOX move IDs too: W x H cells from (X, Y), one stream row
- *     by row, packed the same way. Only the HUD layer (sprites) is RGB565.
+ *   - The grid holds a byte per cell: the material (MAT_AIR, MAT_SAND...,
+ *     fpga.h) in the high 4 bits, shown through a colour lookup table
+ *     (sim_lut) like the real FPGA's. The low 4 bits are kept as written
+ *     and read back unchanged (the real FPGA uses them for its own state;
+ *     this one doesn't simulate). WRITE/READ_CONS move cells: N bytes from
+ *     cell (X, Y) on, row after row, one or two per byte
+ *     (FPGA_SIM_IDS_PER_BYTE; with two, only materials travel).
+ *   - WRITE/READ_BOX move cells too: W x H cells from (X, Y), one stream
+ *     row by row, packed the same way. Only the HUD layer (sprites) is RGB565.
  *   - Sprites: WRITE_SPRITE appends its payload to sprite memory and
  *     answers a memID (1, 2, ...; 0 means none). Memory is append-only and
  *     contiguous, so an image uploaded as several WRITE_SPRITEs in a row is
@@ -66,7 +69,7 @@
 /* The real FPGA has 16 MB; memIDs run out long before 2 MB is used
  * (1023 uploads of at most N-1 bytes). */
 #define SPRITE_MEM    (2u * 1024u * 1024u)  /* bytes of sprite memory      */
-#define MAX_IMAGES    1024u         /* memID LUT: memIDs 1 .. MAX_IMAGES-1 */
+#define MAX_IMAGES    1024u         /* memID LUT: up to MAX_IMAGES-1 memIDs */
 #define MAX_SPRITES   1024u         /* PROTOCOL: spriteIDs 0 .. 1023       */
 
 /* ---- state ------------------------------------------------------------ */
@@ -86,8 +89,8 @@ static struct {
 
     uint8_t    mem[SPRITE_MEM]; /* sprite images, one after the other       */
     uint32_t   mem_used;
-    struct { uint32_t off, len; } image[MAX_IMAGES];   /* [0] = none       */
-    uint16_t   n_images;        /* memIDs handed out: 1 .. n_images         */
+    struct { uint32_t off, len; } image[MAX_IMAGES];   /* by memID          */
+    uint16_t   n_images;        /* memIDs handed out: FPGA_MEMID_FIRST on   */
     instance_t sprite[MAX_SPRITES];
 } ff;
 
@@ -129,16 +132,19 @@ static bool param_count(uint16_t len, uint16_t n, uint8_t *status, const char *w
 #define LUT565(r, g, b) ((uint16_t)((((r) & 0xF8u) << 8) | (((g) & 0xFCu) << 3) | ((b) >> 3)))
 
 /* PROTOCOL: the FPGA team's colours aren't known; these are stand-ins. */
-static const uint16_t sim_lut[SIM_ID_MAX + 1] = {
-    [SIM_AIR]   = LUT565(  0,   0,   0),
-    [SIM_SAND]  = LUT565(222, 190, 110),
-    [SIM_WATER] = LUT565( 40, 110, 225),
-    [SIM_WALL]  = LUT565(125, 125, 135),
-    [SIM_LIFE]  = LUT565( 90, 230,  90),
-    [5 ... 15]  = LUT565(255,   0, 200),    /* not in use: shows up loud */
+static const uint16_t sim_lut[MAT_ID_MAX + 1] = {
+    [MAT_AIR]       = LUT565(  0,   0,   0),
+    [MAT_STONE]     = LUT565(125, 125, 135),
+    [MAT_SAND]      = LUT565(222, 190, 110),
+    [MAT_WATER]     = LUT565( 40, 110, 225),
+    [MAT_LAVA]      = LUT565(255,  90,  20),
+    [MAT_ACID]      = LUT565(170, 240,  30),
+    [MAT_LIFE]      = LUT565(235, 235, 235),
+    [MAT_EXPLOSIVE] = LUT565(200,  20,  40),
+    [MAT_COUNT ... MAT_ID_MAX] = LUT565(255, 0, 200),   /* not in use: shows up loud */
 };
 
-static uint8_t cells[FAKE_W * FAKE_H];      /* one ID per cell, row after row */
+static uint8_t cells[FAKE_W * FAKE_H];      /* one cell byte each, row after row */
 
 /* ---- pixel access -----------------------------------------------------
  * A region is w pixels wide starting at (x, y); pixel i lands at
@@ -151,38 +157,45 @@ static uint16_t *pixel(display_layer_t L, uint32_t x, uint32_t y)
 
 static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 
-/* Cell i (counted from the top-left, row after row) gets material id, and
- * the SIM picture its colour. */
-static void cell_set(uint32_t i, uint8_t id)
+/* Cell i (counted from the top-left, row after row) gets cell byte v, and
+ * the SIM picture the colour of its material (high 4 bits). */
+static void cell_set(uint32_t i, uint8_t v)
 {
-    cells[i] = id;
+    cells[i] = v;
     uint16_t *p = pixel(DISPLAY_SIM, i % FAKE_W, i / FAKE_W);
-    if (p) *p = sim_lut[id];
+    if (p) *p = sim_lut[SIM_MAT(v)];
 }
 
-/* The k-th ID in packed data. */
-static uint8_t packed_id(const uint8_t *data, uint32_t k)
+/* The k-th cell byte in packed data (two per byte: the material only). */
+static uint8_t packed_cell(const uint8_t *data, uint32_t k)
 {
-    uint8_t b = data[k / FPGA_SIM_IDS_PER_BYTE];
-    if (FPGA_SIM_IDS_PER_BYTE == 2) return (k & 1u) ? (b & 0x0Fu) : (uint8_t)(b >> 4);
-    return b & 0x0Fu;
+    if (FPGA_SIM_IDS_PER_BYTE == 2) return SIM_CELL(sim_get(data, k));
+    return data[k];
+}
+
+/* Pack cell byte v as cell k of out[] (which starts zeroed). */
+static void pack_cell(uint8_t *out, uint32_t k, uint8_t v)
+{
+    if (FPGA_SIM_IDS_PER_BYTE == 2) sim_put(out, k, SIM_MAT(v));
+    else                            out[k] = v;
 }
 
 /* WRITE_CONS: IDs from (x, y) on, contiguous. */
 static void cons_write(uint16_t x, uint16_t y, const uint8_t *data, uint16_t nbytes)
 {
     uint32_t start = (uint32_t)y * FAKE_W + x, n = (uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE;
-    uint32_t oob = 0, big = 0;
+    uint32_t oob = 0, unused = 0;
     for (uint32_t k = 0; k < n; k++) {
-        uint8_t id = packed_id(data, k);
-        if (FPGA_SIM_IDS_PER_BYTE == 1) big += data[k] > SIM_ID_MAX;
+        uint8_t v = packed_cell(data, k);
+        unused += SIM_MAT(v) >= MAT_COUNT;
         if (x >= FAKE_W || start + k >= (uint32_t)FAKE_W * FAKE_H) { oob++; continue; }
-        cell_set(start + k, id);
+        cell_set(start + k, v);
     }
     if (oob) LOG_WARN("write_cons at (%u,%u): %lu of %lu cells out of bounds (%ux%u)",
                       x, y, (unsigned long)oob, (unsigned long)n, FAKE_W, FAKE_H);
-    if (big) LOG_WARN("write_cons at (%u,%u): %lu byte(s) above %u -- only 4 bits are used",
-                      x, y, (unsigned long)big, SIM_ID_MAX);
+    if (unused) LOG_WARN("write_cons at (%u,%u): %lu cell(s) with a material >= %u "
+                         "(the material is the HIGH 4 bits: SIM_CELL())",
+                         x, y, (unsigned long)unused, (unsigned)MAT_COUNT);
 }
 
 /* Cell k of a W-wide box at (x, y): its index in cells[], or -1 if it's
@@ -207,7 +220,7 @@ static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
     for (uint32_t k = 0; k < n; k++) {
         int32_t c = box_cell(x, y, w, k);
         if (c < 0) { oob++; continue; }
-        cell_set((uint32_t)c, packed_id(data, k));
+        cell_set((uint32_t)c, packed_cell(data, k));
     }
     if (oob) LOG_WARN("write_box at (%u,%u): %lu of %lu cells out of bounds (%ux%u)",
                       x, y, (unsigned long)oob, (unsigned long)n, FAKE_W, FAKE_H);
@@ -225,9 +238,7 @@ static void box_read(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     memset(ff.out, 0, nbytes);
     for (uint32_t k = 0; k < n && k / FPGA_SIM_IDS_PER_BYTE < nbytes; k++) {
         int32_t c = box_cell(x, y, w, k);
-        uint8_t id = c < 0 ? SIM_AIR : cells[c];
-        if (FPGA_SIM_IDS_PER_BYTE == 2) ff.out[k / 2] |= (k & 1u) ? id : (uint8_t)(id << 4);
-        else                            ff.out[k] = id;
+        pack_cell(ff.out, k, c < 0 ? SIM_CELL(MAT_AIR) : cells[c]);
     }
     ff.out_len = (uint16_t)nbytes;
 }
@@ -241,15 +252,10 @@ static void cons_read(uint16_t x, uint16_t y, uint32_t nbytes)
         nbytes = OUT_FIFO;
     }
     uint32_t start = (uint32_t)y * FAKE_W + x, total = (uint32_t)FAKE_W * FAKE_H;
-    for (uint32_t b = 0; b < nbytes; b++) {
-        uint8_t v = 0;
-        for (uint32_t j = 0; j < FPGA_SIM_IDS_PER_BYTE; j++) {
-            uint32_t k = b * FPGA_SIM_IDS_PER_BYTE + j;
-            uint8_t id = (x < FAKE_W && start + k < total) ? cells[start + k] : SIM_AIR;
-            v = (uint8_t)(FPGA_SIM_IDS_PER_BYTE == 2 ? (v << 4) | id : id);
-        }
-        ff.out[b] = v;
-    }
+    memset(ff.out, 0, nbytes);
+    for (uint32_t k = 0; k < nbytes * FPGA_SIM_IDS_PER_BYTE; k++)
+        pack_cell(ff.out, k, (x < FAKE_W && start + k < total) ? cells[start + k]
+                                                              : SIM_CELL(MAT_AIR));
     ff.out_len = (uint16_t)nbytes;
 }
 
@@ -281,7 +287,10 @@ static bool expect_fields(const transport_hdr_t *h, uint8_t fields,
 }
 
 /* ---- sprites ------------------------------------------------------------ */
-static bool image_ok(uint16_t mem_id) { return mem_id >= 1 && mem_id <= ff.n_images; }
+static bool image_ok(uint16_t mem_id)
+{
+    return (uint16_t)(mem_id - FPGA_MEMID_FIRST) < ff.n_images;   /* wraps below FIRST */
+}
 
 static bool sprite_used(unsigned id) { return id < MAX_SPRITES && ff.sprite[id].used; }
 
@@ -289,14 +298,23 @@ static bool sprite_used(unsigned id) { return id < MAX_SPRITES && ff.sprite[id].
  * that spans several uploads in a row may use all of them. */
 static uint32_t bytes_from(uint16_t mem_id) { return ff.mem_used - ff.image[mem_id].off; }
 
-static int32_t write_sprite(const uint8_t *data, uint16_t len, uint8_t *status)
+static int32_t write_sprite(const transport_hdr_t *h, const uint8_t *data, uint16_t len,
+                            uint8_t *status)
 {
+    /* LEN (alt bytes) must say how much payload follows */
+    if (!expect_fields(h, TRANSPORT_F_ALT16, "write_sprite", status)) return READY_US;
+    uint32_t said = (uint16_t)h->alt * FPGA_SPRITE_LEN_UNIT;
+    if (said != len) {
+        LOG_WARN("write_sprite: LEN says %lu bytes, %u came", (unsigned long)said, len);
+        return fail(status, said > len ? FPGA_FAIL_MISSING_PARAMETER
+                                       : FPGA_FAIL_TOO_MANY_PARAMETERS, "write_sprite");
+    }
     if (len == 0 || len % PIXEL_BYTES)
         return fail(status, FPGA_FAIL_ILLEGAL_VALUE, "write_sprite");
     if (ff.n_images + 1u >= MAX_IMAGES || ff.mem_used + len > SPRITE_MEM)
         return fail(status, FPGA_FAIL_RESOURCE_EXHAUSTED, "write_sprite");
 
-    uint16_t id = ++ff.n_images;
+    uint16_t id = (uint16_t)(FPGA_MEMID_FIRST + ff.n_images++);   /* like the FPGA: from FPGA_MEMID_FIRST */
     ff.image[id].off = ff.mem_used;
     ff.image[id].len = len;
     memcpy(&ff.mem[ff.mem_used], data, len);
@@ -422,7 +440,7 @@ int32_t fake_fpga_write(const transport_hdr_t *h, const uint8_t *data,
         box_read(x, y, w, hh);
         break;
 
-    case WRITE_SPRITE_OPCODE:  return write_sprite(data, len, status);
+    case WRITE_SPRITE_OPCODE:  return write_sprite(h, data, len, status);
     case SPRITE_WRITE_OPCODE:  return sprite_write(data, len, status);
     case SPRITE_UPDATE_OPCODE: return sprite_update(data, len, status);
     case SPRITE_DELETE_OPCODE: return sprite_delete(data, len, status);
@@ -499,7 +517,7 @@ void fake_fpga_reset(void)
 {
     /* The layers are not cleared here: display_init() already did. */
     memset(&ff, 0, sizeof ff);
-    for (uint32_t i = 0; i < (uint32_t)FAKE_W * FAKE_H; i++) cell_set(i, SIM_AIR);
+    for (uint32_t i = 0; i < (uint32_t)FAKE_W * FAKE_H; i++) cell_set(i, SIM_CELL(MAT_AIR));
 
     /* A fresh id per "power-up", like an FPGA that just got configured. */
     srand((unsigned)time(NULL));

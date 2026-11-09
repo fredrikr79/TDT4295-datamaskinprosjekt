@@ -16,11 +16,20 @@ extern const font_t ASSET_FONT;
 
 assets_t assets;
 
-static const char *const material_names[MAT_COUNT] = {
-    [MAT_SAND]  = "Sand",
-    [MAT_WATER] = "Water",
-    [MAT_LIFE]  = "Game of Life",
+/* One per material_t (fpga.h). A new material there without a name here
+ * fails to compile (see the check below). */
+static const char *const material_names[] = {
+    [MAT_AIR]       = "Air",
+    [MAT_STONE]     = "Stone",
+    [MAT_SAND]      = "Sand",
+    [MAT_WATER]     = "Water",
+    [MAT_LAVA]      = "Lava",
+    [MAT_ACID]      = "Acid",
+    [MAT_LIFE]      = "Game of Life",
+    [MAT_EXPLOSIVE] = "Explosive",
 };
+_Static_assert(sizeof material_names / sizeof material_names[0] == MAT_COUNT,
+               "a material in fpga.h has no name in material_names");
 
 static sprite_img_t *text(const char *s)
 {

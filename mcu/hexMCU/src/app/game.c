@@ -14,35 +14,47 @@
 #include "sprite.h"
 #include "assets.h"
 #include "funny_man.h"
+#include "demo.h"
+#include "probe.h"
+#include "cli.h"
 
 /* tuning */
-#define PROBE_LEN       100u
-#define PROBE_RETRY_MS  200u
 #define FIRST_ROOM_X    0u
 #define FIRST_ROOM_Y    0u
 
 /* ======================================================================
  * The state machine
  *
- *   PROBE -> INFO -> LOAD -> RUN
- *                     ^       |
- *                     |       v  (door)
- *                     +---- SAVE
+ *   PROBE -> LOAD -> RUN
+ *             ^       |
+ *             |       v  (door)
+ *             +---- SAVE
  *
- * Any failed command -> resync -> PROBE -> INFO. If the FPGA still has
+ * PROBE is the handshake (probe.c: steady READY, ECHO, INFO).
+ * With loading off (console: "loading off"), PROBE -> HOLD instead: the
+ * game sends nothing more and the console has the FPGA to itself.
+ * Any failed command -> resync -> PROBE. If the FPGA still has
  * the same session (its memory survived), we go back to the state that
  * was interrupted. If not, everything on it is gone and the current
  * room is loaded again.
  * ====================================================================== */
  
 /* This is the higher state machine that is responsible for error recovery and switching of scenes */
-typedef enum { S_PROBE, S_PROBING, S_INFO, S_INFO_WAIT, S_SAVE, S_LOAD, S_RUN } state_t;
-static const char *const state_names[] =
-    { "probe", "probing", "info", "info-wait", "save", "load", "run" };
+typedef enum { S_PROBE, S_SAVE, S_LOAD, S_RUN, S_HOLD, S_FPGA_RESET } state_t;
+static const char *const state_names[] = { "probe", "save", "load", "run", "hold", "fpga-reset" };
 
-static state_t  state = S_PROBE;
+#define FPGA_RESET_PULSE_MS 10u     /* the FPGA's reset pin held low this long */
+static uint32_t fpga_reset_until;
+
+
+
+#ifndef GAME_LOADING
+#define GAME_LOADING 1          /* 0: start with loading off: HOLD, no probing */
+#endif
+static bool     loading = GAME_LOADING;
+
+static state_t  state = GAME_LOADING ? S_PROBE : S_HOLD;
 static state_t  resume_to = S_LOAD; /* where a resync goes back to (same session) */
-static uint32_t retry_at;           /* S_PROBE: don't probe before this */
 static bool     failed;             /* a callback saw an error          */
 static bool     have_session;
 static uint32_t session;            /* the FPGA session we drew into    */
@@ -56,10 +68,13 @@ static player_t player;
 
 static portal_t portals[MAX_PORTALS] = {0};
 
-static uint8_t *box;
+static uint8_t box[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
+static velocity_box_t velocity_box;
 
 static void run_enter(void);
 static void room_enter(void);
+
+static void handle_movement_keys(input_t in);
 
 static void go(state_t s)
 {
@@ -67,23 +82,6 @@ static void go(state_t s)
     state = s;
     if (s == S_RUN) run_enter();
 }
-
-/* PROBE / INFO */
-static uint8_t probe_tx[PROBE_LEN], probe_rx[PROBE_LEN];
-
-static void probe_done(const fpga_cmd_t *cmd, fpga_err_t err)
-{
-    (void)cmd;
-    if (err == FPGA_ERR_NONE) {
-        go(S_INFO);
-    } else {
-        LOG_DBG("probe: %s", fpga_err_str(err));
-        retry_at = plat_millis() + PROBE_RETRY_MS;
-        go(S_PROBE);
-    }
-}
-
-static void info_done(const fpga_cmd_t *cmd, fpga_err_t err);
 
 /* SAVE: the current room, FPGA -> card (rooms.c reads it back row by row,
  * then writes the file).
@@ -124,7 +122,7 @@ static void load_resume(void)
 static struct {
     uint32_t sync_seen;         /* SYNC count we last started a frame at */
     int32_t  cx, cy;            /* cursor position, follows the mouse    */
-    input_t  keys;              /* latest input, for held keys in run_frame */
+    input_t  keys;              /* this frame's input (taken once per frame) */
 } run;
 
 /* State machine for run, handels if we are showing menu or doing other actions. */
@@ -177,9 +175,53 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
 /* Runs on every way into RUN, also after a resync that kept the session,
  * so nothing here may reset the game. Frames that went by while probing
  * or loading don't count as missed. */
+/* ---- frames: the FPGA's SYNC, or a timer while there is none -------------
+ * RUN steps once per SYNC (30 Hz from the FPGA). If no SYNC has come for
+ * SYNC_LOST_MS, frames come from a FRAME_MS timer instead, so the game
+ * still runs while the FPGA doesn't send SYNC (yet). Logged each time it
+ * switches. */
+#define SYNC_LOST_MS 200u
+#define FRAME_MS     33u        /* ~30 Hz, like SYNC */
+
+static struct {
+    uint32_t last_sync_ms;      /* when a SYNC was last seen           */
+    uint32_t next_frame_ms;     /* timer mode: when the next frame is due */
+    bool     timer;             /* frames from the timer right now     */
+} frames;
+
+/* Frames to run now: SYNCs since last time, or timer ticks without SYNC. */
+static uint32_t frames_due(void)
+{
+    uint32_t now = plat_millis();
+    uint32_t n = frame_sync_take(&run.sync_seen);
+    if (n) {
+        frames.last_sync_ms = now;
+        if (frames.timer) {
+            frames.timer = false;
+            LOG_INFO("frame SYNC from the FPGA: frames follow it again");
+        }
+        return n;
+    }
+    if (!frames.timer) {
+        if (now - frames.last_sync_ms < SYNC_LOST_MS) return 0;
+        frames.timer = true;
+        frames.next_frame_ms = now;
+        LOG_WARN("no frame SYNC from the FPGA for %u ms: frames from a %u ms timer instead",
+                 SYNC_LOST_MS, FRAME_MS);
+    }
+    if ((int32_t)(now - frames.next_frame_ms) < 0) return 0;
+    n = (now - frames.next_frame_ms) / FRAME_MS + 1u;
+    frames.next_frame_ms += n * FRAME_MS;
+    return n;
+}
+
 static void run_enter(void)
 {
+    input_t stale;
+    input_take(&stale);         /* input from loading / a demo / HOLD doesn't count */
     run.sync_seen = frame_sync_count();
+    frames.last_sync_ms  = plat_millis();     /* give SYNC a chance first */
+    frames.next_frame_ms = plat_millis();
 }
 
 /* setup things for the menu */
@@ -205,7 +247,7 @@ static void sprites_setup(void)
     assets_init();              /* reads the sprite files' headers from the card */
 
     const fpga_info_t *scr = fpga_link_info();
-    player_init(100, 100);      /* start position for the room */
+    player_init_old(100, 100);      /* start position for the room */
 
     /* test: a sentence centred near the top */
     int32_t w = sprite_img_w(assets.title);
@@ -229,25 +271,46 @@ static void room_enter(void)
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);
 }
 
+/* Set the next velocity box */
+void set_player(player_t plr)
+{
+    player = plr;
+}
+
+/* Set the next velocity box */
+void set_next_velocity_box(velocity_box_t *vb)
+{
+    velocity_box = *vb;
+}
+
+static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
+{
+    if (err != FPGA_ERR_NONE)
+    {
+        LOG_WARN(
+            "read box, x %d, y %d, dx %d, dy %d: %s",
+            velocity_box.box.x1,
+            velocity_box.box.y1,
+            velocity_box.box.x2,
+            velocity_box.box.y2,
+            fpga_err_str(err)
+        );
+        return;
+    }
+
+    update_player(player, cmd->rx, velocity_box, portals);
+}
+
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
 static void run_frame(uint32_t n)
 {
     (void)n;
 
-    update_player_position(0, 0, player, box);
-    // fpga_cmd_read_sim_box(  // TODO: Use the new command
-    //     next_velocity_box(player), box, 25*25
-    // );
-    
-    int overlap = pos_in_portal(player.x, player.y, portals);
-    if (overlap != -1)
-    {
-        player.promised_exit = (uint8_t) overlap;
-        game_change_room(
-            portals[overlap].dest_x,
-            portals[overlap].dest_y
-        );
-    }
+    fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
+        velocity_box.box, box, velocity_box.length
+    );
+    player_box_cmd.done = update_player_callback;
+    fpga_submit(&player_box_cmd);
     
     /* TODO: update + draw */
 
@@ -262,22 +325,37 @@ static void run_frame(uint32_t n)
 
 static void run_poll(void)
 {
-    /* Input every poll, not just on frames: the mouse adds up in between. */
-    const fpga_info_t *scr = fpga_link_info();
-    input_t in;
-    input_take(&in);
-    /* input_log(&in); */
-    run.keys = in;              /* held keys are "down right now", so the latest copy is enough */
-    run.cx = clamp32(run.cx + in.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
-    run.cy = clamp32(run.cy + in.mouse_dy, 0, (int32_t)scr->height - cursor_h());
-
-    if (key_pressed(&in, KEY_ESCAPE))
-        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
-        
-
     if (!sprite_poll()) { failed = true; return; }
-    uint32_t n = frame_sync_take(&run.sync_seen);
-    if (n) run_frame(n);
+    uint32_t n = frames_due();
+    if (n == 0) return;
+
+    /* Input once per frame: usb_input adds up presses, releases and mouse
+     * movement between takes, so nothing that happened in between is lost
+     * (taking every poll would throw presses away before a frame saw them). */
+    const fpga_info_t *scr = fpga_link_info();
+    input_take(&run.keys);
+    /* input_log(&run.keys); */
+    run.cx = clamp32(run.cx + run.keys.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
+    run.cy = clamp32(run.cy + run.keys.mouse_dy, 0, (int32_t)scr->height - cursor_h());
+
+    if (key_pressed(&run.keys, KEY_ESCAPE))
+        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
+
+    handle_movement_keys(run.keys);
+
+    run_frame(n);
+}
+
+static void handle_movement_keys(input_t in)
+{
+    bool left_pressed = key_held(&in, KEY_A);
+    bool right_pressed = key_held(&in, KEY_D);
+
+    if (left_pressed && !right_pressed) move_left();
+    if (right_pressed && !left_pressed) move_right();
+    else move_stop();
+
+    if (key_held(&in, KEY_SPACE)) start_jump();
 }
 
 /* Leave the current room: save it, then load `to`.
@@ -290,16 +368,10 @@ void game_change_room(int to_x, int to_y)
     save_start();
 }
 
-/* ---- INFO callback: same session -> resume, new session -> reload ------- */
-static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
+/* ---- the handshake is done: same session -> resume, new -> reload ------ */
+static void connected(void)
 {
-    (void)cmd;
-    if (err != FPGA_ERR_NONE) { failed = true; return; }
-
     const fpga_info_t *in = fpga_link_info();
-    LOG_INFO("fpga: %ux%u, N=%u, session 0x%08lX",
-             in->width, in->height, in->max_cmd, (unsigned long)in->session);
-
     if (have_session && in->session == session) {
         /* same FPGA memory: what was sent is still there */
         switch (resume_to) {
@@ -317,42 +389,134 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
     }
 }
 
+/* ---- loading on / off (console) -----------------------------------------
+ * Off: the game holds (HOLD) right away and sends nothing, so the console
+ * can test the FPGA by hand -- also in the middle of the handshake, which
+ * then stops trying. Commands the game already queued still finish.
+ * Built with GAME_LOADING 0 it starts like that: HOLD, no probing at all.
+ * On: from HOLD, a new handshake (the console may have changed anything),
+ * then on as after a resync: same session -> carry on where it was, new
+ * session -> load everything again. */
+bool game_loading(void) { return loading; }
+
+static void hold(void)
+{
+    if (state == S_SAVE || state == S_LOAD || state == S_RUN) resume_to = state;
+    cli_status(NULL);
+    LOG_INFO("loading is off: the game holds, the FPGA is the console's ('loading on' to go on)");
+    go(S_HOLD);
+}
+
+void game_set_loading(bool on)
+{
+    loading = on;
+    if (!on) {
+        if (state == S_PROBE) probe_stop();     /* no more tries: the console takes over now */
+        if (state != S_HOLD) hold();
+        return;
+    }
+    if (state != S_HOLD) return;        /* already going */
+    LOG_INFO("loading is on: handshake again, then on from '%s'", state_names[resume_to]);
+    fpga_abort_all();                   /* whatever the console left queued */
+    sprite_lost();
+    failed = false;
+    probe_start();
+    go(S_PROBE);
+}
+
+/* ---- resets (console: "reset", "reset fpga", "reset mcu") ---------------
+ * FPGA: everything queued is dropped, the reset pin is held low for
+ * FPGA_RESET_PULSE_MS, and then it's a new FPGA: everything on it is
+ * forgotten and the handshake starts over (with loading off: back to HOLD).
+ * MCU: a full restart, as from power-up. Both: the FPGA's reset pulse, then
+ * the MCU restart. */
+void game_reset_fpga(void)
+{
+    LOG_WARN("resetting the FPGA (reset pin low for %u ms)", FPGA_RESET_PULSE_MS);
+    if (demo_busy()) demo_stop();
+    if (state == S_PROBE) probe_stop();
+    fpga_abort_all();                   /* callbacks run now (CANCELLED) */
+    plat_fpga_reset(true);
+    fpga_reset_until = plat_millis() + FPGA_RESET_PULSE_MS;
+    go(S_FPGA_RESET);
+}
+
+void game_reset_mcu(void)
+{
+    LOG_WARN("resetting the MCU");
+    plat_mcu_reset();                   /* doesn't return */
+}
+
+void game_reset_all(void)
+{
+    LOG_WARN("resetting the FPGA and the MCU");
+    fpga_abort_all();
+    plat_fpga_reset(true);
+    uint32_t t0 = plat_millis();
+    while (plat_millis() - t0 < FPGA_RESET_PULSE_MS) { }   /* the MCU restarts anyway */
+    plat_fpga_reset(false);
+    plat_mcu_reset();
+}
+
+/* The reset pulse is over: a new FPGA, nothing of ours on it. */
+static void fpga_reset_done(void)
+{
+    plat_fpga_reset(false);
+    LOG_INFO("FPGA reset released: starting over");
+    sprite_forget();                    /* its memory is gone: send it all again */
+    have_session = false;               /* -> connected() loads everything */
+    resume_to    = S_LOAD;
+    failed       = false;
+    if (loading) { probe_start(); go(S_PROBE); }
+    else         go(S_HOLD);
+}
+
 /* the state machine */
 static void resync(void)
 {
-    LOG_WARN("command failed in '%s' -> resync", state_names[state]);
+    LOG_WARN("command failed in '%s' -> resync: %s", state_names[state], fpga_last_failure());
     if (state == S_SAVE || state == S_LOAD || state == S_RUN)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */
     sprite_lost();               /* ...so this comes after them      */
-    failed   = false;
-    retry_at = plat_millis();
+    failed = false;
+    probe_start();
     go(S_PROBE);
 }
 
 void game_poll(void)
 {
+    /* A console demo has the FPGA to itself: the game waits (its commands
+     * already queued still finish). Afterwards RUN doesn't count the frames
+     * that went by as missed. */
+    static bool paused;
+    if (state == S_FPGA_RESET) {        /* before anything else: nothing may be sent */
+        if ((int32_t)(plat_millis() - fpga_reset_until) >= 0) fpga_reset_done();
+        return;
+    }
+    if (demo_busy()) { paused = true; demo_poll(); return; }
+    if (paused) { paused = false; if (state == S_RUN) run_enter(); }
+
+    if (state == S_HOLD) {              /* the console's turn: not even a resync */
+        static bool told;
+        if (!told && !GAME_LOADING) {
+            told = true;
+            LOG_INFO("loading is off (GAME_LOADING 0): no probing, the FPGA is the "
+                     "console's ('loading on' to start)");
+        }
+        return;
+    }
     if (failed) { resync(); return; }
 
     switch (state) {
-    case S_PROBE: {
-        if ((int32_t)(plat_millis() - retry_at) < 0) break;
-        for (unsigned i = 0; i < PROBE_LEN; i++)
-            probe_tx[i] = (uint8_t)(i * 37u + retry_at);   /* new pattern each try */
-        fpga_cmd_t c = fpga_cmd_echo(probe_tx, probe_rx, PROBE_LEN);
-        c.done = probe_done;
-        if (fpga_submit(&c) == FPGA_OK) go(S_PROBING);
+    case S_PROBE:
+        if (probe_poll() != PROBE_DONE) break;
+        if (loading) connected();
+        else         hold();
         break;
-    }
-    case S_INFO: {
-        fpga_cmd_t c = fpga_cmd_info();
-        c.done = info_done;
-        if (fpga_submit(&c) == FPGA_OK) go(S_INFO_WAIT);
+    case S_HOLD:
+    case S_FPGA_RESET:
         break;
-    }
-    case S_PROBING:
-    case S_INFO_WAIT:
-        break;                   /* the done callback moves us on */
     case S_SAVE:
         switch (room_poll()) {
         case ROOM_FAILED: failed = true; break;

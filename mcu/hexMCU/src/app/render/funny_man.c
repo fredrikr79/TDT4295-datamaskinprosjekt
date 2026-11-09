@@ -59,7 +59,7 @@ static void make_px(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
     }
 }
 
-void player_init(int16_t px0, int16_t py0)
+void player_init_old(int16_t px0, int16_t py0)
 {
     x = px0;
     y = py0;

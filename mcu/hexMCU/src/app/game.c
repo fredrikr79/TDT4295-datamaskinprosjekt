@@ -310,7 +310,8 @@ static void run_frame(uint32_t n)
         velocity_box.box, box, velocity_box.length
     );
     player_box_cmd.done = update_player_callback;
-    fpga_submit(&player_box_cmd);
+    // commented out for testing remeber to comment back in!!
+    //fpga_submit(&player_box_cmd);
     
     /* TODO: update + draw */
 

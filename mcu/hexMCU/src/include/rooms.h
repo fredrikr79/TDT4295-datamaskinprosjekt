@@ -12,14 +12,14 @@
 #define MAX_PORTALS 8
 #define DATA_MAX_SIZE (ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS)
 
-#define AIR 0
-#define STONE 16
-#define SAND 17
-#define WATER 18
-#define LAVA 19
-#define ACID 20
-#define GOL 21
-#define EXPLOSION 22
+#define AIR 0 << 4
+#define STONE 1 << 4
+#define SAND 2 << 4
+#define WATER 3 << 4
+#define LAVA 4 << 4
+#define ACID 5 << 4
+#define GOL 6 << 4
+#define EXPLOSION 7 << 4
 
 /* false: no card / file / write failed (logged). read_room() then gives
  * an empty room (all tile 0), so the game goes on. */

@@ -116,7 +116,7 @@ void update_player(
     portal_t *portals
 )
 {
-    //LOG_DBG("1 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
+    // LOG_DBG("1 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
     float force_x = 0;
     float force_y = 0;
@@ -135,22 +135,22 @@ void update_player(
         {
             uint8_t id = box[x + y*velocity_box.box.x2];
             if (id == AIR) in_air++;
-            else if (id == STONE) in_air++;
-            else if (id == SAND) in_air++;
-            else if (id == WATER) in_air++;
-            else if (id == LAVA) in_air++;
-            else if (id == ACID) in_air++;
-            else if (id == GOL) in_air++;
-            else if (id == EXPLOSION) in_air++;
+            else if (id == STONE) in_stone++;
+            else if (id == SAND) in_sand++;
+            else if (id == WATER) in_water++;
+            else if (id == LAVA) in_lava++;
+            else if (id == ACID) in_acid++;
+            else if (id == GOL) in_gol++;
+            else if (id == EXPLOSION) in_explosion++;
         }
-    //LOG_DBG("in_air: %u", in_air);
-    //LOG_DBG("in_stone: %u", in_stone);
-    //LOG_DBG("in_sand: %u", in_sand);
-    //LOG_DBG("in_water: %u", in_sand);
-    //LOG_DBG("in_lava: %u", in_lava);
-    //LOG_DBG("in_acid: %u", in_acid);
-    //LOG_DBG("in_gol: %u", in_gol);
-    //LOG_DBG("in_explosion: %u", in_explosion);
+    // LOG_DBG("in_air: %u", in_air);
+    // LOG_DBG("in_stone: %u", in_stone);
+    // LOG_DBG("in_sand: %u", in_sand);
+    // LOG_DBG("in_water: %u", in_water);
+    // LOG_DBG("in_lava: %u", in_lava);
+    // LOG_DBG("in_acid: %u", in_acid);
+    // LOG_DBG("in_gol: %u", in_gol);
+    // LOG_DBG("in_explosion: %u", in_explosion);
     
     // Breathing
     if (!in_air && 0 < player->breath_meter) player->breath_meter--;
@@ -159,6 +159,7 @@ void update_player(
     // Check if on ground
     bool on_ground = velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y;
     bool on_radiation = false;
+    // LOG_DBG("on_ground: %u", on_ground);
     if (!on_ground)
     {
         uint16_t y = velocity_box.rel_y + PLAYER_SIZE_Y;
@@ -168,10 +169,12 @@ void update_player(
             x++
         )
         {
+            // LOG_DBG("x: %u, y: %u, id: %u, col: %u", x, y, box[x + y*velocity_box.box.x2], tile_has_collision(box[x + y*velocity_box.box.x2]));
             if (tile_has_collision(box[x + y*velocity_box.box.x2])) on_ground = true;
             if (tile_has_raditation(box[x + y*velocity_box.box.x2])) on_radiation = true;
         }
     }
+    // LOG_DBG("on_ground: %u", on_ground);
 
     // Apply friction
     if (on_ground || in_water || in_acid)

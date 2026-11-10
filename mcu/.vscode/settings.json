@@ -1,0 +1,7 @@
+{
+    "cmake.sourceDirectory": "/home/sam/Projects/TDT4295/TDT4295-datamaskinprosjekt/mcu/hexMCU/host",
+    "cmake.cmakePath": "cube-cmake",
+    "cmake.configureArgs": [
+        "-DCMAKE_COMMAND=cube-cmake"
+    ]
+}

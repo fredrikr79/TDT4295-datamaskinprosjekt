@@ -1,0 +1,11 @@
+{
+    // Only for the Microsoft C/C++ extension; the STM32 extension uses
+    // clangd, which reads hexMCU/.clangd instead.
+    "configurations": [
+        {
+            "name": "STM32 (hexU59)",
+            "compileCommands": "${workspaceFolder}/hexMCU/cube/hexU59/build/Debug/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

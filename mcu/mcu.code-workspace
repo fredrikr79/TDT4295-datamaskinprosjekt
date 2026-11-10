@@ -1,0 +1,41 @@
+{
+    // The whole MCU side in one window. Open with File > Open Workspace from
+    // File... (or double-click this file). This file lives in mcu/.
+    //
+    // Each board project is a folder of its own, so the STM32Cube extension
+    // finds it just as when that folder is opened alone: build, flash and
+    // debug work as before. The first folder is everything shared: the
+    // README, docs/, tools/ and hexMCU/src + cmake.
+    "folders": [
+        { "name": "mcu (shared code, docs, tools)", "path": "." },
+        { "name": "hexU59 (final board, U595)",     "path": "hexMCU/cube/hexU59" },
+        { "name": "hexU54 (Nucleo-U545RE-Q)",       "path": "hexMCU/cube/hexU54" },
+        { "name": "host (PC emulator)",             "path": "hexMCU/host" }
+    ],
+    "settings": {
+        // The board and host folders are listed above on their own: don't
+        // show them a second time inside the first folder. (Patterns are
+        // relative to each folder, so these only match in the first one.)
+        "files.exclude": {
+            "hexMCU/cube": true,
+            "hexMCU/host": true,
+            "hexMCU/build": true
+        },
+
+        // The build button builds the "active folder". By default CMake
+        // makes the folder of the file you're editing active -- so editing
+        // anything in src/ made the shared folder active, which has no
+        // CMakeLists.txt, and it asked for a kit. Keep hexU59 active
+        // instead; switch with the folder name in the status bar (or
+        // "CMake: Select Active Folder").
+        "cmake.autoSelectActiveFolder": false,
+        "cmake.defaultActiveFolder": "hexU59 (final board, U595)",
+        "cmake.ignoreCMakeListsMissing": true,
+        "stm32cube-ide-clangd.path": "cube",
+        "stm32cube-ide-clangd.arguments": [
+            "starm-clangd",
+            "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-gcc*",
+            "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-g++*"
+        ]
+    }
+}

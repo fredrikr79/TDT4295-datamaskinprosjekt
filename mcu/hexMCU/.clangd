@@ -1,0 +1,6 @@
+# clangd ("go to definition", includes, errors) for the shared code in src/:
+# use the final board's compile commands. Build cube/hexU59 once so the
+# file exists. Use cube/hexU54/build/Debug or build-host instead to see the
+# code as the Nucleo or the PC build sees it.
+CompileFlags:
+  CompilationDatabase: cube/hexU59/build/Debug

@@ -6,8 +6,9 @@ cmake_minimum_required(VERSION 3.22)
 #
 # User is free to modify the file as much as necessary
 #
-# The Nucleo-U545RE-Q build. The final board (STM32U595ZJT6) is
-# cube/hexU59/; both get our code from cmake/stm32u5.cmake.
+# The Nucleo-U545RE-Q build, kept to show how we developed before the PCB.
+# The final board (STM32U595ZJT6) is ../hexU59/; both get our code from
+# ../../cmake/stm32u5.cmake.
 
 # Setup compiler settings
 set(CMAKE_C_STANDARD 11)
@@ -21,7 +22,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME hexMCU)
+set(CMAKE_PROJECT_NAME hexU54)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -45,11 +46,11 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # ---------------------------------------------------------------------
-# hexMCU: our code, the STM32 port and TinyUSB (cmake/stm32u5.cmake)
+# hexMCU: our code, the STM32 port and TinyUSB (../../cmake/stm32u5.cmake)
 # USB controller: fsdev = U535/U545 (this Nucleo), dwc2 = U595/U5A5
 # ---------------------------------------------------------------------
 set(USB_IP fsdev)
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/stm32u5.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/stm32u5.cmake)
 hexmcu_stm32u5_setup(${CMAKE_PROJECT_NAME})
 
 # Add project symbols (macros)

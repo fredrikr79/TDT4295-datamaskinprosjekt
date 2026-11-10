@@ -1,7 +1,7 @@
 ## RGB LED
-set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_r_n_1]
-set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g_n_1]
-set_property -dict {PACKAGE_PIN B9 IOSTANDARD LVCMOS15} [get_ports led_b_n_1]
+set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_r_n]
+set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g_n]
+set_property -dict {PACKAGE_PIN B9 IOSTANDARD LVCMOS15} [get_ports led_b_n]
 
 # User button
 set_property -dict {PACKAGE_PIN A10 IOSTANDARD LVCMOS15} [get_ports user_btn]
@@ -80,5 +80,5 @@ create_clock -period 50.000 [get_ports clk_in]
 # MCU clock
 create_clock -period 40.000 -name ck_sck [get_ports ck_sck]
 set_clock_groups -asynchronous \
-    -group [get_clocks -of_objects [get_ports clk]] \
+    -group [get_clocks -of_objects [get_ports clk_in]] \
     -group [get_clocks ck_sck]

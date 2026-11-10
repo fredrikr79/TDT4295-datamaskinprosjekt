@@ -1,7 +1,7 @@
 module main #(
   parameter bit ON_BOARD_MEMORY = 1'b1
 )(
-    input wire       clk_in,
+    input wire clk_in,
     input wire user_btn,
 
     output wire [4:0] vga_r,
@@ -29,9 +29,10 @@ module main #(
 
   wire clk;
   // Main onboard clock
-  clk_wiz_0 clk_100 (
-    .clk_in1(clk_in),
-    .clk_out1(clk)
+  clk_wiz_0 clk_master (
+    .clk_in(clk_in),
+    .clk(clk),
+    .mem_clk(mem_clk)
   );
 
   logic active_area, pixel_pulse;

@@ -11,9 +11,9 @@ module spi #(
     inout wire [7:0] octo_spi,
     inout wire       acknack,
 
-    output wire       led_r_1,
-    output wire       led_g_1,
-    output wire       led_b_1,
+    output wire       led_r_n,
+    output wire       led_g_n,
+    output wire       led_b_n,
     output wire       ready,
 
     output wire out_almost_empty,
@@ -260,8 +260,8 @@ module spi #(
   );
 
   // DEBUG
-  assign led_r_1 = state[2];
-  assign led_g_1 = state[1];
-  assign led_b_1 = state[0];
+  assign led_r_n = state[2];
+  assign led_g_n = state[1];
+  assign led_b_n = state[0];
 
 endmodule

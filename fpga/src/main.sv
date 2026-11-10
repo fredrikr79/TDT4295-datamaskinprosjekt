@@ -19,9 +19,9 @@ module main #(
 
     inout wire [7:0] octo_spi,
 
-    output wire led_r_1,
-    led_g_1,
-    led_b_1,
+    output wire led_r_n,
+    led_g_n,
+    led_b_n,
     ready,
     acknack
 );
@@ -124,9 +124,9 @@ module main #(
       .ck_rst(ck_rst),
       .octo_spi(octo_spi),
       .acknack(acknack),
-      .led_r_1(led_r_1),
-      .led_g_1(led_g_1),
-      .led_b_1(led_b_1),
+      .led_r_n(led_r_n),
+      .led_g_n(led_g_n),
+      .led_b_n(led_b_n),
       .ready(ready),
 
       .out_almost_empty(out_almost_empty),

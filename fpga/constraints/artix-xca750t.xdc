@@ -1,7 +1,7 @@
 ## RGB LED
-set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_r_1_1]
-set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g_1_1]
-set_property -dict {PACKAGE_PIN B9 IOSTANDARD LVCMOS15} [get_ports led_b_1_1]
+set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_r_n_1]
+set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g_n_1]
+set_property -dict {PACKAGE_PIN B9 IOSTANDARD LVCMOS15} [get_ports led_b_n_1]
 
 # User button
 set_property -dict {PACKAGE_PIN A10 IOSTANDARD LVCMOS15} [get_ports user_btn]

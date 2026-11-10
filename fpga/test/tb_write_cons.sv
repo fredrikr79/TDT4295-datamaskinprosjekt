@@ -52,9 +52,9 @@ module tb_write_cons #(
   );
 
   always @(posedge clk) begin
-    logic sampled_r_1ead_enable;
+    logic sampled_read_enable;
     integer sampled_fifo_ptr;
-    sampled_r_1ead_enable = write_cons_r_en;
+    sampled_read_enable = write_cons_r_en;
     sampled_fifo_ptr = fifo_ptr;
     #1;
     if (!ck_rst) begin
@@ -64,7 +64,7 @@ module tb_write_cons #(
         request_lengths[req_count] = mem_len;
         req_count = req_count + 1;
       end
-      if (mem_data_on_wire && !mem_busy && sampled_r_1ead_enable &&
+      if (mem_data_on_wire && !mem_busy && sampled_read_enable &&
           sampled_fifo_ptr >= HEADER_LEN) begin
         if (payload_count >= PAYLOAD_LEN) $fatal(1, "WRITE_CONS emitted too many payload samples");
         payload_seen[payload_count] = mem_in;

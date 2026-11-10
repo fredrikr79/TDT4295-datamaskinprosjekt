@@ -125,14 +125,18 @@ void plat_fpga_reset(bool hold)
  * are ignored. No logging in here: that's a blocking UART send. */
 #define BUTTON_DEBOUNCE_MS 50u
 
-static volatile bool button_pressed;
+static volatile bool     button_pressed;
+static volatile uint32_t button_edges;      /* every interrupt, bounces too */
+static volatile uint32_t button_presses;    /* after the debounce           */
 
 static void button_edge(void)
 {
     static uint32_t last;
     uint32_t now = HAL_GetTick();
+    button_edges++;
     if (now - last < BUTTON_DEBOUNCE_MS) return;
     last = now;
+    button_presses++;
     button_pressed = true;
 }
 
@@ -161,8 +165,28 @@ bool plat_button_pressed(void)
 {
     if (!button_pressed) return false;
     button_pressed = false;
-    LOG_WARN("Button ws pressedd");
     return true;
+}
+
+/* For the console's "button" test: the pin right now (true = held down),
+ * read straight from the pin, and how many interrupts and presses there
+ * have been. A pin that changes with no interrupts = the EXTI side is
+ * wrong; a pin that never changes = the button or its wiring. */
+bool plat_button_down(void)
+{
+#if defined(USER_BUTTON_Pin)                /* PCB: to GND, pull-up */
+    return HAL_GPIO_ReadPin(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin) == GPIO_PIN_RESET;
+#elif defined(B1_Pin)                       /* Nucleo: active high */
+    return HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) == GPIO_PIN_SET;
+#else
+    return false;
+#endif
+}
+
+void plat_button_counts(uint32_t *edges, uint32_t *presses)
+{
+    *edges   = button_edges;
+    *presses = button_presses;
 }
 
 /* ---- misc ------------------------------------------------------------------ */

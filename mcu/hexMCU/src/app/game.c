@@ -317,11 +317,12 @@ static void run_frame(uint32_t n)
 {
     (void)n;
 
-    fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
-        velocity_box.box, box, velocity_box.length
-    );
-    player_box_cmd.done = update_player_callback;
-    fpga_submit(&player_box_cmd);
+    //comment out for testing
+    // fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
+    //     velocity_box.box, box, velocity_box.length
+    // );
+    // player_box_cmd.done = update_player_callback;
+    // fpga_submit(&player_box_cmd);
     
     /* TODO: update + draw */
 

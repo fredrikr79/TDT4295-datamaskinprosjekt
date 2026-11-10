@@ -675,6 +675,18 @@ static void cmd_demo(int argc, char **argv)
     demo_list();
 }
 
+/* log_raw formats into a buffer of its own, so a long text is cut short:
+ * print it a line at a time. */
+static void print_lines(const char *s)
+{
+    while (*s) {
+        const char *e = strchr(s, '\n');
+        int n = e ? (int)(e - s + 1) : (int)strlen(s);
+        log_raw("%.*s", n, s);
+        s += n;
+    }
+}
+
 static void cmd_led(int argc, char **argv)
 {
     static const struct { const char *name; uint8_t rgb; } colours[] = {
@@ -689,7 +701,7 @@ static void cmd_led(int argc, char **argv)
     } else if (argc == 2 && !strcmp(argv[1], "pins")) {
         static char buf[320];
         plat_led_pins(buf, sizeof buf);
-        log_raw("%s", buf);
+        print_lines(buf);
         return;
     } else if (argc == 2 && !strcmp(argv[1], "cycle")) {
         led_cycle();
@@ -710,6 +722,82 @@ static void cmd_led(int argc, char **argv)
         }
     }
     log_raw("led: %s\r\n", led_now());
+}
+
+/* button             the board button now: up/down, presses so far
+ * button watch       for BUTTON_WATCH_MS, every change of the pin and every
+ *                    press the interrupt sees, then what that means
+ * Reads the pin directly as well as counting interrupts, so it tells a
+ * dead button from a button whose interrupt isn't set up. */
+#define BUTTON_WATCH_MS 15000u
+
+static struct {
+    bool     on;
+    uint32_t until;
+    bool     down;                  /* pin, last poll       */
+    uint32_t edges, presses;        /* at the last poll     */
+    uint32_t edges0, presses0;      /* when the watch began */
+    uint32_t changes;               /* pin changes seen     */
+} bw;
+
+static void button_watch_poll(void)
+{
+    if (!bw.on) return;
+    uint32_t now = plat_millis(), edges, presses;
+    bool down = plat_button_down();
+    plat_button_counts(&edges, &presses);
+
+    if (down != bw.down) {
+        bw.down = down;
+        bw.changes++;
+        log_raw("button: pin %s (%s) at %lu ms\r\n", down ? "DOWN" : "up",
+                down ? "pressed" : "released", (unsigned long)now);
+    }
+    if (presses != bw.presses || edges != bw.edges) {
+        log_raw("button: interrupt, press #%lu (%lu edges so far, bounces included)\r\n",
+                (unsigned long)(presses - bw.presses0), (unsigned long)(edges - bw.edges0));
+        bw.presses = presses;
+        bw.edges   = edges;
+    }
+    if ((int32_t)(now - bw.until) < 0) return;
+
+    bw.on = false;
+    uint32_t p = presses - bw.presses0, e = edges - bw.edges0;
+    log_raw("button watch done: pin changed %lu times, %lu presses through the interrupt (%lu edges)\r\n",
+            (unsigned long)bw.changes, (unsigned long)p, (unsigned long)e);
+    if (bw.changes == 0 && p == 0)
+        log_raw("  -> nothing at all: the pin never moved. The button, its wiring, or the "
+                "pull-up (USER_BUTTON: pull-up in CubeMX)\r\n");
+    else if (bw.changes > 0 && p == 0)
+        log_raw("  -> the pin works but no interrupt: check EXTI13 is enabled in CubeMX's NVIC "
+                "tab and that EXTI13_IRQHandler calls HAL_GPIO_EXTI_IRQHandler\r\n");
+    else if (bw.changes == 0 && p > 0)
+        log_raw("  -> interrupts but the pin looked still: presses shorter than a poll; fine\r\n");
+    else
+        log_raw("  -> the button works\r\n");
+}
+
+static void cmd_button(int argc, char **argv)
+{
+    uint32_t edges, presses;
+    plat_button_counts(&edges, &presses);
+    if (argc == 2 && !strcmp(argv[1], "watch")) {
+        bw.on       = true;
+        bw.until    = plat_millis() + BUTTON_WATCH_MS;
+        bw.down     = plat_button_down();
+        bw.edges    = bw.edges0   = edges;
+        bw.presses  = bw.presses0 = presses;
+        bw.changes  = 0;
+        log_raw("button watch: press the button a few times in the next %u s (now %s)\r\n",
+                BUTTON_WATCH_MS / 1000u, bw.down ? "DOWN" : "up");
+        return;
+    }
+    if (argc != 1) {
+        log_raw("usage: button [watch]\r\n");
+        return;
+    }
+    log_raw("button: %s now, %lu presses since start (%lu interrupt edges)\r\n",
+            plat_button_down() ? "DOWN" : "up", (unsigned long)presses, (unsigned long)edges);
 }
 
 /* sd                status: mounted?, size, free, the last thing that happened
@@ -840,6 +928,7 @@ static const cli_cmd_t cmds[] = {
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
     { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
+    { "button",  cmd_button,   "button [watch]      the board button now / watch it for 15 s" },
     { "sd",      cmd_sd,       "sd [ls [<folder>]]  SD card status (mounts now if it can) / list a folder" },
     { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
@@ -920,6 +1009,8 @@ void cli_init(void)
 
 void cli_poll(void)
 {
+    button_watch_poll();
+
     /* Results arrive through cli_done(), called from fpga_poll() just
      * before this. Here: retry a submit that found the queue full. */
     if (pend.waiting) {

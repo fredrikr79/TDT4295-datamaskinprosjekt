@@ -18,3 +18,6 @@ void plat_led_rgb(bool r, bool g, bool b);
 bool plat_fpga_done(void);          /* true: the FPGA has loaded its design */
 void plat_fpga_program(bool hold);  /* true: PROGRAM_B low (wipes the FPGA) */
 bool plat_button_pressed(void);     /* true once per press                  */
+
+bool plat_button_down(void);
+void plat_button_counts(uint32_t *edges, uint32_t *presses);

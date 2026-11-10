@@ -89,6 +89,13 @@ bool plat_button_pressed(void)
     return false;                   /* no board button on the PC */
 }
 
+bool plat_button_down(void) { return false; }
+
+void plat_button_counts(uint32_t *edges, uint32_t *presses)
+{
+    *edges = *presses = 0;
+}
+
 bool plat_exit(int code)
 {
     exit(code);      /* does not return */

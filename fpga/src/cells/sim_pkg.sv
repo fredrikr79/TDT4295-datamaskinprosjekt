@@ -55,7 +55,8 @@ package sim_pkg;
     MatLava  = 4'd4,
     MatAcid  = 4'd5,
     MatGOL   = 4'd6,
-    MatExplo = 4'd7
+    MatExplo = 4'd7,
+    MatIgneousStone = 4'd8
   } materials_e;
 
   // density: heavier materials sink in lighter ones
@@ -85,12 +86,14 @@ package sim_pkg;
       MatAcid:  rgb = 12'h8F0;  // acid green
       MatGOL:   rgb = 12'hEEE;  // off-white
       MatExplo: rgb = 12'hF44;
+      MatIgneousStone: rgb = 12'h777; // grey
       default:  rgb = 12'h001;  // MatAir, and every unassigned id
     endcase
     return color_pkg::color_t'(rgb);
   endfunction
 
   localparam int GolRefreshDelay = 'd100;
+  localparam int IgneousStoneThickness = 'd4;
 
   // Lookup table for materials
   function automatic material_props_t props(material_t m);
@@ -159,6 +162,15 @@ package sim_pkg;
         p.displaceable     = 1'b1;
         p.delay            = 'd1;
         p.blast_resistance = 'd2;
+      end
+      MatIgneousStone: begin
+        p.density          = 'd15;
+        p.falls            = 1'b0;
+        p.spreads          = 1'b0;
+        p.solid            = 1'b1;
+        p.displaceable     = 1'b0;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd3;
       end
       default: begin  // MatAir, and every unassigned id
         p.density          = 'd0;

@@ -154,6 +154,19 @@ package sim_rules;
       return 'hFF;
     end
   endfunction
+
+  function automatic logic [7:0] stone_generator_rules(input sim_pkg::neighbourhood_t stencil,
+                                                       input int sim_clk);
+    if (stencil.center[7:4] == sim_pkg::MatLava && sim_clk % sim_pkg::props(
+            sim_pkg::MatIgneousStone
+        ).delay == 'd0)
+      if (stencil.top[7:4] == sim_pkg::MatWater)
+        return {sim_pkg::MatIgneousStone, 4'(sim_pkg::IgneousStoneThickness)};
+      else if (stencil.top[7:4] == sim_pkg::MatIgneousStone && stencil.top[3:0] > 0)
+        return {sim_pkg::MatIgneousStone, stencil.top[3:0] - 4'd1};
+    return 'hFF;
+  endfunction
+
   function automatic sim_pkg::gravity_movement_t gravity_rules(
       ref sim_pkg::row_buffer_t output_buffers[2], input sim_pkg::neighbourhood_t stencil,
       input logic r, input int curr, input int counter);

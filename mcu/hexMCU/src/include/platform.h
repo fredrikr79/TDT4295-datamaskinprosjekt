@@ -1,9 +1,10 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 uint32_t plat_millis(void);
-void     plat_led_toggle(void);
+void plat_led_pins(char *buf, size_t n);
 bool     plat_fpga_ready_pin(void);
 
 /* Terminate the program. Returns false on targets where that makes no

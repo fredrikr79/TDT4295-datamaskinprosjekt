@@ -23,7 +23,15 @@ module main #(
     led_g_n,
     led_b_n,
     ready,
-    acknack
+    acknack,
+
+    // Memory signals
+    output logic mem_clk,
+    output logic mem_clk_n,
+    output logic mem_cs_n,
+    output logic mem_reset_n,
+    inout wire [7:0] mem_data_bus,
+    inout wire mem_rwds
 );
 
 
@@ -191,6 +199,27 @@ module main #(
     );
   end else begin : g_mem
 
+    memory memory (
+      .clk(clk),
+      .reset(~ck_rst),
+      .enable(1'b1),
+      .transaction_toggle(mem_toggle),
+      .next_transaction(mem_transaction),
+      .address(mem_addr),
+      .length(mem_len),
+      .write_data(mem_in),
+      .busy(mem_busy),
+      .data_on_cable(mem_data_on_wire),
+      .read_data(mem_out),
+
+      // Actual memory pins
+      .out_clk(mem_clk),
+      .out_clk_n(mem_clk_n),
+      .cs_n(mem_cs_n),
+      .reset_n(mem_reset_n),
+      .dq(mem_data_bus),
+      .rwds(mem_rwds)
+    );
   end
 
 endmodule

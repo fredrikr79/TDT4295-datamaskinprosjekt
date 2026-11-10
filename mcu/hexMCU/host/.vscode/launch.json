@@ -16,7 +16,7 @@
             "stopAtEntry": false,
             "externalConsole": false,
             "environment": [
-                { "name": "HEXMCU_SD",     "value": "${workspaceFolder}/../sd" },
+                { "name": "HEXMCU_SD",     "value": "${workspaceFolder}/sd" },
                 { "name": "ASAN_OPTIONS",  "value": "detect_leaks=0:abort_on_error=1" },
                 { "name": "UBSAN_OPTIONS", "value": "print_stacktrace=1" }
             ],
@@ -36,7 +36,7 @@
             "miDebuggerPath": "/usr/bin/gdb",
             "externalConsole": false,
             "environment": [
-                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/../sd" },
+                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/sd" },
                 { "name": "ASAN_OPTIONS", "value": "detect_leaks=0:abort_on_error=1" }
             ]
         },
@@ -53,7 +53,7 @@
             "miDebuggerPath": "/usr/bin/gdb",
             "externalConsole": false,
             "environment": [
-                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/../sd" },
+                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/sd" },
                 { "name": "ASAN_OPTIONS", "value": "detect_leaks=0:abort_on_error=1" }
             ]
         }

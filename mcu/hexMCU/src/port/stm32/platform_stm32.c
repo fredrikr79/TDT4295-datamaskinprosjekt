@@ -6,35 +6,71 @@
 #include "frame_sync.h"
 #include "main.h"
 
+#include <stdio.h>
+#include <string.h>
+
 uint32_t plat_millis(void)
 {
     return HAL_GetTick();
 }
 
 /* ---- LED ------------------------------------------------------------------
- * Nucleo: the green LED (high = on). PCB: an RGB LED with a common anode on
- * 3V3, so each colour lights when its pin is LOW (LED_R / LED_G / LED_B,
- * initial level High = off in CubeMX). */
-void plat_led_toggle(void)
-{
-#if defined(LED_GREEN_Pin)                  /* Nucleo */
-    HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
-#elif defined(LED_R_Pin)                    /* PCB */
-    HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin);
+ * Only led.c calls these. Nucleo: the green LED (high = on). PCB: an RGB LED
+ * with a common anode on 3V3, so each colour lights when its pin is LOW.
+ *
+ * The pins come from CubeMX's user labels, spelled exactly LED_R, LED_G,
+ * LED_B (PCB) or LED_GREEN (Nucleo): main.h then has LED_R_Pin and so on.
+ * Any other spelling and this file wouldn't see the pins, so that's a build
+ * error instead of an LED that silently does nothing. */
+#if defined(LED_R_Pin) && defined(LED_G_Pin) && defined(LED_B_Pin)
+#define LED_IS_RGB 1
+#elif defined(LED_GREEN_Pin)
+#define LED_IS_RGB 0
+#else
+#error "No status LED pins in main.h: label them LED_R, LED_G, LED_B in CubeMX (PCB) or LED_GREEN (Nucleo)"
 #endif
-}
 
 /* Each colour on or off. The Nucleo has only green: it shows "any colour". */
 void plat_led_rgb(bool r, bool g, bool b)
 {
-#if defined(LED_R_Pin)
+#if LED_IS_RGB
     HAL_GPIO_WritePin(LED_R_GPIO_Port, LED_R_Pin, r ? GPIO_PIN_RESET : GPIO_PIN_SET);
     HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin, g ? GPIO_PIN_RESET : GPIO_PIN_SET);
     HAL_GPIO_WritePin(LED_B_GPIO_Port, LED_B_Pin, b ? GPIO_PIN_RESET : GPIO_PIN_SET);
-#elif defined(LED_GREEN_Pin)
-    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, (r || g || b) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 #else
-    (void)r; (void)g; (void)b;
+    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, (r || g || b) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+#endif
+}
+
+/* "led pins": what the LED pins really are, read back from the GPIO
+ * registers, to tell a software problem from a board problem. Per pin: its
+ * port and number, its mode, what the MCU drives, and what the pin reads.
+ * Driven low, reads low, still dark: the LED, its resistor or its 3V3 side.
+ * A port whose clock is off reads all zeros: "input, set low, reads low". */
+static void led_pin_line(char *p, size_t n, const char *name, GPIO_TypeDef *port, uint16_t pin)
+{
+    static const char *const modes[] = { "input", "output", "alternate function", "analog" };
+    unsigned i    = (unsigned)__builtin_ctz(pin);
+    unsigned mode = (port->MODER >> (2u * i)) & 3u;
+    char     pl   = (char)('A' + ((uintptr_t)port - (uintptr_t)GPIOA) / ((uintptr_t)GPIOB - (uintptr_t)GPIOA));
+    snprintf(p, n, "  %-9s P%c%-2u %s%s, set %s, reads %s%s\r\n", name, pl, i, modes[mode],
+             mode == 1 && ((port->OTYPER >> i) & 1u) ? " (open drain)" : "",
+             ((port->ODR >> i) & 1u) ? "high" : "low",
+             ((port->IDR >> i) & 1u) ? "high" : "low",
+             port->MODER == 0 ? "  (port clock off? all registers read 0)" : "");
+}
+
+void plat_led_pins(char *buf, size_t n)
+{
+    size_t k;
+#if LED_IS_RGB
+    snprintf(buf, n, "RGB LED, common anode: a colour is on when its pin is LOW\r\n");
+    k = strlen(buf); led_pin_line(buf + k, n - k, "LED_R", LED_R_GPIO_Port, LED_R_Pin);
+    k = strlen(buf); led_pin_line(buf + k, n - k, "LED_G", LED_G_GPIO_Port, LED_G_Pin);
+    k = strlen(buf); led_pin_line(buf + k, n - k, "LED_B", LED_B_GPIO_Port, LED_B_Pin);
+#else
+    snprintf(buf, n, "Nucleo green LED: on when its pin is HIGH\r\n");
+    k = strlen(buf); led_pin_line(buf + k, n - k, "LED_GREEN", LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 #endif
 }
 
@@ -125,7 +161,7 @@ bool plat_button_pressed(void)
 {
     if (!button_pressed) return false;
     button_pressed = false;
-    LOG_WARN("Button goes gangdamstyle");
+    LOG_WARN("Button ws pressedd");
     return true;
 }
 

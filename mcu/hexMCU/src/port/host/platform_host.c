@@ -10,6 +10,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 /* Driven by the fake FPGA in transport_host.c. */
 bool host_ready_pin;
@@ -38,11 +39,6 @@ uint32_t plat_millis(void)
  * plat_millis, keep these dependency-free. */
 static bool led_r, led_g, led_b;
 
-void plat_led_toggle(void)
-{
-    led_r = !led_r;
-}
-
 void plat_led_rgb(bool r, bool g, bool b)
 {
     led_r = r;
@@ -50,7 +46,13 @@ void plat_led_rgb(bool r, bool g, bool b)
     led_b = b;
 }
 
-/* FPGA lines  */
+void plat_led_pins(char *buf, size_t n)
+{
+    snprintf(buf, n, "no LED on the PC; it would show: red %s, green %s, blue %s\r\n",
+             led_r ? "on" : "off", led_g ? "on" : "off", led_b ? "on" : "off");
+}
+
+/* ---- FPGA lines ----------------------------------------------------------- */
 bool plat_fpga_ready_pin(void)
 {
     return host_ready_pin;
@@ -81,7 +83,7 @@ void plat_fpga_reset(bool hold)
     else { fake_fpga_reset(); host_ready_pin = true; }   /* a new FPGA: new session, memory empty */
 }
 
-/* the rest */
+/* ---- the rest --------------------------------------------------------------- */
 bool plat_button_pressed(void)
 {
     return false;                   /* no board button on the PC */

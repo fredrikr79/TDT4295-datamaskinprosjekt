@@ -383,13 +383,6 @@ static bool parse_num(const char *s, unsigned long min, unsigned long max,
 
 static void cmd_help(int argc, char **argv);
 
-static void cmd_toggle(int argc, char **argv)
-{
-    (void)argc; (void)argv;
-    plat_led_toggle();
-    log_raw("led toggled\r\n");
-}
-
 /* parse_num + an error message naming the argument. */
 static bool parse_arg(const char *what, const char *s, unsigned long max,
                       unsigned long *out)
@@ -693,6 +686,11 @@ static void cmd_led(int argc, char **argv)
     } else if (argc == 2 && !strcmp(argv[1], "list")) {
         for (unsigned i = 0; i < LED_COUNT; i++)          /* in priority order */
             log_raw("  %-9s %s\r\n", led_id((led_state_t)i), led_name((led_state_t)i));
+    } else if (argc == 2 && !strcmp(argv[1], "pins")) {
+        static char buf[320];
+        plat_led_pins(buf, sizeof buf);
+        log_raw("%s", buf);
+        return;
     } else if (argc == 2 && !strcmp(argv[1], "cycle")) {
         led_cycle();
     } else if (argc == 3 && !strcmp(argv[1], "show")) {
@@ -707,7 +705,7 @@ static void cmd_led(int argc, char **argv)
         for (i = 0; i < sizeof colours / sizeof colours[0]; i++)
             if (!strcmp(argv[1], colours[i].name)) { led_test(colours[i].rgb); break; }
         if (i == sizeof colours / sizeof colours[0]) {
-            log_raw("usage: led [r|g|b|y|c|m|w|off | list | show <state> | cycle | auto]\r\n");
+            log_raw("usage: led [r|g|b|y|c|m|w|off | list | show <state> | cycle | pins | auto]\r\n");
             return;
         }
     }
@@ -834,7 +832,6 @@ static void cmd_exit(int argc, char **argv)
 }
 static const cli_cmd_t cmds[] = {
     { "help",    cmd_help,     "list commands" },
-    { "toggle",  cmd_toggle,   "toggle user LED" },
     { "send",    cmd_send,     "send <op> [<x> <y> [<n> | <w> <h>]]  header only, e.g. send 0xB0" },
     { "read",    cmd_read,     "read <len>          e.g. read 4" },
     { "fecho",   cmd_fecho,    "fecho [-r N] <n> | <b0> <b1> ...  echo random / given bytes, N rounds" },
@@ -842,7 +839,7 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
-    { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | auto]  test the LED, no FPGA needed" },
+    { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
     { "sd",      cmd_sd,       "sd [ls [<folder>]]  SD card status (mounts now if it can) / list a folder" },
     { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },

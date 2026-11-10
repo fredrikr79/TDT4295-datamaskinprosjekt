@@ -61,6 +61,7 @@ void led_poll(void);                          /* main loop: updates the LED    *
  * led_now() names what's shown; led_id()/led_name() are for listing the
  * states ("led list"); led_find() is the state with that id, -1 if none. */
 #define LED_CYCLE_MS 4000u      /* two rounds of a 2 s pattern */
+/* (The pins themselves: plat_led_pins(), "led pins" on the console.) */
 
 void        led_test(uint8_t rgb);
 void        led_show(led_state_t s);

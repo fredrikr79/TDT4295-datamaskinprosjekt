@@ -52,9 +52,10 @@ projects (see *How the code is laid out* below).
 
 ### 4. Set up the STM32 projects
 
-1. Open the STM32 extension (its icon in the left bar).
+1. Open the STM32 extension (its icon in the left bar) and click
+   *Setup STM32Cube project*.
 2. It lists the projects it found: **hexU59**, **hexU54** (and **host**). Pick
-   the one to set up, click *Setup STM32Cube project*, then **Save and close**.
+   the one to set up, then click **Save and close**.
 3. Do the same for the other board if you need it.
 
 This only has to be done once per project and machine.

@@ -42,10 +42,10 @@ module tb_sim #(
     .clk                          (clk),
     .pulse_new_row                (pulse_new_row),
     .sim_running                  (sim_running),
-    .buffers                      (buffers),
+    .input_buffers                      (buffers),
     .pulse_row_done               (pulse_row_done),
     .pulse_transaction_pair_done  (pulse_transaction_pair_done),
-    .res_buffer                   (res_buffer)
+    .output_buffers                   (res_buffer)
   );
 
   // Return the res_buffer index selected by the DUT's convention:

@@ -60,9 +60,9 @@ module tb_write_sprite_upload #(
   );
 
   always @(posedge clk) begin
-    logic sampled_read_enable;
+    logic sampled_r_1ead_enable;
     integer sampled_fifo_ptr;
-    sampled_read_enable = write_sprite_r_en;
+    sampled_r_1ead_enable = write_sprite_r_en;
     sampled_fifo_ptr = fifo_ptr;
     #1;
     if (!ck_rst) begin
@@ -79,7 +79,7 @@ module tb_write_sprite_upload #(
         write_count = write_count + 1;
       end
       if (write_sprite_valid) valid_count = valid_count + 1;
-        if (mem_data_on_wire && !mem_busy && sampled_read_enable &&
+        if (mem_data_on_wire && !mem_busy && sampled_r_1ead_enable &&
           sampled_fifo_ptr >= HEADER_LEN) begin
         if (payload_count >= PAYLOAD_LEN) $fatal(1, "WRITE_SPRITE transferred too many bytes");
         payload_seen[payload_count] = mem_in;

@@ -1,9 +1,8 @@
 module main #(
   parameter bit ON_BOARD_MEMORY = 1'b1
 )(
-    input wire       clk,
-    input wire [3:2] sw,
-    input wire [3:0] btn,
+    input wire       clk_in,
+    input wire user_btn,
 
     output wire [4:0] vga_r,
     vga_b,
@@ -19,14 +18,22 @@ module main #(
     ck_rst,
 
     inout wire [7:0] octo_spi,
-    inout wire [3:0] led,
 
-    output wire led_r,
-    led_g,
-    led_b,
+    output wire led_r_1,
+    led_g_1,
+    led_b_1,
     ready,
     acknack
 );
+
+
+  wire clk;
+  // Main onboard clock
+  clk_wiz_0 clk_100 (
+    .clk_in1(clk_in),
+    .clk_out1(clk)
+  );
+
   logic active_area, pixel_pulse;
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
@@ -117,10 +124,9 @@ module main #(
       .ck_rst(ck_rst),
       .octo_spi(octo_spi),
       .acknack(acknack),
-      .led(led),
-      .led_r(led_r),
-      .led_g(led_g),
-      .led_b(led_b),
+      .led_r_1(led_r_1),
+      .led_g_1(led_g_1),
+      .led_b_1(led_b_1),
       .ready(ready),
 
       .out_almost_empty(out_almost_empty),
@@ -166,7 +172,7 @@ module main #(
   //   .res_buffer(res_buffers)
   // );
 
-  if(ON_BOARD_MEMORY) begin : g_mem
+  if(ON_BOARD_MEMORY) begin : g_mem_onboard
     memory_onboard memory (
       .clk(clk),
       .reset(~ck_rst),
@@ -183,6 +189,8 @@ module main #(
       .data_on_cable(mem_data_on_wire),
       .read_data(mem_out)
     );
+  end else begin : g_mem
+
   end
 
 endmodule

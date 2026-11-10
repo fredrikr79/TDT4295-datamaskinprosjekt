@@ -38,9 +38,9 @@ module tb_spi;
   // ============================================================
 
   wire [3:0] led;
-  wire       led_r;
-  wire       led_g;
-  wire       led_b;
+  wire       led_r_1;
+  wire       led_g_1;
+  wire       led_b_1;
   wire       ready;
 
   wire       out_almost_empty;
@@ -86,9 +86,9 @@ module tb_spi;
       .acknack (acknack),
 
       .led   (led),
-      .led_r(led_r),
-      .led_g(led_g),
-      .led_b(led_b),
+      .led_r_1(led_r_1),
+      .led_g_1(led_g_1),
+      .led_b_1(led_b_1),
       .ready (ready),
 
       .out_almost_empty(out_almost_empty),

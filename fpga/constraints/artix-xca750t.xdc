@@ -1,9 +1,7 @@
-## This file is a general .xdc for the Arty A7-35 Rev. D and Rev. E
-
 ## RGB LED
-set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_b]
-set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g]
-set_property -dict {PACKAGE_PIN B6 IOSTANDARD LVCMOS15} [get_ports led_r]
+set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports led_r_1_1]
+set_property -dict {PACKAGE_PIN A9 IOSTANDARD LVCMOS15} [get_ports led_g_1_1]
+set_property -dict {PACKAGE_PIN B9 IOSTANDARD LVCMOS15} [get_ports led_b_1_1]
 
 # User button
 set_property -dict {PACKAGE_PIN A10 IOSTANDARD LVCMOS15} [get_ports user_btn]
@@ -76,7 +74,11 @@ set_property -dict {PACKAGE_PIN M4  IOSTANDARD LVCMOS33} [get_ports vga_vsync]
 
 # Occilator
 ## Clock signal
-set_property -dict {PACKAGE_PIN N11 IOSTANDARD LVCMOS33} [get_ports clk]
-create_clock -period 50.000 -name clk_20MHz [get_ports clk]
+set_property -dict {PACKAGE_PIN N11 IOSTANDARD LVCMOS33} [get_ports clk_in]
+create_clock -period 50.000 [get_ports clk_in]
 
-
+# MCU clock
+create_clock -period 40.000 -name ck_sck [get_ports ck_sck]
+set_clock_groups -asynchronous \
+    -group [get_clocks -of_objects [get_ports clk]] \
+    -group [get_clocks ck_sck]

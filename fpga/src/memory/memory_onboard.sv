@@ -1,5 +1,5 @@
 module memory_onboard #(
-    parameter int MEM_SIZE = 65536
+    parameter int MEM_SIZE = 300000
 ) (
     // Input from FPGA
     input logic clk,
@@ -29,7 +29,7 @@ module memory_onboard #(
     // ----------------------------------------
     // Internal byte-addressable memory
     // ----------------------------------------
-
+    (* ram_style = "block" *)
     logic [7:0] memory [0:MEM_SIZE-1];
 
     // ----------------------------------------

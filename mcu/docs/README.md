@@ -12,8 +12,9 @@ It builds for three targets, all from the same code in `hexMCU/src/`:
 | Target | What it is |
 |---|---|
 | **hexU59** | the final PCB, STM32U595ZJT6 |
-| **hexU54** | the Nucleo-U545RE-Q dev board we used before the PCB existed |
+| **hexU54** | the Nucleo-U545RE-Q dev board we used before the PCB existed. **Doesn't link right now**, see *Known issues* |
 | **host** | the PC emulator (Linux) |
+| **n6test** | a USB-only test program for the Nucleo-N657X0-Q. Not in the workspace, see *The N6 USB test* |
 
 ---
 
@@ -79,8 +80,9 @@ Press F5 again (continue) to run after it stops at `main()`.
 - **PCB:** connect an ST-LINK to the SWD programming header, and power the
   board first (see *Using the board*).
 
-The build button in the bottom bar builds the **active folder**, hexU59 by
-default. Click the folder name next to it to switch to hexU54 or host.
+**The build button in the bottom bar** only becomes usable after you have
+built once through *Run and Debug*. After that, a menu next to it lets you pick
+the target to build (hexU59, hexU54 or host).
 
 ### If you change pins or peripherals in CubeMX
 
@@ -117,10 +119,11 @@ mcu/
     │   └── port/
     │       ├── stm32/      OCTOSPI, SD card (FileX), UART, GPIO, usb/
     │       └── host/       fake FPGA, SDL window, a folder as SD card
-    ├── cmake/              sources.cmake, stm32u5.cmake, tinyusb_patches.cmake
+    ├── cmake/              sources.cmake, stm32u5.cmake, tinyusb_patches.cmake, n6_usbtest.cmake
     ├── cube/
     │   ├── hexU59/         final board: hexU59.ioc, Core/, Drivers/, CMakeLists.txt
-    │   └── hexU54/         Nucleo: hexU54.ioc, Core/, Drivers/, CMakeLists.txt
+    │   ├── hexU54/         Nucleo: hexU54.ioc, Core/, Drivers/, CMakeLists.txt
+    │   └── n6test/         USB test on the Nucleo-N657X0-Q                [not in the workspace]
     ├── host/               host CMakeLists.txt, .vscode/ (tasks, debug), card.img
     ├── third_party/        git submodules: tinyusb, SDL                   [hidden]
     └── build/              host build output                             [hidden]
@@ -155,8 +158,62 @@ TinyUSB and SDL in `third_party/`). So each project is a folder of its own.
 - `cube/hexU59` and `cube/hexU54` differ only in CubeMX's generated files
   (`Core/`, `Drivers/`, startup file, linker script) and the USB controller:
   OTG_HS with UCPD on the U595, the full-speed controller on the U545.
+- `cube/n6test` builds only the USB part, through `cmake/n6_usbtest.cmake`
+  (see *The N6 USB test*).
 - `third_party/` is not ours and is not changed. Our TinyUSB fixes live in
   `cmake/tinyusb_patches.cmake` and `src/port/stm32/usb/`.
+
+---
+
+## The N6 USB test
+
+`hexMCU/cube/n6test` is a small program for the **Nucleo-N657X0-Q** that only
+tests USB input. We used it to develop and debug the USB host before the PCB
+existed, since the N6 has the same high-speed USB controller as the U595 (the
+U545 doesn't). It shares most of the USB code with the real builds
+(`src/port/stm32/usb/`, TinyUSB with our fixes), but builds through its own
+`cmake/n6_usbtest.cmake` instead of `stm32u5.cmake`, with none of the game.
+
+It is not in the workspace. To build and flash it, open **`hexMCU/cube/n6test`
+as the root folder** in VS Code (*File → Open Folder…*), set it up with
+*Setup STM32Cube project* as above, and use *Run and Debug*.
+
+---
+
+## Known issues
+
+### hexU54 (the Nucleo) doesn't link
+
+Building hexU54 now stops with:
+
+```
+RAM:      744640 B       256 KB    284.06%
+collect2: error: ld returned 1 exit status
+```
+
+The rooms grew to the final screen size: `src/include/rooms.h` changed from
+
+```c
+#define ROOM_X 40
+#define ROOM_Y 60
+```
+
+to
+
+```c
+#define ROOM_X 640
+#define ROOM_Y 360
+```
+
+and a whole room is kept in RAM while it's loaded or saved. That fits in the
+U595's 2.5 MB, but not in the U545's 256 KB.
+
+- **To build hexU54 anyway**, for example to test something else on the
+  Nucleo: set `ROOM_X` and `ROOM_Y` back to 40 and 60 for that build.
+- **The real fix** would be to load and save a room a smaller chunk at a time
+  (a few rows from the SD card, send them to the FPGA, the next few rows, …)
+  instead of through one buffer for the whole room. We didn't, since the U595
+  has the memory; the report discusses this choice in the section on the MCU.
 
 ---
 

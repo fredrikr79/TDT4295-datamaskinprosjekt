@@ -1,4 +1,6 @@
 {
+    // Flash the Nucleo-U545RE-Q and debug it. (The host configurations moved
+    // to hexMCU/host/.vscode/launch.json.)
     "version": "0.2.0",
     "configurations": [
         {
@@ -11,41 +13,6 @@
             "runEntry": "main",
             "imagesAndSymbols": [
                 { "imageFileName": "${command:st-stm32-ide-debug-launch.get-projects-binary-from-context1}" }
-            ]
-        },
-        {
-            "type": "cppdbg",
-            "request": "launch",
-            "name": "Host: game (gdb)",
-            "program": "${workspaceFolder}/build/host/hexmcu_host",
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build host",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "stopAtEntry": false,
-            "externalConsole": false,
-            "environment": [
-                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/sd" },
-                { "name": "ASAN_OPTIONS", "value": "detect_leaks=0:abort_on_error=1" },
-                { "name": "UBSAN_OPTIONS","value": "print_stacktrace=1" }
-            ],
-            "setupCommands": [
-                { "text": "-enable-pretty-printing", "ignoreFailures": true }
-            ]
-        },
-        {
-            "type": "cppdbg",
-            "request": "launch",
-            "name": "Host: test_host (gdb)",
-            "program": "${workspaceFolder}/build/host/test_host",
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build host",
-            "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "externalConsole": false,
-            "environment": [
-                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/sd" },
-                { "name": "ASAN_OPTIONS", "value": "detect_leaks=0:abort_on_error=1" }
             ]
         }
     ]

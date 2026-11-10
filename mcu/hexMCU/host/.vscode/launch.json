@@ -1,0 +1,61 @@
+{
+    // The host build under gdb (needs the Microsoft C/C++ extension for
+    // "cppdbg"). Each one builds first. ${workspaceFolder} is hexMCU/host;
+    // the programs run from hexMCU/, as with the old Makefile.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Host: game (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../build/host/hexmcu_host",
+            "cwd": "${workspaceFolder}/..",
+            "preLaunchTask": "host: before the game",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "stopAtEntry": false,
+            "externalConsole": false,
+            "environment": [
+                { "name": "HEXMCU_SD",     "value": "${workspaceFolder}/../sd" },
+                { "name": "ASAN_OPTIONS",  "value": "detect_leaks=0:abort_on_error=1" },
+                { "name": "UBSAN_OPTIONS", "value": "print_stacktrace=1" }
+            ],
+            "setupCommands": [
+                { "text": "-enable-pretty-printing", "ignoreFailures": true }
+            ]
+        },
+        {
+            "name": "Host: test_host (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../build/host/test_host",
+            "args": ["${workspaceFolder}/test565.bmp"],
+            "cwd": "${workspaceFolder}/..",
+            "preLaunchTask": "host: before test_host",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "externalConsole": false,
+            "environment": [
+                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/../sd" },
+                { "name": "ASAN_OPTIONS", "value": "detect_leaks=0:abort_on_error=1" }
+            ]
+        },
+        {
+            // as "make test ARGS=--errors=2": 2 % of transfers fail, to watch the resync
+            "name": "Host: test_host, 2 % errors (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../build/host/test_host",
+            "args": ["--errors=2", "${workspaceFolder}/test565.bmp"],
+            "cwd": "${workspaceFolder}/..",
+            "preLaunchTask": "host: before test_host",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "externalConsole": false,
+            "environment": [
+                { "name": "HEXMCU_SD",    "value": "${workspaceFolder}/../sd" },
+                { "name": "ASAN_OPTIONS", "value": "detect_leaks=0:abort_on_error=1" }
+            ]
+        }
+    ]
+}

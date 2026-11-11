@@ -15,10 +15,9 @@ module memory_controller (
     output logic busy,
     data_on_cable,
     output logic [7:0] read_data,
+    output logic run_clock,
 
     // Memory pins
-    output logic out_clk,
-    output logic out_clk_n,
     output logic cs_n,
     output logic reset_n,
     inout wire [7:0] dq,
@@ -52,72 +51,58 @@ module memory_controller (
     current_state == memory_pkg::READING ||
     current_state == memory_pkg::WRITING;
 
-  logic run_memory_clock;
-
   always_comb begin
     case (current_state)
       memory_pkg::IDLE: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 1;
-        run_memory_clock = 0;
+        run_clock = 0;
       end
       memory_pkg::STARTING_TRANSACTION: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 1;
-        run_memory_clock = 0;
+        run_clock = 0;
       end
       memory_pkg::SENDING_CMD: begin
         dq_oe = 1;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::SENDING_ADDRESS: begin
         dq_oe = 1;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::WAITING_ON_LATENCY: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::READING: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::WRITING: begin
         dq_oe = 1;
         rwds_oe = 1;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       default: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 1;
-        run_memory_clock = 0;
+        run_clock = 0;
       end
     endcase
   end
-
-
-  divised_clock #(
-      .N(2)
-  ) memory_clock_generator (
-      .old_clock(clk),
-      .new_clock(out_clk),
-      .enable(enable),
-      .reset(~run_memory_clock | reset)
-  );
-
-  assign out_clk_n = ~out_clk;
 
   logic reset_byte_counter;
   assign reset_byte_counter = (current_state == previous_state) ? 0 : 1;

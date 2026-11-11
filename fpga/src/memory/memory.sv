@@ -16,8 +16,7 @@ module memory (
     output logic [7:0] read_data,
 
     // Memory pins
-    output logic out_clk,
-    output logic out_clk_n,
+    output logic run_clock,
     output logic cs_n,
     output logic reset_n,
     inout wire [7:0] dq,
@@ -52,10 +51,9 @@ module memory (
       .length(controller_length),
       .write_data(controller_write_data),
       .busy(controller_busy),
+      .run_clock(run_clock),
       .data_on_cable(controller_data_on_cable),
       .read_data(controller_read_data),
-      .out_clk,
-      .out_clk_n,
       .reset_n,
       .dq,
       .cs_n,

@@ -35,13 +35,15 @@ module main #(
 );
 
 
-  wire clk;
+  wire mem_run_clock;
+  wire clk, mem_clk_raw;
   // Main onboard clock
   clk_wiz_0 clk_master (
     .clk_in(clk_in),
     .clk(clk),
-    .mem_clk(mem_clk)
+    .mem_clk(mem_clk_raw)
   );
+  assign mem_clk = mem_run_clock ? mem_clk_raw : 0;
 
   logic active_area, pixel_pulse;
   vga_sync_params::x_coordinate_t coord_x;
@@ -210,12 +212,11 @@ module main #(
       .length(mem_len),
       .write_data(mem_in),
       .busy(mem_busy),
+      .run_clock(mem_run_clock),
       .data_on_cable(mem_data_on_wire),
       .read_data(mem_out),
 
       // Actual memory pins
-      .out_clk(mem_clk),
-      .out_clk_n(mem_clk_n),
       .cs_n(mem_cs_n),
       .reset_n(mem_reset_n),
       .dq(mem_data_bus),

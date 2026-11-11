@@ -80,7 +80,7 @@ module memory_initializer (
           write_data: '{
             0: 8'hFF,
             1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
-            default: 'hFF
+            default: 'h00
           }
       },
       '{
@@ -96,7 +96,7 @@ module memory_initializer (
           write_data: '{
             0: 8'hFF,
             1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
-            default: 'hFF
+            default: 'h00
           }
       },
       '{

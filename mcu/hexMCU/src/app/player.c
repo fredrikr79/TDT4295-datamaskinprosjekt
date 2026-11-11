@@ -5,7 +5,7 @@
 #include <math.h>
 #include <stdint.h>
 
-float move_force = 0;
+float move_direction = 0;
 bool jump_next_frame = false;
 
 uint16_t ticks_since_last_damage = 0;
@@ -194,14 +194,16 @@ void update_player(
     );
 
     // Accelerate from input
-    if (move_force)
+    if (move_direction)
     {
-        float move_force_from_max = copysignf(
-            fmaxf(PLAYER_MAX_MOVE - fabsf(player->velocity_x), 0),
-            move_force
+        float target_velocity = copysignf(
+            fmaxf(PLAYER_MAX_SPEED, 0),
+            move_direction
         );
-        if (move_force < move_force_from_max) force_x = move_force;
-        else force_x = move_force_from_max;
+        if (target_velocity < 0 && target_velocity < player->velocity_x)
+            player->velocity_x = target_velocity;
+        else if (0 < target_velocity && player->velocity_x < target_velocity)
+            player->velocity_x = target_velocity;
     }
     // Stop if no input and low velocity
     else if (fabsf(player->velocity_x) < 0.3) player->velocity_x = 0;
@@ -289,17 +291,17 @@ void update_player(
 
 void move_left()
 {
-    move_force = -1;
+    move_direction = -1;
 }
 
 void move_right()
 {
-    move_force = 1;
+    move_direction = 1;
 }
 
 void move_stop()
 {
-    move_force = 0;
+    move_direction = 0;
 }
 
 void start_jump()

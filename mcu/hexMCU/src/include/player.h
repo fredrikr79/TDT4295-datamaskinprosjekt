@@ -13,7 +13,7 @@
 #define JUMP_WATER 3
 #define JUMP_LAVA 1
 #define JUMP_ACID 2
-#define PLAYER_MAX_MOVE 5
+#define PLAYER_MAX_SPEED 5
 #define PLAYER_MAX_GRAVITY 7
 
 #define PLAYER_SIZE_X 8

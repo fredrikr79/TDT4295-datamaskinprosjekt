@@ -15,6 +15,7 @@ module memory_initializer (
   localparam int NInitTransactions = 10;
   localparam int TransactionCount  = $clog2(NInitTransactions + 1);
   typedef enum logic [1:0] {
+    WAIT_STARTUP,
     READY,
     WAIT_BUSY,
     WAIT_DONE
@@ -79,7 +80,7 @@ module memory_initializer (
           length: 2,
           write_data: '{
             0: 8'hFF,
-            1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
+            1: {1'b1, memory_pkg::MemoryClockType, 1'b0, 3'b000, 2'b00},
             default: 'h00
           }
       },
@@ -95,7 +96,7 @@ module memory_initializer (
           length: 2,
           write_data: '{
             0: 8'hFF,
-            1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
+            1: {1'b1, memory_pkg::MemoryClockType, 1'b0, 3'b000, 2'b00},
             default: 'h00
           }
       },
@@ -107,6 +108,9 @@ module memory_initializer (
       }
   };
   logic [TransactionCount-1:0] i_current_transactions;
+  localparam int unsigned StartupCountWidth = (memory_pkg::StartupDelayCycles > 1)
+      ? $clog2(memory_pkg::StartupDelayCycles) : 1;
+  logic [StartupCountWidth-1:0] startup_count;
   memory_pkg::message_length_t current_byte_written;
   init_state_t state;
 
@@ -120,9 +124,16 @@ module memory_initializer (
       write <= 0;
       i_current_transactions <= 0;
       current_byte_written <= 0;
-      state <= READY;
+      startup_count <= '0;
+      state <= (memory_pkg::StartupDelayCycles == 0) ? READY : WAIT_STARTUP;
     end else if (enable) begin
       case (state)
+        WAIT_STARTUP: begin
+          if (startup_count == StartupCountWidth'(memory_pkg::StartupDelayCycles - 1))
+            state <= READY;
+          else
+            startup_count <= startup_count + 1'b1;
+        end
         READY: begin
           if (i_current_transactions == TransactionCount'(NInitTransactions)) begin
             finished <= 1;

@@ -32,6 +32,7 @@ package memory_pkg;
   } transaction_output_t;
 
   localparam int unsigned MaxMessageLength = 1022;
+  localparam int unsigned StartupDelayCycles = (config_pkg::GlobalClockFrequency / 1000) * 300;
 
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
       MaxMessageLength
@@ -99,6 +100,6 @@ package memory_pkg;
 
   // 1 - single ended clock
   // 0 - differential clock
-  localparam bit MemoryClockType = 0;
+  localparam bit MemoryClockType = 1;
 
 endpackage

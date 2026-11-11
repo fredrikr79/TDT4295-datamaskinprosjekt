@@ -26,7 +26,7 @@ module mem_txn_write (
           if (bytes_this_state == 1) begin
             out.next_state = memory_pkg::SENDING_ADDRESS;
             out.dq = address[31-:8];
-          end
+          end else out.dq = memory_pkg::WRITE;
         end
         memory_pkg::SENDING_ADDRESS: begin
           if (bytes_this_state < 3) out.dq = address[31-8*(bytes_this_state+1)-:8];
@@ -40,8 +40,8 @@ module mem_txn_write (
           end
         end
         memory_pkg::WRITING: begin
-          out.dq = write_data;
-          out.rwds = bytes_this_state[0];
+          out.dq   = write_data;
+          out.rwds = 1;
           if (memory_pkg::transaction_is_finished(
                   bytes_this_state, memory_pkg::WRITE, write_length
               )) begin

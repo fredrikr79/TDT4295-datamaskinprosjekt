@@ -18,7 +18,9 @@ module mem_txn_write_enable #(
           out.next_state = memory_pkg::SENDING_CMD;
           out.dq = memory_pkg::WRITE_ENABLE;
         end
-        memory_pkg::SENDING_CMD: if (bytes_this_state == 1) out.next_state = memory_pkg::IDLE;
+        memory_pkg::SENDING_CMD:
+        if (bytes_this_state == 1) out.next_state = memory_pkg::IDLE;
+        else out.dq = memory_pkg::WRITE_ENABLE;
         default: ;
       endcase
     end

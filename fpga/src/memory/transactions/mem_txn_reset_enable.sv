@@ -19,7 +19,9 @@ module mem_txn_reset_enable #(
           out.next_state = memory_pkg::SENDING_CMD;
           out.dq = memory_pkg::RESET_ENABLE;
         end
-        memory_pkg::SENDING_CMD: if (bytes_this_state == 1) out.next_state = memory_pkg::IDLE;
+        memory_pkg::SENDING_CMD:
+        if (bytes_this_state == 1) out.next_state = memory_pkg::IDLE;
+        else out.dq = memory_pkg::RESET_ENABLE;
         default: ;
       endcase
     end

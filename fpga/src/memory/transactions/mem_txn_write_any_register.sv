@@ -24,7 +24,7 @@ module mem_txn_write_any_register #(
           if (bytes_this_state == 1) begin
             out.next_state = memory_pkg::SENDING_ADDRESS;
             out.dq = address[31-:8];
-          end
+          end else out.dq = memory_pkg::WRITE_ANY_REGISTER;
         end
         memory_pkg::SENDING_ADDRESS: begin
           if (bytes_this_state < 3) out.dq = address[31-8*(bytes_this_state+1)-:8];
@@ -36,6 +36,7 @@ module mem_txn_write_any_register #(
         end
         memory_pkg::WRITING: begin
           out.dq = write_data;
+          out.rwds = 1;
           if (bytes_this_state == 1) out.next_state = memory_pkg::IDLE;
         end
         default: ;

@@ -24,7 +24,7 @@ module mem_txn_read_any_register (
           if (bytes_this_state == 1) begin
             out.next_state = memory_pkg::SENDING_ADDRESS;
             out.dq = address[31-:8];
-          end
+          end else out.dq = memory_pkg::READ_ANY_REGISTER;
         end
         memory_pkg::SENDING_ADDRESS: begin
           if (bytes_this_state < 3) out.dq = address[31-8*(bytes_this_state+1)-:8];

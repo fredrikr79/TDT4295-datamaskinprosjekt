@@ -23,7 +23,7 @@ module mem_txn_read_id (
           if (bytes_this_state == 1) begin
             out.next_state = memory_pkg::SENDING_ADDRESS;
             out.dq = 'h00;
-          end
+          end else out.dq = memory_pkg::READ_ID;
         end
         memory_pkg::SENDING_ADDRESS: begin
           if (bytes_this_state < 3) out.dq = 'h00;
@@ -32,7 +32,7 @@ module mem_txn_read_id (
         memory_pkg::WAITING_ON_LATENCY: begin
           if (memory_pkg::waiting_is_finished(bytes_this_state, double_latency)) begin
             out.next_state = memory_pkg::READING;
-            out.read_data = dq_in;
+            out.read_data  = dq_in;
           end
         end
         memory_pkg::READING: begin

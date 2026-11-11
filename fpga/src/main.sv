@@ -1,8 +1,8 @@
 module main #(
   parameter bit ON_BOARD_MEMORY = 1'b0
 )(
-    input logic clk_in,
-    input logic user_btn,
+    input wire clk_in,
+    input wire user_btn,
 
     output logic [4:0] vga_r,
     vga_b,
@@ -13,17 +13,17 @@ module main #(
 
 
     // SPI Signals
-    input logic ck_ss,
+    input wire ck_ss,
     ck_sck,
     ck_rst,
 
-    inout logic [7:0] octo_spi,
+    inout wire [7:0] octo_spi,
 
     output logic led_r_n,
     led_g_n,
     led_b_n,
     ready,
-    acknack,
+    output wire acknack,
 
     // Memory signals
     output logic mem_clk,

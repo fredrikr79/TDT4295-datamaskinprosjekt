@@ -124,7 +124,7 @@ module write_cons #(
               end else begin
                 write_cons_r_en <= mem_data_on_wire;
               end
-            end else if (!mem_busy && mem_data_on_wire) begin
+            end else if (mem_data_on_wire) begin
               // write byte next cycle.
               write_cons_r_en <= 1'b1;
             end
@@ -140,7 +140,7 @@ module write_cons #(
   end
 
   // DEBUG
-  assign led_r_n = 1'b0; // !((state == MEM_START) || (state == MEM_GET_X_TOP) || (state == MEM_GET_X_BOTTOM) || (state == MEM_GET_Y_TOP) || (state == MEM_GET_Y_BOTTOM) || (state == MEM_GET_MSG_LENGTH_TOP) || (state == MEM_GET_MSG_LENGTH_BOTTOM) || (state == MEM_GET_MEM_ADDR));
-  assign led_g_n = 1'b0; // state[1];
-  assign led_b_n = 1'b0; // !((state == MEM_INIT_REQ) || (state == MEM_DATA) || (state == MEM_DONE));
+  //assign led_r_n = !((state == MEM_INIT_REQ));
+  //assign led_g_n = state[1];
+  //assign led_b_n = !((state == MEM_DATA));
 endmodule

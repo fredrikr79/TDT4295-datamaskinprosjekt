@@ -287,7 +287,7 @@ module spi_processor #(
       end
       default: begin
         sprite_req_body = sprite_w_body;
-        sprite_req_op = LUT_DELETE;
+        sprite_req_op = LUT_WRITE;
       end
     endcase
   end
@@ -414,7 +414,7 @@ module spi_processor #(
               if (!read_box_done) begin
                 send_read_box <= 1'b1;
                 mem_addr <= read_box_mem_addr;
-                mem_transaction <= READ;
+                mem_transaction <= READ_ID;
               end else send_read_box <= 1'b0;
             end
 
@@ -501,7 +501,10 @@ module spi_processor #(
     .write_cons_done(write_cons_done),
     .write_cons_r_en(write_cons_r_en),
     .error_valid(write_cons_error_valid),
-    .error_code(write_cons_error_code)
+    .error_code(write_cons_error_code),
+    .led_r_n,
+    .led_g_n,
+    .led_b_n
   );
 
   read_cons read_cons_cmd_processor (

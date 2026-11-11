@@ -41,9 +41,25 @@ Without them, the USB code and the host build won't compile.
 - **For the host emulator:** gcc, CMake, Ninja and gdb, plus Microsoft's
   **C/C++** extension for debugging it in VS Code. The card image tasks need
   `dosfstools` and `mtools`, the test picture needs ImageMagick.
-- **STM32CubeMX**, only if you need to change pins or peripherals.
+- **STM32CubeMX**, to generate the CubeMX code (next step) and to change pins
+  or peripherals.
 
-### 3. Open the workspace
+### 3. Generate the CubeMX code
+
+`Drivers/` and `Middlewares/` (ST's HAL, CMSIS and FileX) are not in the git
+repo, so they have to be generated before anything builds. For each board you
+want to build:
+
+1. Open its `.ioc` in STM32CubeMX:
+   - `hexMCU/cube/hexU59/hexU59.ioc` (the final board)
+   - `hexMCU/cube/hexU54/hexU54.ioc` (the Nucleo)
+2. Click **Generate Code**, into the same folder.
+
+Do this **before** *Setup STM32Cube project* in the next steps. Generating
+doesn't touch our code: it's all outside `Core/`, and `main.c` only calls
+`myMain()`.
+
+### 4. Open the workspace
 
 In VS Code: *File → Open Workspace from File…* → **`mcu/mcu.code-workspace`**.
 
@@ -51,7 +67,7 @@ Open the workspace, not a folder: it shows the shared code and each project as
 folders of their own, which is what lets the STM32 extension find the board
 projects (see *How the code is laid out* below).
 
-### 4. Set up the STM32 projects
+### 5. Set up the STM32 projects
 
 1. Open the STM32 extension (its icon in the left bar) and click
    *Setup STM32Cube project*.
@@ -61,7 +77,11 @@ projects (see *How the code is laid out* below).
 
 This only has to be done once per project and machine.
 
-### 5. Build, flash and debug
+**If VS Code asks for a kit, ignore it** (close the question): the projects
+pick their compiler through their CMake presets. **If it asks for a configure
+preset (Debug or Release), pick Debug.**
+
+### 6. Build, flash and debug
 
 Everything is under **Run and Debug** (the play button with a bug, or F5).
 Pick a configuration in the list at the top and press F5:
@@ -176,7 +196,8 @@ U545 doesn't). It shares most of the USB code with the real builds
 
 It is not in the workspace. To build and flash it, open **`hexMCU/cube/n6test`
 as the root folder** in VS Code (*File → Open Folder…*), set it up with
-*Setup STM32Cube project* as above, and use *Run and Debug*.
+*Setup STM32Cube project* as above (generate its `.ioc` in CubeMX first, like
+the boards), and use *Run and Debug*.
 
 ---
 

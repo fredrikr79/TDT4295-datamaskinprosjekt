@@ -8,8 +8,10 @@ module mem_txn_write_disable #(
 );
 
   always_comb begin
-    out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE, read_data: 'h00};
-    if (!reset && enable) begin
+    out = '{rwds: 'b0, dq: 'h00, next_state: current_state, read_data: 'h00};
+    if (reset) begin
+      out.next_state = memory_pkg::IDLE;
+    end else if (enable) begin
       case (current_state)
         memory_pkg::IDLE: out.next_state = memory_pkg::STARTING_TRANSACTION;
         memory_pkg::STARTING_TRANSACTION: begin

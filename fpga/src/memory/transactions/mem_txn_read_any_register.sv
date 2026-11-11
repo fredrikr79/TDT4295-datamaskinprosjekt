@@ -10,7 +10,7 @@ module mem_txn_read_any_register (
 );
 
   always_comb begin
-    if (reset) out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE};
+    if (reset) out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE, read_data: 'h00};
     else if (enable) begin
       case (current_state)
         memory_pkg::IDLE: out.next_state = memory_pkg::STARTING_TRANSACTION;

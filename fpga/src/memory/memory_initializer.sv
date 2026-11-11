@@ -51,6 +51,12 @@ module memory_initializer (
           }
       },
       '{
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
+      },
+      '{
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00800004,
           length: 2,
@@ -59,6 +65,12 @@ module memory_initializer (
             {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
             {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
+      },
+      '{
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
       },
       // Write to configuration registers 1
       '{
@@ -70,12 +82,24 @@ module memory_initializer (
           }
       },
       '{
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
+      },
+      '{
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00800006,
           length: 2,
           write_data: {
             8'hFF, 1'b1, 1'b0, 1'b0, 3'b000, 2'b00, {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
+      },
+      '{
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
       }
   };
   logic [TransactionCount-1:0] i_current_transactions;

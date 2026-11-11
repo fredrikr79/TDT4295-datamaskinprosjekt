@@ -1,4 +1,6 @@
-module memory (
+module memory #(
+    parameter int unsigned StartupDelayCycles = (config_pkg::GlobalClockFrequency / 1000) * 300
+) (
     // input from fpga
     input logic clk,
     input logic reset,
@@ -71,7 +73,9 @@ module memory (
   );
 
 
-  memory_initializer initilizer (
+  memory_initializer #(
+      .StartupDelayCycles(StartupDelayCycles)
+  ) initilizer (
       .clk,
       .reset,
       .enable,

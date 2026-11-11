@@ -44,10 +44,10 @@ module memory_initializer (
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00000004,
           length: 2,
-          write_data: {
-            {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
-            {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          write_data: '{
+            0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
+            1: {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
+            2: {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
       },
       '{
@@ -60,10 +60,10 @@ module memory_initializer (
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00800004,
           length: 2,
-          write_data: {
-            {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
-            {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          write_data: '{
+            0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
+            1: {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
+            2: {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
       },
       '{
@@ -77,8 +77,10 @@ module memory_initializer (
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00000006,
           length: 2,
-          write_data: {
-            8'hFF, 1'b1, 1'b0, 1'b0, 3'b000, 2'b00, {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          write_data: '{
+            0: 8'hFF,
+            1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
+            2: {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
       },
       '{
@@ -91,8 +93,10 @@ module memory_initializer (
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00800006,
           length: 2,
-          write_data: {
-            8'hFF, 1'b1, 1'b0, 1'b0, 3'b000, 2'b00, {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          write_data: '{
+            0: 8'hFF,
+            1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
+            2: {(memory_pkg::MaxMessageLength - 2) {8'b0}}
           }
       },
       '{

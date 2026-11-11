@@ -1,5 +1,5 @@
 module main #(
-  parameter bit ON_BOARD_MEMORY = 1'b1
+  parameter bit ON_BOARD_MEMORY = 1'b0
 )(
     input wire clk_in,
     input wire user_btn,
@@ -27,7 +27,6 @@ module main #(
 
     // Memory signals
     output logic mem_clk,
-    output logic mem_clk_n,
     output logic mem_cs_n,
     output logic mem_reset_n,
     inout wire [7:0] mem_data_bus,

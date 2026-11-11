@@ -33,7 +33,10 @@ module main #(
     inout logic mem_rwds
 );
 
-
+  always @(posedge clk) begin
+    if(mem_rwds)
+      led_r_n <= 1'b0;
+  end
 
   wire mem_run_clock;
   wire clk, mem_clk_raw;
@@ -229,6 +232,27 @@ module main #(
       .rwds(mem_rwds)
     );
   end
+
+  logic [7:0] dq_in_q;
+  logic       rwds_in_q;
+  always_ff @(posedge clk) begin
+    dq_in_q   <= mem_data_bus;
+    rwds_in_q <= mem_rwds;
+  end
+
+  ila_2 ila (
+    .clk(clk),
+    .probe0(mem_run_clock),
+    .probe1(mem_clk),
+    .probe2(mem_cs_n),
+    .probe3(dq_in_q),
+    .probe4(mem_reset_n),
+    .probe5(rwds_in_q),
+    .probe6(mem_busy),
+    .probe7(mem_data_on_wire),
+    .probe8(ck_rst),
+    .probe9(mem_toggle)
+  );
 
 endmodule
 

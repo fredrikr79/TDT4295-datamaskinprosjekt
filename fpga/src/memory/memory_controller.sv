@@ -152,7 +152,12 @@ module memory_controller (
     end
   end
 
-  memory_pkg::transaction_output_t none_out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE};
+  memory_pkg::transaction_output_t none_out = '{
+      rwds: 'b0,
+      dq: 'h00,
+      next_state: memory_pkg::IDLE,
+      read_data: 'h00
+  };
   memory_pkg::transaction_output_t reset_enable_out;
   mem_txn_reset_enable reset_enable_transaction (
       .reset(reset),

@@ -19,8 +19,12 @@ module memory (
     output logic run_clock,
     output logic cs_n,
     output logic reset_n,
-    inout wire [7:0] dq,
-    inout wire rwds
+    input wire [7:0] dq_in,
+    output logic [7:0] dq_out,
+    output logic dq_oe,
+    input wire rwds_in,
+    output logic rwds_out,
+    output logic rwds_oe
 );
 
   logic initializer_finished, controller_busy, controller_data_on_cable;
@@ -55,9 +59,13 @@ module memory (
       .data_on_cable(controller_data_on_cable),
       .read_data(controller_read_data),
       .reset_n,
-      .dq,
+      .dq_in,
+      .dq_out,
+      .dq_oe,
       .cs_n,
-      .rwds
+      .rwds_in,
+      .rwds_out,
+      .rwds_oe
   );
 
 

@@ -20,28 +20,19 @@ module memory_controller (
     // Memory pins
     output logic cs_n,
     output logic reset_n,
-    inout wire [7:0] dq,
-    inout wire rwds
+    input wire [7:0] dq_in,
+    output logic [7:0] dq_out,
+    output logic dq_oe,
+    input wire rwds_in,
+    output logic rwds_out,
+    output logic rwds_oe
 );
-  logic                        [7:0] dq_in;
-  logic                        [7:0] dq_out;
-  logic                              rwds_in;
-  logic                              rwds_out;
-
-  logic                              dq_oe;
-  logic                              rwds_oe;
 
   logic                              double_latency;
   logic                              current_transaction_toggle;
   memory_pkg::address_t              current_address;
   memory_pkg::message_length_t       current_length;
 
-
-  assign dq_in   = dq;
-  assign rwds_in = rwds;
-
-  assign dq      = dq_oe ? dq_out : 8'bzzzzzzzz;
-  assign rwds    = rwds_oe ? rwds_out : 1'bz;
 
   assign reset_n = ~reset;
 

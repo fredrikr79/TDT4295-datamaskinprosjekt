@@ -29,12 +29,12 @@ module main #(
     output logic mem_clk,
     output logic mem_cs_n,
     output logic mem_reset_n,
-    inout logic [7:0] mem_data_bus,
-    inout logic mem_rwds
+    inout wire [7:0] mem_data_bus,
+    inout wire mem_rwds
 );
 
   always @(posedge clk) begin
-    if(mem_rwds)
+    if(mem_rwds_in)
       led_r_n <= 1'b0;
   end
 
@@ -64,6 +64,8 @@ module main #(
 
   // Memory signals
   logic mem_busy, mem_data_on_wire, mem_toggle;
+  wire [7:0] mem_dq_in;
+  wire mem_rwds_in;
   logic [31:0] mem_addr;
   logic [15:0]  mem_len;
   logic [7:0] mem_in, mem_out;
@@ -193,6 +195,9 @@ module main #(
   // );
 
   if(ON_BOARD_MEMORY) begin : g_mem_onboard
+    assign mem_dq_in = '0;
+    assign mem_rwds_in = 1'b0;
+    assign mem_run_clock = 1'b0;
     memory_onboard memory (
       .clk(clk),
       .reset(~ck_rst),
@@ -210,6 +215,25 @@ module main #(
       .read_data(mem_out)
     );
   end else begin : g_mem
+    wire [7:0] dq_out;
+    wire dq_oe;
+    wire rwds_out, rwds_oe;
+
+    for (genvar i = 0; i < 8; i++) begin : g_dq_buf
+      IOBUF dq_iobuf (
+        .IO(mem_data_bus[i]),
+        .I(dq_out[i]),
+        .O(mem_dq_in[i]),
+        .T(~dq_oe)
+      );
+    end
+
+    IOBUF rwds_iobuf (
+      .IO(mem_rwds),
+      .I(rwds_out),
+      .O(mem_rwds_in),
+      .T(~rwds_oe)
+    );
 
     memory memory (
       .clk(clk),
@@ -228,16 +252,20 @@ module main #(
       // Actual memory pins
       .cs_n(mem_cs_n),
       .reset_n(mem_reset_n),
-      .dq(mem_data_bus),
-      .rwds(mem_rwds)
+      .dq_in(mem_dq_in),
+      .dq_out(dq_out),
+      .dq_oe(dq_oe),
+      .rwds_in(mem_rwds_in),
+      .rwds_out(rwds_out),
+      .rwds_oe(rwds_oe)
     );
   end
 
   logic [7:0] dq_in_q;
   logic       rwds_in_q;
   always_ff @(posedge clk) begin
-    dq_in_q   <= mem_data_bus;
-    rwds_in_q <= mem_rwds;
+    dq_in_q   <= mem_dq_in;
+    rwds_in_q <= mem_rwds_in;
   end
 
   ila_2 ila (
@@ -255,4 +283,3 @@ module main #(
   );
 
 endmodule
-

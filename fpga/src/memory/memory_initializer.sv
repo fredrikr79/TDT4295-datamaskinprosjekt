@@ -12,7 +12,7 @@ module memory_initializer (
     output logic [7:0] write
 );
 
-  localparam int NInitTransactions = 6;
+  localparam int NInitTransactions = 10;
   localparam int TransactionCount  = $clog2(NInitTransactions + 1);
   typedef enum logic [1:0] {
     READY,

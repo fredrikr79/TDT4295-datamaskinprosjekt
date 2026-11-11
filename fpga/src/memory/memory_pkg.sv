@@ -28,6 +28,7 @@ package memory_pkg;
     logic rwds;
     logic [7:0] dq;
     state_e next_state;
+    logic [7:0] read_data;
   } transaction_output_t;
 
   localparam int unsigned MaxMessageLength = 1022;

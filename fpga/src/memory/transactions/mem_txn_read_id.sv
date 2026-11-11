@@ -5,8 +5,7 @@ module mem_txn_read_id (
     input logic double_latency,
     input memory_pkg::state_e current_state,
     input memory_pkg::message_length_t bytes_this_state,
-    output memory_pkg::transaction_output_t out,
-    output logic [7:0] read_data
+    output memory_pkg::transaction_output_t out
 );
 
   always_comb begin
@@ -31,11 +30,11 @@ module mem_txn_read_id (
         memory_pkg::WAITING_ON_LATENCY: begin
           if (memory_pkg::waiting_is_finished(bytes_this_state, double_latency)) begin
             out.next_state = memory_pkg::READING;
-            read_data = dq_in;
+            out.read_data = dq_in;
           end
         end
         memory_pkg::READING: begin
-          read_data = dq_in;
+          out.read_data = dq_in;
           if (memory_pkg::transaction_is_finished(bytes_this_state, memory_pkg::READ_ID, 0))
             out.next_state = memory_pkg::IDLE;
         end

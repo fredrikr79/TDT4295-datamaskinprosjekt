@@ -123,6 +123,7 @@ module memory_controller (
     current_state <= transaction_out.next_state;
     dq_out <= transaction_out.dq;
     rwds_out <= transaction_out.rwds;
+    read_data <= transaction_out.read_data;
   endfunction
 
   always_ff @(posedge clk) begin
@@ -217,7 +218,6 @@ module memory_controller (
       .dq_in(dq_in),
       .address(current_address),
       .double_latency,
-      .read_data,
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
       .out(read_any_register_txn_out)
@@ -228,7 +228,6 @@ module memory_controller (
       .enable(enable),
       .dq_in(dq_in),
       .double_latency,
-      .read_data,
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
       .out(read_id_txn_out)
@@ -241,7 +240,6 @@ module memory_controller (
       .address(current_address),
       .read_length(current_length),
       .double_latency,
-      .read_data,
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
       .out(read_txn_out)

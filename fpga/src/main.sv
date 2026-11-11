@@ -39,19 +39,12 @@ module main #(
   end
 
   wire mem_run_clock;
-  wire clk, mem_clk_raw;
+  wire clk;
   // Main onboard clock
   clk_wiz_0 clk_master (
     .clk_in(clk_in),
     .clk(clk),
-    .mem_clk(mem_clk_raw)
-  );
-
-  // Looked up usi
-  BUFGCE mem_clk_bufgce (
-    .O(mem_clk),
-    .CE(mem_run_clock),
-    .I(mem_clk_raw)
+    .mem_clk()
   );
 
   logic active_area, pixel_pulse;
@@ -195,6 +188,7 @@ module main #(
   // );
 
   if(ON_BOARD_MEMORY) begin : g_mem_onboard
+    assign mem_clk = 1'b0;
     assign mem_dq_in = '0;
     assign mem_rwds_in = 1'b0;
     assign mem_run_clock = 1'b0;
@@ -215,6 +209,26 @@ module main #(
       .read_data(mem_out)
     );
   end else begin : g_mem
+    // Each rising edge of mem_clk follows a controller update on negedge clk.
+    // ODDR registers both halves of the forwarded clock to avoid gating glitches.
+    logic mem_clk_phase;
+    always_ff @(posedge clk) begin
+      if (!ck_rst) mem_clk_phase <= 1'b0;
+      else mem_clk_phase <= ~mem_clk_phase;
+    end
+    wire mem_cycle_enable = mem_clk_phase;
+    wire mem_clk_drive = mem_clk_phase & mem_run_clock;
+
+    ODDR #(.DDR_CLK_EDGE("SAME_EDGE")) mem_clk_oddr (
+      .Q(mem_clk),
+      .C(clk),
+      .CE(1'b1),
+      .D1(mem_clk_drive),
+      .D2(mem_clk_drive),
+      .R(~ck_rst),
+      .S(1'b0)
+    );
+
     wire [7:0] dq_out;
     wire dq_oe;
     wire rwds_out, rwds_oe;
@@ -239,6 +253,7 @@ module main #(
       .clk(clk),
       .reset(~ck_rst),
       .enable(1'b1),
+      .controller_enable(mem_cycle_enable),
       .transaction_toggle(mem_toggle),
       .next_transaction(mem_transaction),
       .address(mem_addr),

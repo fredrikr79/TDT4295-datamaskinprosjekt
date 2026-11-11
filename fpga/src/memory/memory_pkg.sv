@@ -71,8 +71,7 @@ package memory_pkg;
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
     memory_pkg::message_length_t latency_count;
-    latency_count = 5'(MemoryClockSlowDownFactor)
-                    * (double_latency ? 5'(2 * LatencyCount) : 5'(LatencyCount));
+    latency_count = message_length_t'(double_latency ? 2 * LatencyCount : LatencyCount);
 
     return amount_of_latency_ticks > latency_count;
   endfunction

@@ -3,6 +3,7 @@ module memory (
     input logic clk,
     input logic reset,
     input logic enable,
+    input logic controller_enable,
     input logic transaction_toggle,
 
     input memory_pkg::transaction_e next_transaction,
@@ -33,7 +34,8 @@ module memory (
   logic [31:0] controller_address, initializer_address;
   memory_pkg::message_length_t initializer_length, controller_length;
   assign busy = initializer_finished ? controller_busy : 1;
-  assign data_on_cable = initializer_finished ? controller_data_on_cable : 0;
+  // The SPI handlers run on clk, so expose one data beat per memory-clock cycle.
+  assign data_on_cable = initializer_finished ? (controller_data_on_cable && controller_enable) : 0;
   assign read_data = initializer_finished ? controller_read_data : 'h00;
 
   assign controller_next_transaction = initializer_finished ? next_transaction
@@ -48,7 +50,7 @@ module memory (
   memory_controller controller (
       .clk,
       .reset,
-      .enable,
+      .enable(controller_enable),
       .transaction_toggle(controller_toggle),
       .next_transaction(controller_next_transaction),
       .address(controller_address),
@@ -73,6 +75,7 @@ module memory (
       .clk,
       .reset,
       .enable,
+      .controller_enable,
       .controller_busy,
       .controller_data_on_cable,
       .finished(initializer_finished),

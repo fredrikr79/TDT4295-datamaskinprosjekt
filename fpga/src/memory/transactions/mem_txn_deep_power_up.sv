@@ -7,8 +7,8 @@ module mem_txn_deep_power_up #(
 );
 
   always_comb begin
-    if (reset) out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE, read_data: 'h00};
-    else if (enable) begin
+    out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE, read_data: 'h00};
+    if (!reset && enable) begin
       case (current_state)
         memory_pkg::IDLE: out.next_state = memory_pkg::SENDING_CMD;
         memory_pkg::SENDING_CMD: out.next_state = memory_pkg::IDLE;

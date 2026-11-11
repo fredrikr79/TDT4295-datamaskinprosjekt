@@ -5,7 +5,7 @@
 #include <math.h>
 #include <stdint.h>
 
-float move_force = 0;
+float move_direction = 0;
 bool jump_next_frame = false;
 
 uint16_t ticks_since_last_damage = 0;
@@ -62,17 +62,17 @@ int player_in_portal(player_t player, portal_t *portals)
 
 static bool tile_has_damage(uint8_t id)
 {
-    return id == LAVA || id == ACID || id == EXPLOSION;
+    return id_is(id, LAVA) || id_is(id, ACID) || id_is(id, EXPLOSION);
 }
 
 static bool tile_has_raditation(uint8_t id)
 {
-    return id == GOL;
+    return id_is(id, GOL);
 }
 
 static bool tile_is_swimmable(uint8_t id)
 {
-    return id == WATER || id == LAVA || id == ACID;
+    return id_is(id, WATER) || id_is(id, LAVA) || id_is(id, ACID);
 }
 
 static void perform_jump(
@@ -134,14 +134,14 @@ void update_player(
         for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
         {
             uint8_t id = box[x + y*velocity_box.box.x2];
-            if (id == AIR) in_air++;
-            else if (id == STONE) in_stone++;
-            else if (id == SAND) in_sand++;
-            else if (id == WATER) in_water++;
-            else if (id == LAVA) in_lava++;
-            else if (id == ACID) in_acid++;
-            else if (id == GOL) in_gol++;
-            else if (id == EXPLOSION) in_explosion++;
+            if (id_is(id, AIR)) in_air++;
+            else if (id_is(id, STONE)) in_stone++;
+            else if (id_is(id, SAND)) in_sand++;
+            else if (id_is(id, WATER)) in_water++;
+            else if (id_is(id, LAVA)) in_lava++;
+            else if (id_is(id, ACID)) in_acid++;
+            else if (id_is(id, GOL)) in_gol++;
+            else if (id_is(id, EXPLOSION)) in_explosion++;
         }
     // LOG_DBG("in_air: %u", in_air);
     // LOG_DBG("in_stone: %u", in_stone);
@@ -151,6 +151,7 @@ void update_player(
     // LOG_DBG("in_acid: %u", in_acid);
     // LOG_DBG("in_gol: %u", in_gol);
     // LOG_DBG("in_explosion: %u", in_explosion);
+    uint16_t in_collision = in_stone + in_sand + in_gol;
     
     // Breathing
     if (!in_air && 0 < player->breath_meter) player->breath_meter--;
@@ -194,14 +195,16 @@ void update_player(
     );
 
     // Accelerate from input
-    if (move_force)
+    if (move_direction)
     {
-        float move_force_from_max = copysignf(
-            fmaxf(PLAYER_MAX_MOVE - fabsf(player->velocity_x), 0),
-            move_force
+        float target_velocity = copysignf(
+            fmaxf(PLAYER_MAX_SPEED, 0),
+            move_direction
         );
-        if (move_force < move_force_from_max) force_x = move_force;
-        else force_x = move_force_from_max;
+        if (target_velocity < 0 && target_velocity < player->velocity_x)
+            player->velocity_x = target_velocity;
+        else if (0 < target_velocity && player->velocity_x < target_velocity)
+            player->velocity_x = target_velocity;
     }
     // Stop if no input and low velocity
     else if (fabsf(player->velocity_x) < 0.3) player->velocity_x = 0;
@@ -226,11 +229,10 @@ void update_player(
         &(player->x), &(player->y),
         &(player->velocity_x), &(player->velocity_y),
         PLAYER_SIZE_X, PLAYER_SIZE_Y,
-        PLAYER_STEP_ALLOWANCE, 1,
+        PLAYER_STEP_ALLOWANCE, PLAYER_SAND_SLIDE,
         velocity_box, box
     );
     //LOG_DBG("3 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
-
 
     // Apply second half of velocity
     player->velocity_x += force_x / 2;
@@ -252,15 +254,13 @@ void update_player(
         damage_player(player, 1);
         player->burn_timer--;
     }
-    if (in_stone) damage_player(player, 1);
-    if (in_sand) damage_player(player, 1);
+    if (in_collision) damage_player(player, 1);
     if (in_lava)
     {
         damage_player(player, 3);
         player->burn_timer = PLAYER_BURN_TIME;
     }
     if (in_acid) damage_player(player, 3);
-    if (in_gol) damage_player(player, 2);
     if (in_explosion) damage_player(player, 5);
     if (on_radiation) damage_player(player, 2);
     if (player->breath_meter == 0) damage_player(player, 5);
@@ -278,6 +278,47 @@ void update_player(
         );
     }
 
+    // Move player up if stuck in ground
+    if (in_collision)
+    {
+        // Push vertically
+        uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y - 1;
+        for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
+        {
+            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
+            {
+                player->y--;
+                if (player->y < 0)
+                    player->y = 0;
+            }
+        }
+
+        // Push horizontally
+        uint8_t left = velocity_box.rel_x;
+        uint8_t right = velocity_box.rel_x + PLAYER_SIZE_X - 1;
+        uint8_t collisions_left = 0;
+        uint8_t collisions_right = 0;
+        for (uint8_t y = velocity_box.rel_y; y < velocity_box.rel_y + PLAYER_SIZE_Y; y++)
+        {
+            if (tile_has_collision(box[left + y*velocity_box.box.x2]))
+                collisions_left++;
+            if (tile_has_collision(box[right + y*velocity_box.box.x2]))
+                collisions_right++;
+        }
+        if (collisions_left < collisions_right)
+        {
+            player->x--;
+            if (player->x < 0)
+                player->x = 0;
+        }
+        else if (collisions_right < collisions_left)
+        {
+            player->x++;
+            if (ROOM_X <= player->x + PLAYER_SIZE_X)
+                player->x = ROOM_X - PLAYER_SIZE_X;
+        }
+    }
+
     // Create the next velocity box
     velocity_box_t next_velocity_box = create_velocity_box(
         player->x, player->y,
@@ -289,17 +330,17 @@ void update_player(
 
 void move_left()
 {
-    move_force = -1;
+    move_direction = -1;
 }
 
 void move_right()
 {
-    move_force = 1;
+    move_direction = 1;
 }
 
 void move_stop()
 {
-    move_force = 0;
+    move_direction = 0;
 }
 
 void start_jump()

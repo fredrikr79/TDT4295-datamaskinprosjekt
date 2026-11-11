@@ -20,8 +20,8 @@
 #include "cli.h"
 
 /* tuning */
-#define FIRST_ROOM_X    0u
-#define FIRST_ROOM_Y    0u
+#define FIRST_ROOM_X -3
+#define FIRST_ROOM_Y  0
 
 /* ======================================================================
  * The state machine

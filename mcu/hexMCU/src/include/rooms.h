@@ -84,4 +84,6 @@ typedef struct
 } portal_t;
 void init_empty_portals(portal_t *portals, uint8_t n_portals);
 
+bool id_is(uint8_t id, uint8_t target);
+
 #endif

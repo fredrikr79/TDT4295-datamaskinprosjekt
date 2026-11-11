@@ -62,17 +62,17 @@ int player_in_portal(player_t player, portal_t *portals)
 
 static bool tile_has_damage(uint8_t id)
 {
-    return id == LAVA || id == ACID || id == EXPLOSION;
+    return id_is(id, LAVA) || id_is(id, ACID) || id_is(id, EXPLOSION);
 }
 
 static bool tile_has_raditation(uint8_t id)
 {
-    return id == GOL;
+    return id_is(id, GOL);
 }
 
 static bool tile_is_swimmable(uint8_t id)
 {
-    return id == WATER || id == LAVA || id == ACID;
+    return id_is(id, WATER) || id_is(id, LAVA) || id_is(id, ACID);
 }
 
 static void perform_jump(
@@ -134,14 +134,14 @@ void update_player(
         for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
         {
             uint8_t id = box[x + y*velocity_box.box.x2];
-            if (id == AIR) in_air++;
-            else if (id == STONE) in_stone++;
-            else if (id == SAND) in_sand++;
-            else if (id == WATER) in_water++;
-            else if (id == LAVA) in_lava++;
-            else if (id == ACID) in_acid++;
-            else if (id == GOL) in_gol++;
-            else if (id == EXPLOSION) in_explosion++;
+            if (id_is(id, AIR)) in_air++;
+            else if (id_is(id, STONE)) in_stone++;
+            else if (id_is(id, SAND)) in_sand++;
+            else if (id_is(id, WATER)) in_water++;
+            else if (id_is(id, LAVA)) in_lava++;
+            else if (id_is(id, ACID)) in_acid++;
+            else if (id_is(id, GOL)) in_gol++;
+            else if (id_is(id, EXPLOSION)) in_explosion++;
         }
     // LOG_DBG("in_air: %u", in_air);
     // LOG_DBG("in_stone: %u", in_stone);
@@ -151,6 +151,7 @@ void update_player(
     // LOG_DBG("in_acid: %u", in_acid);
     // LOG_DBG("in_gol: %u", in_gol);
     // LOG_DBG("in_explosion: %u", in_explosion);
+    uint16_t in_collision = in_stone + in_sand + in_gol;
     
     // Breathing
     if (!in_air && 0 < player->breath_meter) player->breath_meter--;
@@ -253,15 +254,13 @@ void update_player(
         damage_player(player, 1);
         player->burn_timer--;
     }
-    if (in_stone) damage_player(player, 1);
-    if (in_sand) damage_player(player, 1);
+    if (in_collision) damage_player(player, 1);
     if (in_lava)
     {
         damage_player(player, 3);
         player->burn_timer = PLAYER_BURN_TIME;
     }
     if (in_acid) damage_player(player, 3);
-    if (in_gol) damage_player(player, 2);
     if (in_explosion) damage_player(player, 5);
     if (on_radiation) damage_player(player, 2);
     if (player->breath_meter == 0) damage_player(player, 5);
@@ -280,7 +279,7 @@ void update_player(
     }
 
     // Move player up if stuck in ground
-    if (in_stone || in_sand || in_gol || in_explosion)
+    if (in_collision)
     {
         // Push vertically
         uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y - 1;

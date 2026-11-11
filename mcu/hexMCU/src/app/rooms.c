@@ -492,3 +492,8 @@ void init_empty_portals(portal_t *portals, uint8_t n_portals)
     portals[i] = prt;
   }
 }
+
+bool id_is(uint8_t id, uint8_t target)
+{
+  return (id & 0b11110000) == target;
+}

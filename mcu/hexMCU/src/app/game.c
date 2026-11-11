@@ -67,8 +67,6 @@ static int next_room_y;             /* the y-coordinate of the next room */
 
 static player_t player;
 
-static portal_t portals[MAX_PORTALS] = {0};
-
 static uint8_t box[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
 static velocity_box_t velocity_box;
 
@@ -278,11 +276,6 @@ void set_player(player_t plr)
     player = plr;
 }
 
-void portals_init()
-{
-    init_empty_portals(portals, MAX_PORTALS);
-}
-
 /* Set the next velocity box */
 void set_next_velocity_box(velocity_box_t *vb)
 {
@@ -307,7 +300,7 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
     float old_x = player.x;
     float old_y = player.y;
 
-    update_player(&player, cmd->rx, velocity_box, portals);
+    update_player(&player, cmd->rx, velocity_box);
 
     if(player.x != old_x || player.y != old_y) funny_man_move(player.x, player.y);
 }

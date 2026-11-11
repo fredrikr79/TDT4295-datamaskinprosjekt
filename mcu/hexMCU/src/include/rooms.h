@@ -10,7 +10,7 @@
 #define ROOM_X 640
 #define ROOM_Y 360
 #define MAX_PORTALS 8
-#define DATA_MAX_SIZE (ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS)
+#define DATA_MAX_SIZE (1 + 14*MAX_PORTALS + ROOM_X*ROOM_Y*2)
 
 #define AIR 0 << 4
 #define STONE 1 << 4
@@ -68,6 +68,7 @@ room_status_t room_poll(void);
  * not done. Call it after fpga_abort_all(). false: nothing to resume. */
 bool room_resume(void);
 
+// Portals
 typedef struct
 {
     bool active;
@@ -82,8 +83,10 @@ typedef struct
     uint16_t dest_pos_x;
     uint16_t dest_pos_y;
 } portal_t;
-void init_empty_portals(portal_t *portals, uint8_t n_portals);
+void portals_init();
+portal_t *area_in_portal(float x1, float x2, float y1, float y2);
 
+// IDs
 bool id_is(uint8_t id, uint8_t target);
 
 #endif

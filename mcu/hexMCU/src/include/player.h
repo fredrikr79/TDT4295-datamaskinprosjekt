@@ -27,6 +27,7 @@
 #define PLAYER_HEAL_AMOUNT 5
 #define PLAYER_MAX_BREATH 250
 #define PLAYER_BURN_TIME 125
+#define PLAYER_PORTAL_EXHAUSTION 10
 
 typedef struct
 {
@@ -38,18 +39,16 @@ typedef struct
     uint16_t health;
     uint16_t breath_meter;
     uint16_t burn_timer;
+    uint8_t still_in_portal;
 } player_t;
 
 void update_player(
     player_t *player,
-    uint8_t *box, velocity_box_t velocity_box,
-    portal_t *portals
+    uint8_t *box, velocity_box_t velocity_box
 );
 void move_left();
 void move_right();
 void move_stop();
 void start_jump();
-
-int player_in_portal(player_t player, portal_t *portals);
 
 void player_init();

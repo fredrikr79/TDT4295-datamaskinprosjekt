@@ -46,12 +46,12 @@ bool perform_object_movement(
 )
 {
     // Debug info
-    LOG_DBG("---------------");
-    LOG_DBG(
-        "x: %f, y: %f, vel_x: %f, vel_y: %f",
-        *pos_x, *pos_y,
-        *velocity_x, *velocity_y
-    );
+    // LOG_DBG("---------------");
+    // LOG_DBG(
+    //     "x: %f, y: %f, vel_x: %f, vel_y: %f",
+    //     *pos_x, *pos_y,
+    //     *velocity_x, *velocity_y
+    // );
 
     // Set up read direction and origins
     bool x_is_right = 0 < *velocity_x;
@@ -139,7 +139,7 @@ bool perform_object_movement(
                     vertical_collision = true;
                     vertical_progress -= dir_y;
                 }
-                else if (slide_start ^ slide_end)
+                else if (slide_start ^ slide_end)  // BUG: Change out ^
                 {
                     uint8_t slide_amount = 0;
                     bool hit_wall = false;

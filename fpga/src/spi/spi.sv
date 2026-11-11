@@ -1,27 +1,27 @@
 module spi #(
     parameter bit DEBUG = 1'd1
 ) (
-    input wire clk,
-    input wire ck_ss,
-    input wire ck_sck,
-    input wire ck_rst,
-    input wire error_critical,
+    input logic clk,
+    input logic ck_ss,
+    input logic ck_sck,
+    input logic ck_rst,
+    input logic error_critical,
 
     // Octal SPI data bus
-    inout wire [7:0] octo_spi,
-    inout wire       acknack,
+    inout logic [7:0] octo_spi,
+    inout logic       acknack,
 
-    output wire       led_r_n,
-    output wire       led_g_n,
-    output wire       led_b_n,
-    output wire       ready,
+    output logic       led_r_n,
+    output logic       led_g_n,
+    output logic       led_b_n,
+    output logic       ready,
 
-    output wire out_almost_empty,
-    output wire out_empty,
-    output wire in_almost_full,
-    output wire in_full,
+    output logic out_almost_empty,
+    output logic out_empty,
+    output logic in_almost_full,
+    output logic in_full,
 
-    output wire sim_running,
+    output logic sim_running,
 
     // Memory
     input logic [7:0] mem_out,
@@ -255,13 +255,15 @@ module spi #(
       .sim_running(sim_running),
       .error_event(error_event),
       .error_valid(processor_error_valid),
-      .error_code(processor_error_code)
-
+      .error_code(processor_error_code),
+      .led_r_n,
+      .led_g_n,
+      .led_b_n
   );
 
-  // DEBUG
-  assign led_r_n = state[2];
-  assign led_g_n = state[1];
-  assign led_b_n = state[0];
+  // // DEBUG
+  // assign led_r_n = state[2];
+  // assign led_g_n = state[1];
+  // assign led_b_n = state[0];
 
 endmodule

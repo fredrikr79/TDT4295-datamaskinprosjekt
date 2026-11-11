@@ -1,25 +1,25 @@
 module main #(
   parameter bit ON_BOARD_MEMORY = 1'b0
 )(
-    input wire clk_in,
-    input wire user_btn,
+    input logic clk_in,
+    input logic user_btn,
 
-    output wire [4:0] vga_r,
+    output logic [4:0] vga_r,
     vga_b,
-    output wire [5:0] vga_g,
+    output logic [5:0] vga_g,
 
-    output wire vga_hsync,
+    output logic vga_hsync,
     vga_vsync,
 
 
     // SPI Signals
-    input wire ck_ss,
+    input logic ck_ss,
     ck_sck,
     ck_rst,
 
-    inout wire [7:0] octo_spi,
+    inout logic [7:0] octo_spi,
 
-    output wire led_r_n,
+    output logic led_r_n,
     led_g_n,
     led_b_n,
     ready,
@@ -29,9 +29,10 @@ module main #(
     output logic mem_clk,
     output logic mem_cs_n,
     output logic mem_reset_n,
-    inout wire [7:0] mem_data_bus,
-    inout wire mem_rwds
+    inout logic [7:0] mem_data_bus,
+    inout logic mem_rwds
 );
+
 
 
   wire mem_run_clock;
@@ -42,7 +43,13 @@ module main #(
     .clk(clk),
     .mem_clk(mem_clk_raw)
   );
-  assign mem_clk = mem_run_clock ? mem_clk_raw : 0;
+
+  // Looked up usi
+  BUFGCE mem_clk_bufgce (
+    .O(mem_clk),
+    .CE(mem_run_clock),
+    .I(mem_clk_raw)
+  );
 
   logic active_area, pixel_pulse;
   vga_sync_params::x_coordinate_t coord_x;

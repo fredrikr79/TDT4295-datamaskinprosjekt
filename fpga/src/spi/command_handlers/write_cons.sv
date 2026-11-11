@@ -15,6 +15,9 @@ module write_cons #(
     write_cons_r_en,
     mem_req,
     error_valid,
+    led_r_n,
+    led_g_n,
+    led_b_n,
     output logic [31:0] mem_addr
 );
 
@@ -135,4 +138,9 @@ module write_cons #(
       end
     end
   end
+
+  // DEBUG
+  assign led_r_n = 1'b0; // !((state == MEM_START) || (state == MEM_GET_X_TOP) || (state == MEM_GET_X_BOTTOM) || (state == MEM_GET_Y_TOP) || (state == MEM_GET_Y_BOTTOM) || (state == MEM_GET_MSG_LENGTH_TOP) || (state == MEM_GET_MSG_LENGTH_BOTTOM) || (state == MEM_GET_MEM_ADDR));
+  assign led_g_n = 1'b0; // state[1];
+  assign led_b_n = 1'b0; // !((state == MEM_INIT_REQ) || (state == MEM_DATA) || (state == MEM_DONE));
 endmodule

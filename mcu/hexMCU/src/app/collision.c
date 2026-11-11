@@ -139,7 +139,7 @@ bool perform_object_movement(
                     vertical_collision = true;
                     vertical_progress -= dir_y;
                 }
-                else if (slide_start ^ slide_end)  // BUG: Change out ^
+                else if ((slide_start && !slide_end) || (!slide_start && slide_end))
                 {
                     uint8_t slide_amount = 0;
                     bool hit_wall = false;
@@ -169,7 +169,7 @@ bool perform_object_movement(
                     }
                     if (0 < slide_amount)
                     {
-                        if (!(slide_end ^ x_is_right)) {
+                        if ((slide_end && x_is_right) || (!slide_end && !x_is_right)) {
                             horizontal_done = true;
                             horizontal_collision = true;
                         }

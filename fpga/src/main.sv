@@ -211,14 +211,13 @@ module main #(
       .read_data(mem_out)
     );
   end else begin : g_mem
-    // Each rising edge of mem_clk follows a controller update on negedge clk.
+    // CK is half the controller clock: one byte is sent on each CK edge.
     // ODDR registers both halves of the forwarded clock to avoid gating glitches.
     logic mem_clk_phase;
     always_ff @(posedge clk) begin
       if (!ck_rst) mem_clk_phase <= 1'b0;
       else mem_clk_phase <= ~mem_clk_phase;
     end
-    wire mem_cycle_enable = mem_clk_phase;
     wire mem_clk_drive = mem_clk_phase & mem_run_clock;
 
     // Mirror the ODDR input for the ILA; the ODDR output must drive only the pad.
@@ -263,7 +262,7 @@ module main #(
       .clk(clk),
       .reset(~ck_rst),
       .enable(1'b1),
-      .controller_enable(mem_cycle_enable),
+      .start_phase(mem_clk_phase),
       .transaction_toggle(mem_toggle),
       .next_transaction(mem_transaction),
       .address(mem_addr),

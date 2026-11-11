@@ -31,12 +31,12 @@ module mem_txn_write_any_register #(
           else begin
             out.next_state = memory_pkg::WRITING;
             out.dq = write_data;
-            out.rwds = 1;
+            out.rwds = 0;
           end
         end
         memory_pkg::WRITING: begin
           out.dq = write_data;
-          out.rwds = 1;
+          out.rwds = 0;
           if (bytes_this_state == 1) out.next_state = memory_pkg::IDLE;
         end
         default: ;

@@ -4,7 +4,6 @@ module memory_initializer #(
     input clk,
     reset,
     enable,
-    controller_enable,
     controller_busy,
     controller_data_on_cable,
     output logic finished,
@@ -83,7 +82,7 @@ module memory_initializer #(
           length: 2,
           write_data: '{
             0: 8'hFF,
-            1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
+            1: {1'b1, memory_pkg::MemoryClockType, 1'b0, 3'b000, 2'b00},
             default: 'h00
           }
       },
@@ -99,7 +98,7 @@ module memory_initializer #(
           length: 2,
           write_data: '{
             0: 8'hFF,
-            1: {1'b1, 1'b0, 1'b0, 3'b000, 2'b00},
+            1: {1'b1, memory_pkg::MemoryClockType, 1'b0, 3'b000, 2'b00},
             default: 'h00
           }
       },
@@ -154,7 +153,7 @@ module memory_initializer #(
           if (!controller_busy) begin
             i_current_transactions <= i_current_transactions + 1'b1;
             state <= READY;
-          end else if (controller_data_on_cable && controller_enable) begin
+          end else if (controller_data_on_cable) begin
             write <= InitTransactions[i_current_transactions].write_data[current_byte_written];
             current_byte_written <= current_byte_written + 1'b1;
           end

@@ -71,9 +71,12 @@ package memory_pkg;
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
     memory_pkg::message_length_t latency_count;
-    latency_count = message_length_t'(double_latency ? 2 * LatencyCount : LatencyCount);
+    // The controller counts bytes (both edges of CK), not full CK cycles.
+    latency_count = message_length_t'(2 * (double_latency ? 2 * LatencyCount : LatencyCount));
 
-    return amount_of_latency_ticks > latency_count;
+    // Count starts at zero on the first dummy edge; after exactly the
+    // requested number of edges, the next edge carries the first data byte.
+    return amount_of_latency_ticks >= latency_count - 1'b1;
   endfunction
   function automatic logic transaction_is_finished(input message_length_t amount_of_rws,
                                                    input transaction_e transaction,
@@ -98,6 +101,6 @@ package memory_pkg;
 
   // 1 - single ended clock
   // 0 - differential clock
-  localparam bit MemoryClockType = 0;
+  localparam bit MemoryClockType = 1;
 
 endpackage

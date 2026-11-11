@@ -4,6 +4,7 @@ module memory_controller (
     input logic clk,
     input logic reset,
     input logic enable,
+    input logic start_phase,
     input logic transaction_toggle,
 
     input memory_pkg::transaction_e next_transaction,
@@ -28,7 +29,8 @@ module memory_controller (
     output logic rwds_oe
 );
 
-  logic                              double_latency;
+  // S70KL/S70KS1283 is dual-die and requires fixed 2X latency.
+  wire                               double_latency = 1'b1;
   logic                              current_transaction_toggle;
   memory_pkg::address_t              current_address;
   memory_pkg::message_length_t       current_length;
@@ -82,7 +84,8 @@ module memory_controller (
       end
       memory_pkg::WRITING: begin
         dq_oe = 1;
-        rwds_oe = 1;
+        // RWDS masks array writes when high; register writes do not use a mask.
+        rwds_oe = current_transaction == memory_pkg::WRITE;
         cs_n = 0;
         run_clock = 1;
       end
@@ -121,7 +124,9 @@ module memory_controller (
     if (reset) begin
       current_transaction <= memory_pkg::NONE;
       current_transaction_toggle <= transaction_toggle;
-    end else if (enable && current_state == memory_pkg::IDLE) begin
+    // Capture on the clk edge that begins the high start phase. Otherwise the
+    // transaction could be cleared before the next allowed state update.
+    end else if (enable && !start_phase && current_state == memory_pkg::IDLE) begin
       if (transaction_toggle != current_transaction_toggle) begin
         current_transaction <= next_transaction;
         current_address <= address;
@@ -135,11 +140,10 @@ module memory_controller (
   always @(negedge clk) begin
     if (reset) begin
       update_outputs(find_transaction_output(memory_pkg::NONE));
-      double_latency <= 0;
-    end else if (enable) begin
+    end else if (enable &&
+                 (current_state != memory_pkg::IDLE &&
+                  current_state != memory_pkg::STARTING_TRANSACTION || start_phase)) begin
       update_outputs(find_transaction_output(current_transaction));
-      if (current_state == memory_pkg::SENDING_CMD || current_state == memory_pkg::SENDING_ADDRESS)
-        double_latency <= rwds_in;
     end
   end
 

@@ -36,12 +36,12 @@ module mem_txn_write (
           if (memory_pkg::waiting_is_finished(bytes_this_state, double_latency)) begin
             out.next_state = memory_pkg::WRITING;
             out.dq = write_data;
-            out.rwds = 1;
+            out.rwds = 0;
           end
         end
         memory_pkg::WRITING: begin
           out.dq   = write_data;
-          out.rwds = 1;
+          out.rwds = 0;
           if (memory_pkg::transaction_is_finished(
                   bytes_this_state, memory_pkg::WRITE, write_length
               )) begin

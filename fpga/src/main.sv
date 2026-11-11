@@ -39,6 +39,7 @@ module main #(
   end
 
   wire mem_run_clock;
+  wire mem_clk_debug;
   wire clk;
   // Main onboard clock
   clk_wiz_0 clk_master (
@@ -189,6 +190,7 @@ module main #(
 
   if(ON_BOARD_MEMORY) begin : g_mem_onboard
     assign mem_clk = 1'b0;
+    assign mem_clk_debug = 1'b0;
     assign mem_dq_in = '0;
     assign mem_rwds_in = 1'b0;
     assign mem_run_clock = 1'b0;
@@ -218,6 +220,14 @@ module main #(
     end
     wire mem_cycle_enable = mem_clk_phase;
     wire mem_clk_drive = mem_clk_phase & mem_run_clock;
+
+    // Mirror the ODDR input for the ILA; the ODDR output must drive only the pad.
+    logic mem_clk_debug_q;
+    always_ff @(posedge clk) begin
+      if (!ck_rst) mem_clk_debug_q <= 1'b0;
+      else mem_clk_debug_q <= mem_clk_drive;
+    end
+    assign mem_clk_debug = mem_clk_debug_q;
 
     ODDR #(.DDR_CLK_EDGE("SAME_EDGE")) mem_clk_oddr (
       .Q(mem_clk),
@@ -286,7 +296,7 @@ module main #(
   ila_2 ila (
     .clk(clk),
     .probe0(mem_run_clock),
-    .probe1(mem_clk),
+    .probe1(mem_clk_debug),
     .probe2(mem_cs_n),
     .probe3(dq_in_q),
     .probe4(mem_reset_n),

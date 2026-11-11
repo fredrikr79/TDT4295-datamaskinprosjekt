@@ -414,7 +414,7 @@ module spi_processor #(
               if (!read_box_done) begin
                 send_read_box <= 1'b1;
                 mem_addr <= read_box_mem_addr;
-                mem_transaction <= READ_ID;
+                mem_transaction <= READ;
               end else send_read_box <= 1'b0;
             end
 

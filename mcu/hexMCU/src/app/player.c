@@ -233,7 +233,6 @@ void update_player(
     );
     //LOG_DBG("3 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
-
     // Apply second half of velocity
     player->velocity_x += force_x / 2;
     player->velocity_y += force_y / 2;
@@ -278,6 +277,47 @@ void update_player(
             portal.dest_pos_x,
             portal.dest_pos_y
         );
+    }
+
+    // Move player up if stuck in ground
+    if (in_stone || in_sand || in_gol || in_explosion)
+    {
+        // Push vertically
+        uint8_t y = velocity_box.rel_y + PLAYER_SIZE_Y - 1;
+        for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
+        {
+            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
+            {
+                player->y--;
+                if (player->y < 0)
+                    player->y = 0;
+            }
+        }
+
+        // Push horizontally
+        uint8_t left = velocity_box.rel_x;
+        uint8_t right = velocity_box.rel_x + PLAYER_SIZE_X - 1;
+        uint8_t collisions_left = 0;
+        uint8_t collisions_right = 0;
+        for (uint8_t y = velocity_box.rel_y; y < velocity_box.rel_y + PLAYER_SIZE_Y; y++)
+        {
+            if (tile_has_collision(box[left + y*velocity_box.box.x2]))
+                collisions_left++;
+            if (tile_has_collision(box[right + y*velocity_box.box.x2]))
+                collisions_right++;
+        }
+        if (collisions_left < collisions_right)
+        {
+            player->x--;
+            if (player->x < 0)
+                player->x = 0;
+        }
+        else if (collisions_right < collisions_left)
+        {
+            player->x++;
+            if (ROOM_X <= player->x + PLAYER_SIZE_X)
+                player->x = ROOM_X - PLAYER_SIZE_X;
+        }
     }
 
     // Create the next velocity box

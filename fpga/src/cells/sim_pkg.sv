@@ -71,31 +71,14 @@ package sim_pkg;
     logic              displaceable;
     logic [3:0]        delay;
     logic [3:0]        blast_resistance;
-    color_pkg::color_t color;
   } material_props_t;
 
-  // Color lookup table
-  function automatic color_pkg::color_t material_color(input material_t m);
-    logic [11:0] rgb;
-    case (m)
-      MatStone:  rgb = 12'h777;  // grey
-      MatSand:   rgb = 12'hEC6;  // sandy yellow
-      MatWater:  rgb = 12'h25F;  // blue
-      MatLava:   rgb = 12'hF60;  // orange
-      MatAcid:   rgb = 12'h8F0;  // acid green
-      MatGOL:    rgb = 12'hEEE;  // off-white
-      MatExplo:  rgb = 12'hF44;
-      default:   rgb = 12'h001;  // MatAir, and every unassigned id
-    endcase
-    return color_pkg::color_t'(rgb);
-  endfunction
 
   localparam int GolRefreshDelay = 'd10000;
 
   // Lookup table for materials
   function automatic material_props_t props(material_t m);
     material_props_t p;
-    p.color = material_color(m);
     case (m)
       MatSand: begin
         p.density          = 4'd8;

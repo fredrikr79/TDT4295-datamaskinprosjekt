@@ -226,7 +226,7 @@ void update_player(
         &(player->x), &(player->y),
         &(player->velocity_x), &(player->velocity_y),
         PLAYER_SIZE_X, PLAYER_SIZE_Y,
-        PLAYER_STEP_ALLOWANCE, 1,
+        PLAYER_STEP_ALLOWANCE, PLAYER_SAND_SLIDE,
         velocity_box, box
     );
     //LOG_DBG("3 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);

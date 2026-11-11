@@ -45,6 +45,14 @@ bool perform_object_movement(
     velocity_box_t velocity_box, uint8_t *box
 )
 {
+    // Debug info
+    LOG_DBG("---------------");
+    LOG_DBG(
+        "x: %f, y: %f, vel_x: %f, vel_y: %f",
+        *pos_x, *pos_y,
+        *velocity_x, *velocity_y
+    );
+
     // Set up read direction and origins
     bool x_is_right = 0 < *velocity_x;
     bool y_is_down = 0 < *velocity_y;
@@ -54,33 +62,6 @@ bool perform_object_movement(
     if (y_is_down) base_y += size_y + 1;
     int dir_x = (!x_is_right) ? -1 : 1;
     int dir_y = (!y_is_down) ? -1 : 1;
-
-    // Calculate boundaries for collision detection
-    uint8_t last_end_x = velocity_box.rel_x;
-    uint8_t last_start_x = last_end_x + (int) floorf(*velocity_x);
-    if (x_is_right)
-    {
-        last_start_x = last_end_x + size_x;
-        last_end_x = last_start_x + (int) ceilf(*velocity_x);
-        if (last_end_x > velocity_box.box.x2) last_end_x = velocity_box.box.x2;
-    }
-    uint8_t last_end_y = velocity_box.rel_y;
-    uint8_t last_start_y = last_end_y + (int) floorf(*velocity_y);
-    if (y_is_down)
-    {
-        last_start_y = last_end_y + size_y;
-        last_end_y = last_start_y + (int) ceilf(*velocity_y);
-        if (last_end_y > velocity_box.box.y2) last_end_y = velocity_box.box.y2;
-    }
-
-    // Data for choosing the next axis
-    float prio_x = 1;
-    float prio_y = 1;
-    float y_of_x = fabsf(*velocity_y / *velocity_x);
-    float x_of_y = fabsf(*velocity_x / *velocity_y);
-    bool current_axis_x = fabsf(*velocity_y) < fabsf(*velocity_x);
-    if (current_axis_x) prio_y = y_of_x;
-    else prio_x = x_of_y;
 
     // Progression data
     int vertical_progress = 0;
@@ -103,11 +84,24 @@ bool perform_object_movement(
     bool horizontal_done = horizontal_end == 0;
     bool vertical_collision = false;
     bool horizontal_collision = false;
+    bool vertical_movement_after_step = true;
+    bool horizontal_movement_after_slide = true;
+
+    // Data for choosing the next axis
+    float prio_vertical = 1;
+    float prio_horizontal = 1;
+    float y_of_x = fabsf(*velocity_y / *velocity_x);
+    float x_of_y = fabsf(*velocity_x / *velocity_y);
+    bool going_vertically = fabsf(*velocity_x) < fabsf(*velocity_y);
+    if (vertical_done) going_vertically = false;
+    else if (horizontal_done) going_vertically = true;
+    if (going_vertically) prio_horizontal = x_of_y;
+    else prio_vertical = y_of_x;
 
     // Perform step wise checking for collision
-    while (vertical_done && horizontal_done)
+    while (!vertical_done || !horizontal_done)
     {
-        if (current_axis_x)
+        if (going_vertically)
         {
             uint8_t x_start = velocity_box.rel_x + horizontal_progress;
             uint8_t x_target = velocity_box.rel_x + size_x + horizontal_progress;
@@ -125,7 +119,7 @@ bool perform_object_movement(
                             slide_start = x + 1;
                             continue;
                         }
-                        else if (x_target - x - 1 < slide_ease)
+                        else if (x_target - x - 1 < slide_ease && slide_end < x_target - x)
                         {
                             slide_end = x_target - x;
                             continue;
@@ -159,7 +153,7 @@ bool perform_object_movement(
                         x_end = x + slide_start;
                     }
                     else x_end = x - slide_end;
-                    while (x == x_end)
+                    while (x != x_end)
                     {
                         for (uint8_t y = y_start; y < y_end; y++)
                         {
@@ -175,17 +169,26 @@ bool perform_object_movement(
                     }
                     if (0 < slide_amount)
                     {
-                        if (!(slide_end ^ x_is_right)) horizontal_done = true;
+                        if (!(slide_end ^ x_is_right)) {
+                            horizontal_done = true;
+                            horizontal_collision = true;
+                        }
                         horizontal_progress += slide_start ? slide_amount : -slide_amount;
+                        horizontal_movement_after_slide = false;
                     }
+                    // LOG_DBG(
+                    //     "Tried to slide %u. Slided %u. Hit wall: %u",
+                    //     slide_start + slide_end, slide_amount, hit_wall
+                    // );
                 }
             }
             vertical_progress += dir_y;
-            if (vertical_max <= vertical_progress)
+            vertical_movement_after_step = true;
+            if (abs(vertical_max) <= abs(vertical_progress))
             {
                 if (velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y)
                     vertical_collision = true;
-                else break;
+                vertical_done = true;
             }
         }
 
@@ -204,7 +207,7 @@ bool perform_object_movement(
                         step_start = y + 1;
                         continue;
                     }
-                    else if (y_target - y - 1 < step_allowance)
+                    else if (y_target - y - 1 < step_allowance && step_end < y_target - y)
                     {
                         step_end = y_target - y;
                         continue;
@@ -236,7 +239,7 @@ bool perform_object_movement(
                     }
                     uint8_t y = velocity_box.rel_x - 1 + vertical_progress;
                     uint8_t y_end = y - step_end;
-                    while (y < y_end)
+                    while (y > y_end)
                     {
                         for (uint8_t x = x_start; x < x_end; x++)
                         {
@@ -252,51 +255,71 @@ bool perform_object_movement(
                     }
                     if (0 < step_amount)
                     {
-                        if (y_is_down) vertical_done = true;
+                        if (y_is_down)
+                        {
+                            vertical_done = true;
+                            vertical_collision = true;
+                        }
                         vertical_progress -= step_amount;
+                        vertical_movement_after_step = false;
                     }
+                    // LOG_DBG(
+                    //     "Tried to step %u. Stepped %u. Hit roof: %u",
+                    //     step_end, step_amount, hit_roof
+                    // );
                 }
             }
             horizontal_progress += dir_x;
-            if (horizontal_max <= horizontal_progress)
+            horizontal_movement_after_slide = true;
+            if (abs(horizontal_max) <= abs(horizontal_progress))
             {
                 if (velocity_box.box.x1 + velocity_box.box.x2 == ROOM_X)
                     horizontal_collision = true;
-                else break;
+                horizontal_done = true;
             }
         }
 
         float one = 1;
-        float remainder_x = 1 - modff(prio_x, &one);
+        float remainder_vertical = 1 - modff(prio_vertical, &one);
         one = 1;
-        float remainder_y = 1 - modff(prio_y, &one);
-        vertical_done = abs(vertical_end) <= abs(vertical_progress);
-        horizontal_done = abs(horizontal_end) <= abs(horizontal_progress);
+        float remainder_horizontal = 1 - modff(prio_horizontal, &one);
+        if (abs(vertical_end) <= abs(vertical_progress)) vertical_done = true;
+        if (abs(horizontal_end) <= abs(horizontal_progress)) horizontal_done = true;
         if (!vertical_done && !horizontal_done)
-            current_axis_x = remainder_x / x_of_y < remainder_y / y_of_x;
-        else current_axis_x = !vertical_done;
-        if (current_axis_x)
+            going_vertically = remainder_vertical * y_of_x < remainder_horizontal * x_of_y;
+        else going_vertically = !vertical_done;
+        if (going_vertically)
         {
-            prio_x = ceilf(prio_x);
-            prio_y += y_of_x * prio_x;
+            prio_vertical = ceilf(prio_vertical);
+            prio_horizontal = x_of_y * prio_vertical;
         }
         else
         {
-            prio_y = ceilf(prio_y);
-            prio_x += x_of_y * prio_y;
+            prio_horizontal = ceilf(prio_horizontal);
+            prio_vertical = y_of_x * prio_horizontal;
         }
     }
 
     // Stop object if collided, and apply movement
+    // LOG_DBG("horizontal_collision: %u", horizontal_collision);
+    // LOG_DBG("vertical_collision: %u", vertical_collision);
     if (horizontal_collision)
     {
         *velocity_x = 0;
+        *pos_x += horizontal_progress;
+    }
+    else if (!horizontal_movement_after_slide)
+    {
         *pos_x += horizontal_progress;
     }
     else *pos_x += *velocity_x;
     if (vertical_collision)
     {
         *velocity_y = 0;
+        *pos_y += vertical_progress;
+    }
+    else if (!vertical_movement_after_step)
+    {
         *pos_y += vertical_progress;
     }
     else *pos_y += *velocity_y;

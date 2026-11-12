@@ -76,7 +76,7 @@ module memory_controller (
       : memory_pkg::READ_TAIL;
     end else if(
       current_state == memory_pkg::READING &&
-      txn_data_out.next_state == memor_pkg::IDLE
+      txn_data_out.next_state == memory_pkg::IDLE
     ) begin
         txn_data_out.next_state = memory_pkg::READ_TAIL;
     end
@@ -182,7 +182,7 @@ module memory_controller (
     if (reset) begin
       update_outputs(find_transaction_output(memory_pkg::NONE));
     end else if (enable &&
-      (current_state != memory_pkg::IDLE || current_state != memor_pkg::STARTING_TRANSACTION)
+      (current_state != memory_pkg::IDLE || current_state != memory_pkg::STARTING_TRANSACTION)
     ) begin
       update_outputs(txn_out);
       if (current_state == memory_pkg::SENDING_CMD || current_state == memory_pkg::SENDING_ADDRESS)

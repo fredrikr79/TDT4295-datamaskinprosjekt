@@ -11,7 +11,8 @@ module mem_txn_read (
 );
 
   always_comb begin
-    if (reset) out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE, read_data: 'h00};
+    out = '{rwds: 'b0, dq: 'h00, next_state: current_state, read_data: 'h00};
+    if (reset) out.next_state = memory_pkg::IDLE;
     else if (enable) begin
       case (current_state)
         memory_pkg::IDLE: out.next_state = memory_pkg::STARTING_TRANSACTION;
@@ -23,7 +24,7 @@ module mem_txn_read (
           if (bytes_this_state == 1) begin
             out.next_state = memory_pkg::SENDING_ADDRESS;
             out.dq = address[31-:8];
-          end
+          end else out.dq = memory_pkg::READ;
         end
         memory_pkg::SENDING_ADDRESS: begin
           if (bytes_this_state < 3) out.dq = address[31-8*(bytes_this_state+1)-:8];

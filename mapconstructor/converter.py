@@ -46,7 +46,7 @@ def load_particles() -> dict[color, int]:
         
     # Construct colour to ID-lookup table
     reverse_lookup: dict[color, int] = dict(starmap(
-        lambda a, b, c: (tuple(c), a << 4 + b & 15),
+        lambda a, b, c: (tuple(c), (a << 4) + (b & 15)),
         particle_data.values())
     )
     
@@ -237,6 +237,7 @@ def main() -> None:
                 join(fpga_version, pos + '.dat'),
                 id_bytes
             )
+    print(approximations)
 
 if __name__ == '__main__':
     main()

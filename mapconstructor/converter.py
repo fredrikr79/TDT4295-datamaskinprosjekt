@@ -32,13 +32,9 @@ def load_particles() -> dict[color, int]:
 
     # Verify unique IDs and colours in particle configuration
     errors = 0
-    ids: dict[int, str] = {}
     colors: dict[color, str] = {}
-    for name, (id, particle_color) in particle_data.items():
+    for name, (_, _, particle_color) in particle_data.items():
         particle_color = tuple(particle_color) # type: ignore
-        if id in ids:
-            print(f'{name} has a duplicate of {ids[id]}\'s ID ({id})!')
-            errors += 1
         if particle_color in colors:
             print(f'{name} has a duplicate of {colors[particle_color]}\'s colour ({particle_color})!')
             errors += 1
@@ -50,7 +46,7 @@ def load_particles() -> dict[color, int]:
         
     # Construct colour to ID-lookup table
     reverse_lookup: dict[color, int] = dict(starmap(
-        lambda a, b: (tuple(b), a << 4),
+        lambda a, b, c: (tuple(c), a << 4 + b & 15),
         particle_data.values())
     )
     

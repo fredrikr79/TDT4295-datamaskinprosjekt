@@ -102,7 +102,7 @@ module memory_controller (
       end
       memory_pkg::WRITING: begin
         dq_oe = 1;
-        rwds_oe = 1;
+        rwds_oe = current_transaction == memory_pkg::WRITE;
         cs_n = 0;
         run_clock = 1;
       end

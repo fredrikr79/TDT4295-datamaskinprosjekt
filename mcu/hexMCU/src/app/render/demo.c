@@ -23,6 +23,10 @@
  *   clear   STOP_SIM, the whole grid air, START_SIM
  *   all     echo, info, cons, box, sprite in a row
  *
+ * A check that fails also logs the whole command as hex, what was expected
+ * above what came back, 16 bytes a line, with ^^ under the bytes that
+ * differ (DEMO_DUMP below: 0 never, 1 when a check fails, 2 always).
+ *
  * Every demo but echo starts with an INFO (so N and the screen size are
  * known), after the FPGA queue has emptied. While one runs, game_poll() leaves the
  * FPGA to it (demo_busy()).
@@ -51,8 +55,16 @@
 #define BUF_BYTES        1024u      /* tx / rx: the most one command moves  */
 #define IDLE_TIMEOUT_MS  2000u      /* the queue must empty before we start */
 #define MAX_DIFFS_SHOWN  4u         /* mismatching cells logged per check   */
+#define DUMP_PER_LINE    16u        /* bytes per line of a hex dump         */
+
+/* Hex dumps of expected and received data: 0 never, 1 when a check fails,
+ * 2 always (also for checks that pass). */
+#ifndef DEMO_DUMP
+#define DEMO_DUMP        1
+#endif
 
 static uint8_t tx[BUF_BYTES], rx[BUF_BYTES];
+static uint8_t want[BUF_BYTES];     /* what a read should give, for the dump */
 
 /* ======================================================================
  * The engine
@@ -282,6 +294,55 @@ void demo_poll(void)
  * ====================================================================== */
 typedef uint8_t (*pattern_fn)(uint32_t x, uint32_t y);     /* material at x, y */
 
+static void cell_xy(uint32_t k, uint16_t x0, uint16_t y0, uint16_t box_w,
+                    uint32_t *x, uint32_t *y);
+
+/* Logs exp (expected) above got (received), DUMP_PER_LINE bytes a line,
+ * with ^^ under the bytes where (exp ^ got) & mask isn't 0. cells: the
+ * line starts with the grid cell its first byte is (x0, y0, box_w as for
+ * cell_xy()); false: with the byte offset (echo).
+ *
+ *   demo:   cell (0,180)  want 00 00 00 00  10 10 10 10  20 20 20 20  30 30 30 30
+ *   demo:                 got  00 00 00 00  10 10 10 10  20 20 20 20  30 30 30 30
+ */
+static void dump(bool failed, const uint8_t *exp, const uint8_t *got, uint32_t bytes,
+                 uint8_t mask, bool cells, uint16_t x0, uint16_t y0, uint16_t box_w)
+{
+    if (DEMO_DUMP == 0 || (DEMO_DUMP == 1 && !failed)) return;
+
+    for (uint32_t off = 0; off < bytes; off += DUMP_PER_LINE) {
+        uint32_t end = off + DUMP_PER_LINE < bytes ? off + DUMP_PER_LINE : bytes;
+        char head[24], a[4 * DUMP_PER_LINE + 8], b[sizeof a], m[sizeof a];
+        int na = 0, nb = 0, nm = 0;
+        bool diff = false;
+
+        if (cells) {
+            uint32_t x, y;
+            cell_xy(off * FPGA_SIM_IDS_PER_BYTE, x0, y0, box_w, &x, &y);
+            snprintf(head, sizeof head, "cell (%lu,%lu)", (unsigned long)x, (unsigned long)y);
+        } else {
+            snprintf(head, sizeof head, "byte %lu", (unsigned long)off);
+        }
+        for (uint32_t k = off; k < end; k++) {
+            const char *gap = (k > off && (k - off) % 4u == 0) ? " " : "";
+            bool bad = ((exp[k] ^ got[k]) & mask) != 0;
+            diff |= bad;
+            na += snprintf(a + na, sizeof a - (size_t)na, "%s %02X", gap, exp[k]);
+            nb += snprintf(b + nb, sizeof b - (size_t)nb, "%s %02X", gap, got[k]);
+            nm += snprintf(m + nm, sizeof m - (size_t)nm, "%s %s", gap, bad ? "^^" : "  ");
+        }
+        while (nm > 0 && m[nm - 1] == ' ') m[--nm] = '\0';     /* no trailing spaces */
+        if (failed) {
+            LOG_WARN("  %-14s want%s", head, a);
+            LOG_WARN("  %-14s got %s", "", b);
+            if (diff) LOG_WARN("  %-14s     %s", "", m);
+        } else {
+            LOG_INFO("  %-14s want%s", head, a);
+            LOG_INFO("  %-14s got %s", "", b);
+        }
+    }
+}
+
 static const char *mat_name(uint8_t m)
 {
     static const char *const names[MAT_ID_MAX + 1] = {
@@ -340,6 +401,10 @@ static void check_cells(const char *what, const uint8_t *buf, uint32_t n,
     } else {
         LOG_INFO("  %s: %lu cell%s OK", what, (unsigned long)n, n == 1 ? "" : "s");
     }
+    /* the whole thing as bytes: compared by material only, like above */
+    uint16_t bytes = fill_cells(want, n, x0, y0, box_w, p);
+    dump(wrong != 0, want, buf, bytes, FPGA_SIM_IDS_PER_BYTE == 1 ? 0xF0u : 0xFFu,
+         true, x0, y0, box_w);
     if (low)
         LOG_INFO("  %s: %lu cells came back with low bits set (the FPGA's state bits, "
                  "not compared)", what, (unsigned long)low);
@@ -394,10 +459,14 @@ static void echo_check(unsigned i, const fpga_cmd_t *c)
         lanes |= (uint8_t)(tx[k] ^ rx[k]);
         wrong++;
     }
-    if (!wrong) { LOG_INFO("  echo %u byte%s OK", n, n == 1 ? "" : "s"); return; }
-    LOG_WARN("  echo %u bytes: %u wrong, first at %u (sent 0x%02X, got 0x%02X), "
-             "bad bits 0x%02X (bit b = IO line b)", n, wrong, first, tx[first], rx[first], lanes);
-    d.bad++;
+    if (!wrong) {
+        LOG_INFO("  echo %u byte%s OK", n, n == 1 ? "" : "s");
+    } else {
+        LOG_WARN("  echo %u bytes: %u wrong, first at %u (sent 0x%02X, got 0x%02X), "
+                 "bad bits 0x%02X (bit b = IO line b)", n, wrong, first, tx[first], rx[first], lanes);
+        d.bad++;
+    }
+    dump(wrong != 0, tx, rx, n, 0xFFu, false, 0, 0, 0);
 }
 
 /* ======================================================================

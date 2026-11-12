@@ -21,7 +21,8 @@ package memory_pkg;
     SENDING_ADDRESS = 3,
     WAITING_ON_LATENCY = 4,
     READING = 5,
-    WRITING = 6
+    WRITING = 6,
+    READ_TAIL = 7
   } state_e;
 
   typedef struct {
@@ -54,6 +55,7 @@ package memory_pkg;
   localparam int unsigned MemoryClockSlowDownFactor = 2;
   localparam int unsigned MemoryClockFrequency =
     config_pkg::GlobalClockFrequency / MemoryClockSlowDownFactor;
+  localparam int unsigned ReadDataDelay = 5;
 
   localparam int unsigned LatencyCount = MemoryClockFrequency < 85_000_000 ? 3
   : MemoryClockFrequency < 104_000_000 ? 4

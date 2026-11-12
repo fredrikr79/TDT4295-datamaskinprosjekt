@@ -47,8 +47,19 @@ module memory_controller (
 
   memory_pkg::state_e current_state, previous_state;
   assign busy = current_state != memory_pkg::IDLE;
+
+  // Ensure samplig happens @ negedge
+  logic [7:0] delayed_dq;
+  always @(negedge clk) read_data <= delayed_dq;
+
+  // Keep track of clk where reading occured
+  logic [7:0] read_alignment_buff = '0;
+  always @(negedge clk) reading_pipe <= {reading_pipe[6:0], current_state == memory_pkg::READING};
+
+  // Delay reads by ReadDataDelay cycles.
+  // This way data_on_cable is only issued when the data is actually present.
   assign data_on_cable =
-    current_state == memory_pkg::READING ||
+    current_state == read_alignment_buff[memory_pkg::ReadDataDelay - 1] ||
     current_state == memory_pkg::WRITING;
 
   always_comb begin
@@ -94,6 +105,13 @@ module memory_controller (
         rwds_oe = 1;
         cs_n = 0;
         run_clock = 1;
+      end
+      memory_pkg::READ_TAIL: begin
+        // Ensure delayed read is closed before ending transaction
+        dq_oe = 0;
+        rwds_oe = 0;
+        cs_n = 0;
+        run_clock = 0;
       end
       default: begin
         dq_oe = 0;

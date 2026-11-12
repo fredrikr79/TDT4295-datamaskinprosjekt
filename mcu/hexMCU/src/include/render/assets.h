@@ -14,7 +14,9 @@
 typedef struct {
     sprite_img_t *cursor;                   /* sprites/cursor.spr, or a white square */
     sprite_img_t *title;                    /* test sentence                         */
-    sprite_img_t *paused, *save_game, *load_game;
+    /* the pause menu (menu.c) */
+    sprite_img_t *menu_title;               /* "Sim paused", not a button            */
+    sprite_img_t *menu_save, *menu_load, *menu_restart, *menu_draw;
     sprite_img_t *material[MAT_COUNT];      /* names, for the element picker, by material_t */
 } assets_t;
 

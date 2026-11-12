@@ -23,3 +23,5 @@ mx.scratch
 card.img
 Drivers/
 Middlewares/
+
+**/sd/save/

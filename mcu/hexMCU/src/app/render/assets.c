@@ -11,7 +11,7 @@
 #endif
 extern const font_t ASSET_FONT;
 
-#define TEXT_SCALE   2
+#define TEXT_SCALE   1
 #define TEXT_COLOUR  RGB565(255, 220, 0)
 
 assets_t assets;
@@ -44,9 +44,11 @@ void assets_init(void)
 
     /* texts: one image per text */
     assets.title     = text("Hei verden! Lagre spill? æøå ÆØÅ");
-    assets.paused    = text("Paused");
-    assets.save_game = text("Save game");
-    assets.load_game = text("Load");
+    assets.menu_title   = text("Sim paused");
+    assets.menu_save    = text("Save");
+    assets.menu_load    = text("Load");
+    assets.menu_restart = text("Restart room");
+    assets.menu_draw    = text("Draw");
     for (unsigned i = 0; i < MAT_COUNT; i++) assets.material[i] = text(material_names[i]);
 
     LOG_INFO("%u images queued for the FPGA", sprite_pending());

@@ -18,6 +18,7 @@
 #include "probe.h"
 #include "led.h"
 #include "cli.h"
+#include "menu.h"
 
 /* tuning */
 #define FIRST_ROOM_X -3
@@ -65,6 +66,10 @@ static int room_y = FIRST_ROOM_Y;   /* the y-coordinate of the current room */
 static int next_room_x;             /* the x-coordinate of the next room */
 static int next_room_y;             /* the y-coordinate of the next room */
 
+/* What a finished SAVE goes on to: the next room (through a door), or
+ * back to the game (Save in the menu). */
+static enum { AFTER_SAVE_NEXT_ROOM, AFTER_SAVE_RUN } after_save = AFTER_SAVE_NEXT_ROOM;
+
 static player_t player;
 
 static uint8_t box[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
@@ -72,6 +77,7 @@ static velocity_box_t velocity_box;
 
 static void run_enter(void);
 static void room_enter(void);
+static void menu_reset(void);
 
 static void handle_movement_keys(input_t in);
 
@@ -104,6 +110,7 @@ static void save_resume(void)
  * sends it row by row). */
 static void load_start(void)
 {
+    menu_reset();               /* the load starts the simulation itself */
     room_enter();
     room_load_start(room_x, room_y);
     go(S_LOAD);
@@ -124,39 +131,95 @@ static struct {
     input_t  keys;              /* this frame's input (taken once per frame) */
 } run;
 
-/* State machine for run, handels if we are showing menu or doing other actions. */
-typedef enum { RS_SIM, RS_MENU } run_state_t;
+/* State machine for run: playing, in the menu (the simulation paused), or
+ * drawing (the simulation runs, the mouse draws cells -- comes later). */
+typedef enum { RS_SIM, RS_MENU, RS_DRAW } run_state_t;
 static const char *const run_state_names[] =
-    { "simulating", "menu" };
+    { "simulating", "menu", "drawing" };
 
 static run_state_t  run_state = RS_SIM;
-
-struct {
-    sprite_t *menu_bg;
-    sprite_t *menu_paused;
-    sprite_t *menu_save;
-    sprite_t *menu_load;             
-} menu;
-
 
 static void r_go(run_state_t s)
 {
     if (s != run_state) LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
     run_state = s;
-    switch (run_state) {
-        case RS_SIM: // exit menu
-            sprite_show(menu.menu_bg, false);
-            sprite_show(menu.menu_load, false);
-            sprite_show(menu.menu_paused, false);
-            sprite_show(menu.menu_save, false);
+    if (s == RS_MENU) menu_open();
+    else              menu_close();
+}
+
+/* ---- START_SIM / STOP_SIM from the game -------------------------------------
+ * The menu pauses the simulation and starts it again. A full queue just
+ * means "try again next poll"; a failed command is a resync like any other. */
+static int8_t sim_wanted = -1;          /* -1: nothing to send, 0: stop, 1: start */
+
+static void sim_cmd_done(const fpga_cmd_t *cmd, fpga_err_t err)
+{
+    (void)cmd;
+    if (err != FPGA_ERR_NONE && err != FPGA_ERR_CANCELLED) failed = true;
+}
+
+static void sim_flush(void)
+{
+    if (sim_wanted < 0) return;
+    fpga_cmd_t c = fpga_cmd_sim_run(sim_wanted == 1);
+    c.done = sim_cmd_done;
+    fpga_status_t st = fpga_submit(&c);
+    if (st == FPGA_EFULL) return;                       /* next poll */
+    if (st != FPGA_OK) LOG_WARN("%s not sent: %s", sim_wanted ? "START_SIM" : "STOP_SIM",
+                                fpga_status_str(st));
+    sim_wanted = -1;
+}
+
+static void sim_run(bool run)
+{
+    sim_wanted = run;
+    sim_flush();
+}
+
+/* Back to playing without a word to the FPGA: a load that's starting runs
+ * the simulation itself. */
+static void menu_reset(void)
+{
+    sim_wanted = -1;
+    if (run_state != RS_SIM) r_go(RS_SIM);
+}
+
+/* ---- the menu's choices ------------------------------------------------------ */
+static void menu_choose(menu_action_t a)
+{
+    LOG_INFO("menu: %s", menu_action_name(a));
+    switch (a) {
+    case MENU_CLOSE:                    /* back to the game */
+        r_go(RS_SIM);
+        sim_run(true);
         break;
-        case RS_MENU: // enter menu
-            sprite_show(menu.menu_bg, true);
-            sprite_show(menu.menu_load, true);
-            sprite_show(menu.menu_paused, true);
-            sprite_show(menu.menu_save, true);
+    case MENU_SAVE:                     /* save the room, then play on in it */
+        r_go(RS_SIM);
+        after_save = AFTER_SAVE_RUN;
+        save_start();                   /* the simulation is already stopped */
+        break;
+    case MENU_LOAD:                     /* the room as last saved, without saving now */
+        load_start();                   /* starts the simulation when done */
+        break;
+    case MENU_RESTART:                  /* the room as designed: forget the save */
+        delete_save(room_x, room_y);
+        load_start();
+        break;
+    case MENU_DRAW:
+        r_go(RS_DRAW);
+        sim_run(true);
+        break;
+    default:
         break;
     }
+}
+
+/* Drawing mode: comes later. The idea: while the left button is held, the
+ * cells under the cursor become the chosen material (WRITE_BOX of a small
+ * square), so you can pour sand or water into the running simulation. */
+static void draw_frame(const input_t *in, int32_t cx, int32_t cy)
+{
+    (void)in; (void)cx; (void)cy;
 }
 /* HUD: the cursor, a test sentence and a demo animation (sprite.h) */
 static sprite_t     *cursor;
@@ -223,16 +286,6 @@ static void run_enter(void)
     frames.next_frame_ms = plat_millis();
 }
 
-/* setup things for the menu */
-static void menu_setup(void)
-{
-    menu.menu_bg     = sprite_new(sprite_img_solid(200, 400, RGB565(19, 5, 30)), 200, 50, false);
-    menu.menu_paused = sprite_new(assets.paused,200, 50, false);
-    menu.menu_save   = sprite_new(assets.save_game,200, 100, false);
-    menu.menu_load   = sprite_new(assets.load_game,200, 150, false);
-}
-
-
 /* Images and the HUD's sprites, made once, on the first load. From here
  * on sprite_poll() uploads the images in the background, and sends
  * everything again after a resync or a new FPGA session. */
@@ -256,7 +309,7 @@ static void sprites_setup(void)
     /* demo: an animation from the card, top-left, 10 frames a second */
     spinner = sprite_ani_file("sprites/spinner.spr", 6, 8, 8, true);
 
-    menu_setup();
+    menu_init(scr->width, scr->height);    /* before the cursor: drawn under it */
     cursor = sprite_new(assets.cursor, 0, 0, true);
 }
 
@@ -308,29 +361,23 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
 static void run_frame(uint32_t n)
 {
-    (void)n;
-
-    //comment out for testing
-    fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
-        velocity_box.box, box, velocity_box.length
-    );
-    player_box_cmd.done = update_player_callback;
-    fpga_submit(&player_box_cmd);
-    
-    /* TODO: update + draw */
+    /* the player only moves while the simulation runs (not in the menu) */
+    if (run_state != RS_MENU) {
+        fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
+            velocity_box.box, box, velocity_box.length
+        );
+        player_box_cmd.done = update_player_callback;
+        fpga_submit(&player_box_cmd);
+    }
 
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);   /* sprite_poll sends it */
     sprite_frame(n);            /* animations step */
-
-    // switch (run_state) {
-    // case RS_SIM:  player_frame(&run.keys, n); break;
-    // case RS_MENU: /* do menu */ break;
-    // }
 }
 
 static void run_poll(void)
 {
     if (!sprite_poll()) { failed = true; return; }
+    sim_flush();                /* a START_SIM / STOP_SIM the queue had no room for */
     uint32_t n = frames_due();
     if (n == 0) return;
 
@@ -344,10 +391,27 @@ static void run_poll(void)
     run.cx = clamp32(run.cx + run.keys.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
     run.cy = clamp32(run.cy + run.keys.mouse_dy, 0, (int32_t)scr->height - cursor_h());
 
-    if (key_pressed(&run.keys, KEY_ESCAPE))
-        r_go(run_state == RS_MENU ? RS_SIM : RS_MENU);
-
-    handle_movement_keys(run.keys);
+    switch (run_state) {
+    case RS_MENU: {
+        menu_action_t a = menu_frame(&run.keys, run.cx, run.cy);
+        if (a != MENU_NONE) menu_choose(a);
+        if (state != S_RUN) return;     /* Save / Load / Restart left RUN */
+        break;
+    }
+    case RS_DRAW:
+        if (key_pressed(&run.keys, KEY_ESCAPE)) { r_go(RS_SIM); break; }   /* drawing off */
+        draw_frame(&run.keys, run.cx, run.cy);
+        handle_movement_keys(run.keys);
+        break;
+    case RS_SIM:
+        if (key_pressed(&run.keys, KEY_ESCAPE)) {     /* the menu: pause */
+            r_go(RS_MENU);
+            sim_run(false);
+            break;
+        }
+        handle_movement_keys(run.keys);
+        break;
+    }
 
     run_frame(n);
 }
@@ -369,8 +433,10 @@ static void handle_movement_keys(input_t in)
 void game_change_room(int to_x, int to_y)
 {
     if (state != S_RUN) return;
+    menu_reset();
     next_room_x = to_x;
     next_room_y = to_y;
+    after_save = AFTER_SAVE_NEXT_ROOM;
     save_start();
 }
 
@@ -534,8 +600,13 @@ void game_poll(void)
     case S_SAVE:
         switch (room_poll()) {
         case ROOM_FAILED: failed = true; break;
-        case ROOM_DONE:                         /* saved: on to the next room */
-            room_x = next_room_x;
+        case ROOM_DONE:
+            if (after_save == AFTER_SAVE_RUN) { /* saved from the menu: play on */
+                go(S_RUN);
+                sim_run(true);                  /* a save leaves it stopped */
+                break;
+            }
+            room_x = next_room_x;               /* through a door: the next room */
             room_y = next_room_y;
             load_start();
             break;

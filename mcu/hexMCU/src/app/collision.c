@@ -84,8 +84,8 @@ bool perform_object_movement(
     bool horizontal_done = horizontal_end == 0;
     bool vertical_collision = false;
     bool horizontal_collision = false;
-    bool vertical_movement_after_step = true;
-    bool horizontal_movement_after_slide = true;
+    bool vertical_movement_after_force = true;
+    bool horizontal_movement_after_force = true;
 
     // Data for choosing the next axis
     float prio_vertical = 1;
@@ -174,21 +174,22 @@ bool perform_object_movement(
                             horizontal_collision = true;
                         }
                         horizontal_progress += slide_start ? slide_amount : -slide_amount;
-                        horizontal_movement_after_slide = false;
+                        horizontal_movement_after_force = false;
                     }
-                    // LOG_DBG(
-                    //     "Tried to slide %u. Slided %u. Hit wall: %u",
-                    //     slide_start + slide_end, slide_amount, hit_wall
-                    // );
+                    LOG_DBG(
+                        "Tried to slide %u. Slided %u. Hit wall: %u",
+                        slide_start + slide_end, slide_amount, hit_wall
+                    );
                 }
             }
             vertical_progress += dir_y;
-            vertical_movement_after_step = true;
+            vertical_movement_after_force = true;
             if (abs(vertical_max) <= abs(vertical_progress))
             {
                 if (velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y)
                     vertical_collision = true;
                 vertical_done = true;
+                vertical_movement_after_force = false;
             }
         }
 
@@ -261,21 +262,22 @@ bool perform_object_movement(
                             vertical_collision = true;
                         }
                         vertical_progress -= step_amount;
-                        vertical_movement_after_step = false;
+                        vertical_movement_after_force = false;
                     }
-                    // LOG_DBG(
-                    //     "Tried to step %u. Stepped %u. Hit roof: %u",
-                    //     step_end, step_amount, hit_roof
-                    // );
+                    LOG_DBG(
+                        "Tried to step %u. Stepped %u. Hit roof: %u",
+                        step_end, step_amount, hit_roof
+                    );
                 }
             }
             horizontal_progress += dir_x;
-            horizontal_movement_after_slide = true;
+            horizontal_movement_after_force = true;
             if (abs(horizontal_max) <= abs(horizontal_progress))
             {
                 if (velocity_box.box.x1 + velocity_box.box.x2 == ROOM_X)
                     horizontal_collision = true;
                 horizontal_done = true;
+                horizontal_movement_after_force = false;
             }
         }
 
@@ -308,7 +310,7 @@ bool perform_object_movement(
         *velocity_x = 0;
         *pos_x += horizontal_progress;
     }
-    else if (!horizontal_movement_after_slide)
+    else if (!horizontal_movement_after_force)
     {
         *pos_x += horizontal_progress;
     }
@@ -318,7 +320,7 @@ bool perform_object_movement(
         *velocity_y = 0;
         *pos_y += vertical_progress;
     }
-    else if (!vertical_movement_after_step)
+    else if (!vertical_movement_after_force)
     {
         *pos_y += vertical_progress;
     }

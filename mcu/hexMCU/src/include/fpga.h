@@ -163,9 +163,12 @@
 
 /* ---- the SIM layer (grid) ------------------------------------------------
  * Every cell is a byte on the FPGA. Its HIGH 4 bits are the material (the
- * FPGA's materials_e); the low 4 bits are the FPGA's own (state, for the
- * simulation), so write them as 0 and ignore them when reading back.
+ * FPGA's materials_e); the low 4 bits are the material's state in the
+ * simulation. Most materials start with state 0; game of life and
+ * explosive need theirs set (SIM_LIFE_ALIVE, SIM_EXPLOSIVE_FULL). When
+ * reading back, look at the material only: SIM_MAT() / sim_is().
  * The FPGA turns materials into colours with its own lookup table.
+ * This is the one list of materials: the rest of the code uses these.
  * WRITE_CONS / READ_CONS / *_BOX carry these bytes; X,Y count cells and
  * N counts bytes. */
 typedef enum {                      /* = MatAir ... MatExplo on the FPGA     */
@@ -200,6 +203,13 @@ static inline uint32_t fpga_sim_bytes(uint32_t cells)
  * byte: SIM_CELL(MAT_SAND) = 0x20, SIM_MAT(0x2F) = MAT_SAND. */
 #define SIM_CELL(m)  ((uint8_t)(((unsigned)(m) & 0x0Fu) << 4))
 #define SIM_MAT(b)   ((uint8_t)((uint8_t)(b) >> 4))
+
+/* Is cell byte b material m? sim_is(cell, MAT_LAVA) */
+static inline bool sim_is(uint8_t b, material_t m) { return SIM_MAT(b) == (uint8_t)m; }
+
+/* Low-bit states a new cell needs: SIM_CELL(MAT_LIFE) | SIM_LIFE_ALIVE. */
+#define SIM_LIFE_ALIVE      0x8u    /* game of life: a live cell (0 = dead)      */
+#define SIM_EXPLOSIVE_FULL  0xFu    /* explosive: full power, the sim burns it down */
 
 /* Material of cell k in packed CONS / BOX data, and setting it. sim_put()
  * clears the low bits / the other half as needed, so a buffer can be

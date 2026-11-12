@@ -12,15 +12,6 @@
 #define MAX_PORTALS 8
 #define DATA_MAX_SIZE (1 + 14*MAX_PORTALS + ROOM_X*ROOM_Y*2)
 
-#define AIR 0 << 4
-#define STONE 1 << 4
-#define SAND 2 << 4
-#define WATER 3 << 4
-#define LAVA 4 << 4
-#define ACID 5 << 4
-#define GOL 6 << 4
-#define EXPLOSION 7 << 4
-
 /* false: no card / file / write failed (logged). read_room() then gives
  * an empty room (all tile 0), so the game goes on. */
 bool read_room(int x, int y, uint8_t *tileIDs);
@@ -86,7 +77,6 @@ typedef struct
 void portals_init();
 portal_t *area_in_portal(float x1, float x2, float y1, float y2);
 
-// IDs
-bool id_is(uint8_t id, uint8_t target);
+/* Materials: material_t, SIM_CELL(), SIM_MAT() and sim_is() in fpga.h. */
 
 #endif

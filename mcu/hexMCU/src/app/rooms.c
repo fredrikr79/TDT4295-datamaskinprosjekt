@@ -620,8 +620,3 @@ portal_t *area_in_portal(float x1, float x2, float y1, float y2)
 
   return NULL;
 }
-
-bool id_is(uint8_t id, uint8_t target)
-{
-  return (id & 0b11110000) == target;
-}

@@ -76,15 +76,12 @@ static struct {
 static uint8_t fill[MAT_COUNT][FILL_BYTES];
 
 /* The byte a drawn cell gets: the material in the top 4 bits, and in the
- * low 4 bits what the material needs to start out right. */
-#define LIFE_ALIVE      0x8     /* game of life: a live cell (0 = dead)        */
-#define EXPLOSIVE_POWER 0xF     /* explosive: full power; the sim burns it down */
-
+ * low 4 bits what the material needs to start out right (fpga.h). */
 static uint8_t draw_cell(unsigned m)
 {
     switch (m) {
-    case MAT_LIFE:      return (uint8_t)(SIM_CELL(m) | LIFE_ALIVE);       /* 0x68 */
-    case MAT_EXPLOSIVE: return (uint8_t)(SIM_CELL(m) | EXPLOSIVE_POWER);  /* 0x7F */
+    case MAT_LIFE:      return (uint8_t)(SIM_CELL(m) | SIM_LIFE_ALIVE);       /* 0x68 */
+    case MAT_EXPLOSIVE: return (uint8_t)(SIM_CELL(m) | SIM_EXPLOSIVE_FULL);  /* 0x7F */
     default:            return SIM_CELL(m);
     }
 }

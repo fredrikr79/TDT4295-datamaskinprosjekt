@@ -9,7 +9,7 @@
 
 bool tile_has_collision(uint8_t id)
 {
-    return id_is(id, STONE) || id_is(id, SAND) || id_is(id, GOL);
+    return sim_is(id, MAT_STONE) || sim_is(id, MAT_SAND) || sim_is(id, MAT_LIFE);
 }
 
 velocity_box_t create_velocity_box(
@@ -112,7 +112,7 @@ bool perform_object_movement(
                 uint8_t id = box[x + (base_y + vertical_progress)*velocity_box.box.x2];
                 if (tile_has_collision(id))
                 {
-                    if (y_is_down && id_is(id, SAND))
+                    if (y_is_down && sim_is(id, MAT_SAND))
                     {
                         if (x < slide_ease)
                         {

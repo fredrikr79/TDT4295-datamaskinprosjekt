@@ -22,17 +22,17 @@ uint16_t ticks_since_last_heal = 0;
 
 static bool tile_has_damage(uint8_t id)
 {
-    return id_is(id, LAVA) || id_is(id, ACID) || id_is(id, EXPLOSION);
+    return sim_is(id, MAT_LAVA) || sim_is(id, MAT_ACID) || sim_is(id, MAT_EXPLOSIVE);
 }
 
 static bool tile_has_raditation(uint8_t id)
 {
-    return id_is(id, GOL);
+    return sim_is(id, MAT_LIFE);
 }
 
 static bool tile_is_swimmable(uint8_t id)
 {
-    return id_is(id, WATER) || id_is(id, LAVA) || id_is(id, ACID);
+    return sim_is(id, MAT_WATER) || sim_is(id, MAT_LAVA) || sim_is(id, MAT_ACID);
 }
 
 static void perform_jump(
@@ -93,14 +93,14 @@ void update_player(
         for (uint8_t x = velocity_box.rel_x; x < velocity_box.rel_x + PLAYER_SIZE_X; x++)
         {
             uint8_t id = box[x + y*velocity_box.box.x2];
-            if (id_is(id, AIR)) in_air++;
-            else if (id_is(id, STONE)) in_stone++;
-            else if (id_is(id, SAND)) in_sand++;
-            else if (id_is(id, WATER)) in_water++;
-            else if (id_is(id, LAVA)) in_lava++;
-            else if (id_is(id, ACID)) in_acid++;
-            else if (id_is(id, GOL)) in_gol++;
-            else if (id_is(id, EXPLOSION)) in_explosion++;
+            if (sim_is(id, MAT_AIR)) in_air++;
+            else if (sim_is(id, MAT_STONE)) in_stone++;
+            else if (sim_is(id, MAT_SAND)) in_sand++;
+            else if (sim_is(id, MAT_WATER)) in_water++;
+            else if (sim_is(id, MAT_LAVA)) in_lava++;
+            else if (sim_is(id, MAT_ACID)) in_acid++;
+            else if (sim_is(id, MAT_LIFE)) in_gol++;
+            else if (sim_is(id, MAT_EXPLOSIVE)) in_explosion++;
         }
     // LOG_DBG("in_air: %u", in_air);
     // LOG_DBG("in_stone: %u", in_stone);

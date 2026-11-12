@@ -34,5 +34,6 @@ int16_t player_x(void);
 int16_t player_y(void);
 
 void funny_man_move(float x, float y);
+void funny_man_show(bool visible);
 
 #endif

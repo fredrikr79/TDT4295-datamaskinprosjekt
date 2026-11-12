@@ -5,6 +5,8 @@
 #include "assets.h"
 #include "log.h"
 
+#include <stdio.h>
+
 /* The font for texts. Set it in one place; the font's own .c defines it. */
 #ifndef ASSET_FONT
 #define ASSET_FONT font_kiwisoda
@@ -50,6 +52,15 @@ void assets_init(void)
     assets.menu_restart = text("Restart room");
     assets.menu_draw    = text("Draw");
     for (unsigned i = 0; i < MAT_COUNT; i++) assets.material[i] = text(material_names[i]);
+
+    /* drawing mode: the brush sizes, which depend on the FPGA's N (known by now) */
+    uint16_t sizes[DRAW_SIZES_MAX];
+    unsigned n = draw_sizes(sizes);
+    for (unsigned i = 0; i < n; i++) {
+        char s[16];
+        snprintf(s, sizeof s, "%ux%u", sizes[i], sizes[i]);
+        assets.draw_size[i] = text(s);
+    }
 
     LOG_INFO("%u images queued for the FPGA", sprite_pending());
 }

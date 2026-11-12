@@ -162,11 +162,19 @@ void menu_close(void)
 
 bool menu_is_open(void) { return m.open; }
 
+/* pressed on any connected controller */
+static bool pad_any(const input_t *in, uint32_t b)
+{
+    for (unsigned p = 0; p < INPUT_PADS; p++)
+        if (in->pad[p].connected && (in->pad[p].pressed & b)) return true;
+    return false;
+}
+
 menu_action_t menu_frame(const input_t *in, int32_t cx, int32_t cy)
 {
     if (!m.open) return MENU_NONE;
 
-    if (key_pressed(in, KEY_ESCAPE)) return MENU_CLOSE;
+    if (key_pressed(in, KEY_ESCAPE) || pad_any(in, PAD_HOME | PAD_EAST)) return MENU_CLOSE;
 
     /* the mouse picks when it moves (so the arrow keys aren't overruled
      * by a cursor that just sits on another button) */
@@ -175,14 +183,17 @@ menu_action_t menu_frame(const input_t *in, int32_t cx, int32_t cy)
     m.last_cy = cy;
     if (moved) set_hover(button_at(cx, cy));
 
-    if (key_pressed(in, KEY_DOWN)) set_hover(m.hover < 0 ? 0 : (m.hover + 1) % NBTN);
-    if (key_pressed(in, KEY_UP))   set_hover(m.hover <= 0 ? NBTN - 1 : m.hover - 1);
+    if (key_pressed(in, KEY_DOWN) || pad_any(in, PAD_DOWN))
+        set_hover(m.hover < 0 ? 0 : (m.hover + 1) % NBTN);
+    if (key_pressed(in, KEY_UP) || pad_any(in, PAD_UP))
+        set_hover(m.hover <= 0 ? NBTN - 1 : m.hover - 1);
 
     if (mouse_pressed(in, MOUSE_LEFT)) {
         int i = button_at(cx, cy);          /* only a click on a button counts */
         if (i >= 0) return btn_action[i];
     }
-    if (key_pressed(in, KEY_ENTER) && m.hover >= 0) return btn_action[m.hover];
+    if ((key_pressed(in, KEY_ENTER) || pad_any(in, PAD_SOUTH)) && m.hover >= 0)
+        return btn_action[m.hover];
     return MENU_NONE;
 }
 

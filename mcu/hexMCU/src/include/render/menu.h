@@ -13,7 +13,8 @@
  *     +----------------------+
  *
  * The button under the mouse cursor is highlighted, or the one picked with
- * the arrow keys. A left click, or Enter, chooses it. menu_frame() only
+ * the arrow keys or the d-pad. A left click, Enter or cross chooses it;
+ * Esc, the PS button or circle closes the menu. menu_frame() only
  * says what was chosen; game.c does it (and pauses / starts the simulation).
  *
  *   menu_init(w, h);          once, after assets_init(), before the cursor's

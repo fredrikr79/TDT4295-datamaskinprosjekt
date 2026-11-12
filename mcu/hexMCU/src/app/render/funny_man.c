@@ -130,5 +130,11 @@ void funny_man_move(float x, float y){
     sprite_move(spr, (int16_t)x, (int16_t)y);
 }
 
+/* hidden while drawing */
+void funny_man_show(bool visible)
+{
+    sprite_show(spr, visible);
+}
+
 int16_t player_x(void) { return x; }
 int16_t player_y(void) { return y; }

@@ -10,6 +10,7 @@
 
 #include "sprite.h"
 #include "fpga.h"                           /* material_t, MAT_COUNT (the FPGA's IDs) */
+#include "draw.h"                           /* DRAW_SIZES_MAX */
 
 typedef struct {
     sprite_img_t *cursor;                   /* sprites/cursor.spr, or a white square */
@@ -18,6 +19,7 @@ typedef struct {
     sprite_img_t *menu_title;               /* "Sim paused", not a button            */
     sprite_img_t *menu_save, *menu_load, *menu_restart, *menu_draw;
     sprite_img_t *material[MAT_COUNT];      /* names, for the element picker, by material_t */
+    sprite_img_t *draw_size[DRAW_SIZES_MAX]; /* "1x1", "2x2" ... by draw_sizes()           */
 } assets_t;
 
 extern assets_t assets;

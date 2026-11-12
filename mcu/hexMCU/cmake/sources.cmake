@@ -21,6 +21,8 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/render/assets.c
     ${APP_ROOT}/src/app/render/demo.c
     ${APP_ROOT}/src/app/render/menu.c
+    ${APP_ROOT}/src/app/render/draw.c
+    
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

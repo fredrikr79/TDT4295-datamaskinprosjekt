@@ -19,6 +19,7 @@
 #include "led.h"
 #include "cli.h"
 #include "menu.h"
+#include "draw.h"
 
 /* tuning */
 #define FIRST_ROOM_X -3
@@ -141,10 +142,19 @@ static run_state_t  run_state = RS_SIM;
 
 static void r_go(run_state_t s)
 {
-    if (s != run_state) LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
+    if (s == run_state) return;
+    LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
+    if (run_state == RS_DRAW) {         /* leaving drawing: the player is back */
+        draw_leave();
+        funny_man_show(true);
+    }
     run_state = s;
     if (s == RS_MENU) menu_open();
     else              menu_close();
+    if (s == RS_DRAW) {                 /* drawing: no player, no player controls */
+        funny_man_show(false);
+        draw_enter();
+    }
 }
 
 /* ---- START_SIM / STOP_SIM from the game -------------------------------------
@@ -214,12 +224,49 @@ static void menu_choose(menu_action_t a)
     }
 }
 
-/* Drawing mode: comes later. The idea: while the left button is held, the
- * cells under the cursor become the chosen material (WRITE_BOX of a small
- * square), so you can pour sand or water into the running simulation. */
-static void draw_frame(const input_t *in, int32_t cx, int32_t cy)
+/* Esc, or the PS button on a controller */
+static bool escape_pressed(const input_t *in)
 {
-    (void)in; (void)cx; (void)cy;
+    if (key_pressed(in, KEY_ESCAPE)) return true;
+    for (unsigned p = 0; p < INPUT_PADS; p++)
+        if (in->pad[p].connected && (in->pad[p].pressed & PAD_HOME)) return true;
+    return false;
+}
+
+/* ---- the cursor from a controller -------------------------------------------
+ * The right stick moves it (faster the further it's pushed), and a finger
+ * on the touchpad drags it: a swipe across the whole pad crosses the whole
+ * screen. Added to the mouse's movement. */
+#define CURSOR_STICK_PX   12    /* pixels per frame at full tilt */
+#define CURSOR_DEADZONE   16
+
+static void pad_pointer(const input_t *in, int32_t *dx, int32_t *dy)
+{
+    static int32_t frac_x, frac_y;                  /* sub-pixel stick movement */
+    static bool    was_down[INPUT_PADS];
+    static uint16_t last_x[INPUT_PADS], last_y[INPUT_PADS];
+    const fpga_info_t *scr = fpga_link_info();
+
+    for (unsigned p = 0; p < INPUT_PADS; p++) {
+        const pad_t *pad = &in->pad[p];
+        if (!pad->connected) { was_down[p] = false; continue; }
+
+        frac_x += pad_deadzone(pad->rx, CURSOR_DEADZONE) * CURSOR_STICK_PX;
+        frac_y += pad_deadzone(pad->ry, CURSOR_DEADZONE) * CURSOR_STICK_PX;
+
+        const pad_touch_t *t = &pad->touch[0];
+        if (t->down && was_down[p]) {
+            *dx += ((int32_t)t->x - last_x[p]) * scr->width  / PAD_TOUCH_W;
+            *dy += ((int32_t)t->y - last_y[p]) * scr->height / PAD_TOUCH_H;
+        }
+        was_down[p] = t->down;
+        last_x[p] = t->x;
+        last_y[p] = t->y;
+    }
+    *dx += frac_x / 127;
+    *dy += frac_y / 127;
+    frac_x %= 127;
+    frac_y %= 127;
 }
 /* HUD: the cursor, a test sentence and a demo animation (sprite.h) */
 static sprite_t     *cursor;
@@ -310,6 +357,7 @@ static void sprites_setup(void)
     spinner = sprite_ani_file("sprites/spinner.spr", 6, 8, 8, true);
 
     menu_init(scr->width, scr->height);    /* before the cursor: drawn under it */
+    draw_init(scr->width, scr->height);
     cursor = sprite_new(assets.cursor, 0, 0, true);
 }
 
@@ -361,8 +409,8 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
 static void run_frame(uint32_t n)
 {
-    /* the player only moves while the simulation runs (not in the menu) */
-    if (run_state != RS_MENU) {
+    /* the player only moves while playing (not in the menu, not while drawing) */
+    if (run_state == RS_SIM) {
         fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
             velocity_box.box, box, velocity_box.length
         );
@@ -388,8 +436,10 @@ static void run_poll(void)
     input_take(&run.keys);
     led_set(LED_NO_INPUT, !run.keys.keyboard && !run.keys.mouse);
     /* input_log(&run.keys); */
-    run.cx = clamp32(run.cx + run.keys.mouse_dx, 0, (int32_t)scr->width  - cursor_w());
-    run.cy = clamp32(run.cy + run.keys.mouse_dy, 0, (int32_t)scr->height - cursor_h());
+    int32_t dx = run.keys.mouse_dx, dy = run.keys.mouse_dy;
+    pad_pointer(&run.keys, &dx, &dy);
+    run.cx = clamp32(run.cx + dx, 0, (int32_t)scr->width  - cursor_w());
+    run.cy = clamp32(run.cy + dy, 0, (int32_t)scr->height - cursor_h());
 
     switch (run_state) {
     case RS_MENU: {
@@ -399,12 +449,11 @@ static void run_poll(void)
         break;
     }
     case RS_DRAW:
-        if (key_pressed(&run.keys, KEY_ESCAPE)) { r_go(RS_SIM); break; }   /* drawing off */
-        draw_frame(&run.keys, run.cx, run.cy);
-        handle_movement_keys(run.keys);
+        if (escape_pressed(&run.keys)) { r_go(RS_SIM); break; }   /* drawing off */
+        if (!draw_frame(&run.keys, run.cx, run.cy)) failed = true;
         break;
     case RS_SIM:
-        if (key_pressed(&run.keys, KEY_ESCAPE)) {     /* the menu: pause */
+        if (escape_pressed(&run.keys)) {              /* the menu: pause */
             r_go(RS_MENU);
             sim_run(false);
             break;

@@ -112,10 +112,15 @@ def load_id_file(
     img.close()
     return tuple(img_id_data)
 
-def int_to_bin(x: int | list[int], length: int) -> str:
+def int_or_none(x) -> bool:
+    return isinstance(x, int) or x is None
+
+def int_to_bin(x: int | None | list[int], length: int) -> str:
     if isinstance(x, int):
         return ('1' if x < 0 else '0') + bin(abs(x))[2:].rjust(length, '0')[1:]
-    elif isinstance(x, list) and all(map(isinstance, x, repeat(int))):
+    elif x is None:
+        return '1'*length
+    elif isinstance(x, list) and all(map(int_or_none, x)):
         return ''.join(map(int_to_bin, x, repeat(length)))
     else:
         raise TypeError(f'Expected x of type Int or List[Int], got {type(x)}')

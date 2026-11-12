@@ -62,9 +62,9 @@ The different sections are made up as follows:
 
 "from" and "to" indicated where in the room two of the portal's edges which make up it's area are located. 
 
-"room" indicates which room the portal goes to. These ints are in one's complement.
+"room" indicates which room the portal goes to. These ints use the first bit as their sign, but are otherwise like a uint. Example: -3 = 10000011
 
-"pos" indicates where in the target room the player will be placed.
+"pos" indicates where in the target room the player will be placed. If the bits of an axis' coordinate is all ones, then it means that the position along that axis will remain unchanged. Example: If the x-coordinate is 11111111 11111111 and the y-coordinate is 00000001 11000010, then the player's position along the x-axis will stay the same as before going through the portal, while the player's position along the y-axis will be 450.
 
 The following is the configuration of two portals:
 ```
@@ -100,7 +100,7 @@ This section is made up of chunks specifying how many consecutive tiles of the s
 
 A chunk starts with a header of n 1-bits followed by a 0-bit to indicate that there are n - 1 more bytes than the first that are a part of indicating how many consecutive tiles the chunk is made up of. Setting the first n 1-bits as zeros and combining the n bytes gives the number of consecutive bytes. For the sake of not having to simulate numbers with more bytes than a system can represent natively, the larget number should be 4294967295. This means that n can be 5, but in that case, the first byte will only be zeros once the first n bits are discarded, so the first byte can be omitted, giving a uint32 number at max. 
 
-The chunk ends with a byte with the ID of the tiles in the chunk. The ID is a 4 bit number at the start of the byte. The byte for ID 5 would be 01010000. 
+The chunk ends with a byte with the ID of the tiles in the chunk. The ID is a 4 bit number at the start of the byte. The byte for ID 5 would be 01010000. The 4 last bits are metadata.
 
 Examples:
 
@@ -122,13 +122,13 @@ Encoding example:
 
 Decoding example:
 
-    These are the first 10 bytes of a level data file after the portal section: 11110001 01010101 11000110 01001110 01100000 10001101 01010000 1110110 00110000 10100100
+    These are the first 10 bytes of a level data file after the portal section: 11110001 01010101 11000110 01001110 01100001 10001101 01010000 1110110 00110000 10100100
 
-    The first section of 1-bits is made up of 4 bits. Therefore, the bytes 11110001, 01010101, 11000110 and 01001110 are a part of the number of tiles, and 01100000 will be the part indicating the ID. After that comes a different chunk. 
+    The first section of 1-bits is made up of 4 bits. Therefore, the bytes 11110001, 01010101, 11000110 and 01001110 are a part of the number of tiles, and 01100001 will be the part indicating the ID. After that comes a different chunk. 
 
     After setting the first 4 bits to zeros, we get the bytes 00000001 01010101 11000110 01001110 for the number of tiles. This number can be used directly without having to cut off the first byte since it is made up of less than 5 bytes. This gives 22398542 tiles. On a little endian system, the bytes must be used in the opposite order (01001110 11000110 01010101 00000001). 
 
-    To get the ID, we take the first 4 bits from 01100000 to get 0110. 0110 is binary for 6, giving us the ID 6.
+    To get the ID, we take the first 4 bits from 01100001 to get 0110. 0110 is binary for 6, giving us the ID 6.
 
 ## Raw data for the FPGA
 

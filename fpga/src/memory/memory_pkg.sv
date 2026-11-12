@@ -62,7 +62,7 @@ package memory_pkg;
   : MemoryClockFrequency < 133_000_000 ? 5
   : MemoryClockFrequency < 166_000_000 ? 6
   : 7;
-  localparam bit [4:0] InitialLatency =
+  localparam bit [3:0] InitialLatency =
       MemoryClockFrequency <  85_000_000 ? 'b1110
   : MemoryClockFrequency < 104_000_000 ? 'b1111
   : MemoryClockFrequency < 133_000_000 ? 'b0000
@@ -75,7 +75,7 @@ package memory_pkg;
     memory_pkg::message_length_t latency_count;
     latency_count = message_length_t'(2  * (double_latency ? 2 * LatencyCount : LatencyCount));
 
-    return amount_of_latency_ticks > latency_count - 1'b1;
+    return amount_of_latency_ticks >= latency_count - 1'b1;
   endfunction
   function automatic logic transaction_is_finished(input message_length_t amount_of_rws,
                                                    input transaction_e transaction,
@@ -83,8 +83,9 @@ package memory_pkg;
     return amount_of_rws == get_rw_length(transaction, optional_length) - 1;
   endfunction
 
-  localparam bit UseFixedLatency = 0;
-  localparam bit [1:0] BurstLength = 'b11; // burst length of 32 bytes
+  localparam bit FixedLatency = 1'b1;
+  localparam bit UseHybridBurst = 1'b1;
+  localparam bit [1:0] BurstLength = 2'b11; // burst length of 32 bytes
 
 
   // Possible drive strengths

@@ -50,37 +50,18 @@ module memory_controller (
 
   // Ensure samplig happens @ negedge
   logic [7:0] delayed_dq;
+  always @(posedge clk) delayed_dq <= dq_in;
   always @(negedge clk) read_data <= delayed_dq;
 
   // Keep track of clk where reading occured
   logic [7:0] read_alignment_buff = '0;
-  always @(negedge clk) reading_pipe <= {reading_pipe[6:0], current_state == memory_pkg::READING};
+  always @(negedge clk) read_alignment_buff <= {read_alignment_buff[6:0], current_state == memory_pkg::READING};
 
   // Delay reads by ReadDataDelay cycles.
   // This way data_on_cable is only issued when the data is actually present.
   assign data_on_cable =
-    current_state == read_alignment_buff[memory_pkg::ReadDataDelay - 1] ||
+    read_alignment_buff[memory_pkg::ReadDataDelay - 1] ||
     current_state == memory_pkg::WRITING;
-
-
-  // Drive Read_tail state until done or transition into it if READING, heading into IDLE
-  memory_pkg::transaction_output_t txn_data_out;
-  always_comb begin
-    txn_data_out = find_transaction_output(current_transaction);
-    if (current_state == memory_pkg::READ_TAIL) begin
-      txn_data_out = none_out;
-      txn_data_out.next_state = (
-        bytes_this_state == memory_pkg::message_length_t'(memory_pkg::ReadDataDelay - 1)
-      )
-      ? memory_pkg::IDLE
-      : memory_pkg::READ_TAIL;
-    end else if(
-      current_state == memory_pkg::READING &&
-      txn_data_out.next_state == memory_pkg::IDLE
-    ) begin
-        txn_data_out.next_state = memory_pkg::READ_TAIL;
-    end
-  end
 
   always_comb begin
     case (current_state)
@@ -181,10 +162,8 @@ module memory_controller (
   always @(negedge clk) begin
     if (reset) begin
       update_outputs(find_transaction_output(memory_pkg::NONE));
-    end else if (enable &&
-      (current_state != memory_pkg::IDLE || current_state != memory_pkg::STARTING_TRANSACTION)
-    ) begin
-      update_outputs(txn_out);
+    end else if (enable) begin
+      update_outputs(txn_data_out);
       if (current_state == memory_pkg::SENDING_CMD || current_state == memory_pkg::SENDING_ADDRESS)
         double_latency <= rwds_in;
     end
@@ -300,6 +279,25 @@ module memory_controller (
       .bytes_this_state(bytes_this_state),
       .out(write_txn_out)
   );
+
+  // Drive Read_tail state until done or transition into it if READING, heading into IDLE
+  memory_pkg::transaction_output_t txn_data_out;
+  always_comb begin
+    txn_data_out = find_transaction_output(current_transaction);
+    if (current_state == memory_pkg::READ_TAIL) begin
+      txn_data_out = none_out;
+      txn_data_out.next_state = (
+        bytes_this_state == memory_pkg::message_length_t'(memory_pkg::ReadDataDelay - 1)
+      )
+      ? memory_pkg::IDLE
+      : memory_pkg::READ_TAIL;
+    end else if(
+      current_state == memory_pkg::READING &&
+      txn_data_out.next_state == memory_pkg::IDLE
+    ) begin
+        txn_data_out.next_state = memory_pkg::READ_TAIL;
+    end
+  end
 
   function automatic memory_pkg::transaction_output_t find_transaction_output(
       input memory_pkg::transaction_e transaction);

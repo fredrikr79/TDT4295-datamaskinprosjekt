@@ -284,7 +284,7 @@ module spi_processor #(
       end
       default: begin
         sprite_req_body = sprite_w_body;
-        sprite_req_op = LUT_DELETE;
+        sprite_req_op = LUT_WRITE;
       end
     endcase
   end

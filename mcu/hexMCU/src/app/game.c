@@ -215,9 +215,8 @@ static void menu_choose(menu_action_t a)
         delete_save(room_x, room_y);
         load_start();
         break;
-    case MENU_DRAW:
+    case MENU_DRAW:                     /* starts paused (the menu stopped the sim) */
         r_go(RS_DRAW);
-        sim_run(true);
         break;
     default:
         break;
@@ -449,8 +448,17 @@ static void run_poll(void)
         break;
     }
     case RS_DRAW:
-        if (escape_pressed(&run.keys)) { r_go(RS_SIM); break; }   /* drawing off */
-        if (!draw_frame(&run.keys, run.cx, run.cy)) failed = true;
+        if (escape_pressed(&run.keys)) {              /* drawing off: play on */
+            r_go(RS_SIM);
+            sim_run(true);                  /* it may have been paused */
+            break;
+        }
+        switch (draw_frame(&run.keys, run.cx, run.cy)) {
+        case DRAW_FAILED: failed = true;    break;
+        case DRAW_PAUSE:  sim_run(false);   break;
+        case DRAW_RUN:    sim_run(true);    break;
+        default:                            break;
+        }
         break;
     case RS_SIM:
         if (escape_pressed(&run.keys)) {              /* the menu: pause */

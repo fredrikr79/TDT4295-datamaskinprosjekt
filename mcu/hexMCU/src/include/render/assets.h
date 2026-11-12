@@ -20,6 +20,7 @@ typedef struct {
     sprite_img_t *menu_save, *menu_load, *menu_restart, *menu_draw;
     sprite_img_t *material[MAT_COUNT];      /* names, for the element picker, by material_t */
     sprite_img_t *draw_size[DRAW_SIZES_MAX]; /* "1x1", "2x2" ... by draw_sizes()           */
+    sprite_img_t *draw_paused, *draw_running;  /* the simulation, while drawing          */
 } assets_t;
 
 extern assets_t assets;

@@ -16,6 +16,7 @@
 #define MARGIN       4      /* screen edge -> panel           */
 #define PAD          4      /* panel edge -> text             */
 #define GAP          12     /* material name -> size          */
+#define COL_RUNNING  RGB565(30, 110, 50)    /* sim panel while running */
 
 #define MAX_IN_FLIGHT 3     /* placements queued at once: more just skip a frame */
 #define FILL_BYTES   1024   /* the biggest box we send, in bytes          */
@@ -53,6 +54,7 @@ static struct {
     uint8_t  mat;                           /* material_t                */
     unsigned in_flight;
     bool     failed;                        /* a WRITE_BOX failed        */
+    bool     running;                       /* the simulation, as shown  */
     bool     wait_release;                  /* no placing until the place /
                                                erase buttons are all let go */
 
@@ -60,6 +62,9 @@ static struct {
     sprite_t *panel;
     sprite_t *mat_name[MAT_COUNT];
     sprite_t *size_name[DRAW_SIZES_MAX];
+
+    /* HUD, bottom right: "Paused" / "Running", on a panel each */
+    sprite_t *sim_panel[2], *sim_text[2];   /* [0] paused, [1] running */
 
     /* the brush outline at the cursor, per size: top, bottom, left, right
      * (sizes 1 and 2: one solid square in [0]) */
@@ -103,6 +108,24 @@ void draw_init(uint16_t screen_w, uint16_t screen_h)
         d.size_name[i] = sprite_new(assets.draw_size[i], (int16_t)(px + PAD + mw + GAP),
                                     (int16_t)(py + PAD), false);
 
+    /* sim state panel, bottom right: one size for both texts, so it
+     * doesn't jump when it changes */
+    sprite_img_t *st[2] = { assets.draw_paused, assets.draw_running };
+    int16_t stw = 0, sth = 0;
+    for (int k = 0; k < 2; k++) {
+        stw = max16(stw, (int16_t)sprite_img_w(st[k]));
+        sth = max16(sth, (int16_t)sprite_img_h(st[k]));
+    }
+    int16_t spw = (int16_t)(PAD + stw + PAD), sph = (int16_t)(PAD + sth + PAD);
+    int16_t spx = (int16_t)(screen_w - MARGIN - spw), spy = (int16_t)(screen_h - MARGIN - sph);
+    for (int k = 0; k < 2; k++) {
+        d.sim_panel[k] = sprite_new(sprite_img_solid((uint16_t)spw, (uint16_t)sph,
+                                                     k ? COL_RUNNING : COL_PANEL),
+                                    spx, spy, false);
+        d.sim_text[k]  = sprite_new(st[k], (int16_t)(spx + (spw - (int16_t)sprite_img_w(st[k])) / 2),
+                                    (int16_t)(spy + PAD), false);
+    }
+
     /* outlines: two thin images per size, shared by the opposite sides */
     for (unsigned i = 0; i < d.nsizes; i++) {
         uint16_t s = d.size[i];
@@ -124,6 +147,10 @@ void draw_init(uint16_t screen_w, uint16_t screen_h)
 static void hud_show(bool on)
 {
     sprite_show(d.panel, on);
+    for (int k = 0; k < 2; k++) {
+        sprite_show(d.sim_panel[k], on && k == (int)d.running);
+        sprite_show(d.sim_text[k],  on && k == (int)d.running);
+    }
     for (unsigned m = 0; m < MAT_COUNT; m++) sprite_show(d.mat_name[m], on && m == d.mat);
     for (unsigned i = 0; i < d.nsizes; i++) {
         sprite_show(d.size_name[i], on && i == d.cur_size);
@@ -150,7 +177,8 @@ static void outline_at(int32_t x, int32_t y)
 
 void draw_enter(void)
 {
-    d.active = true;
+    d.active  = true;
+    d.running = false;                      /* the menu stopped it */
     /* the click / cross that chose Draw in the menu is most likely still
      * down: don't let it place a box the moment drawing starts */
     d.wait_release = true;
@@ -228,10 +256,10 @@ static void set_size(int i)
     hud_show(true);
 }
 
-bool draw_frame(const input_t *in, int32_t cx, int32_t cy)
+draw_event_t draw_frame(const input_t *in, int32_t cx, int32_t cy)
 {
-    if (d.failed) { d.failed = false; return false; }
-    if (!d.active) return true;
+    if (d.failed) { d.failed = false; return DRAW_FAILED; }
+    if (!d.active) return DRAW_OK;
 
     /* material: number row, wheel, L1 / R1, d-pad left / right */
     for (unsigned m = 0; m < MAT_COUNT && m < 10u; m++) {
@@ -260,11 +288,19 @@ bool draw_frame(const input_t *in, int32_t cx, int32_t cy)
     /* place / erase while held */
     bool erase = mouse_held(in, MOUSE_RIGHT) || any_pad_held(in, PAD_EAST | PAD_L2);
     bool put   = mouse_held(in, MOUSE_LEFT)  || any_pad_held(in, PAD_SOUTH | PAD_R2);
-    if (d.wait_release) {
-        if (erase || put) return true;
-        d.wait_release = false;
+    if (d.wait_release && !erase && !put) d.wait_release = false;
+    if (!d.wait_release) {
+        if (erase)    place(MAT_AIR, cx, cy);
+        else if (put) place(d.mat, cx, cy);
     }
-    if (erase)    place(MAT_AIR, cx, cy);
-    else if (put) place(d.mat, cx, cy);
-    return true;
+
+    /* pause / run: square, Enter, middle (wheel) button */
+    if (any_pad_pressed(in, PAD_WEST) || key_pressed(in, KEY_ENTER) ||
+        mouse_pressed(in, MOUSE_MIDDLE)) {
+        d.running = !d.running;
+        hud_show(true);
+        LOG_INFO("simulation %s", d.running ? "running" : "paused");
+        return d.running ? DRAW_RUN : DRAW_PAUSE;
+    }
+    return DRAW_OK;
 }

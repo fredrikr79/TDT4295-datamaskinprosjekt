@@ -61,6 +61,8 @@ void assets_init(void)
         snprintf(s, sizeof s, "%ux%u", sizes[i], sizes[i]);
         assets.draw_size[i] = text(s);
     }
+    assets.draw_paused  = text("Paused");
+    assets.draw_running = text("Running");
 
     LOG_INFO("%u images queued for the FPGA", sprite_pending());
 }

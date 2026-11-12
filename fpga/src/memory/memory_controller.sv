@@ -62,6 +62,26 @@ module memory_controller (
     current_state == read_alignment_buff[memory_pkg::ReadDataDelay - 1] ||
     current_state == memory_pkg::WRITING;
 
+
+  // Drive Read_tail state until done or transition into it if READING, heading into IDLE
+  memory_pkg::transaction_output_t txn_data_out;
+  always_comb begin
+    txn_data_out = find_transaction_output(current_transaction);
+    if (current_state == memory_pkg::READ_TAIL) begin
+      txn_data_out = none_out;
+      txn_data_out.next_state = (
+        bytes_this_state == memory_pkg::message_length_t'(memory_pkg::ReadDataDelay - 1)
+      )
+      ? memory_pkg::IDLE
+      : memory_pkg::READ_TAIL;
+    end else if(
+      current_state == memory_pkg::READING &&
+      txn_data_out.next_state == memor_pkg::IDLE
+    ) begin
+        txn_data_out.next_state = memory_pkg::READ_TAIL;
+    end
+  end
+
   always_comb begin
     case (current_state)
       memory_pkg::IDLE: begin

@@ -161,7 +161,6 @@ module memory_controller (
     current_state <= transaction_out.next_state;
     dq_out <= transaction_out.dq;
     rwds_out <= transaction_out.rwds;
-    read_data <= transaction_out.read_data;
   endfunction
 
   always_ff @(posedge clk) begin
@@ -182,9 +181,10 @@ module memory_controller (
   always @(negedge clk) begin
     if (reset) begin
       update_outputs(find_transaction_output(memory_pkg::NONE));
-      double_latency <= 0;
-    end else if (enable) begin
-      update_outputs(find_transaction_output(current_transaction));
+    end else if (enable &&
+      (current_state != memory_pkg::IDLE || current_state != memor_pkg::STARTING_TRANSACTION)
+    ) begin
+      update_outputs(txn_out);
       if (current_state == memory_pkg::SENDING_CMD || current_state == memory_pkg::SENDING_ADDRESS)
         double_latency <= rwds_in;
     end

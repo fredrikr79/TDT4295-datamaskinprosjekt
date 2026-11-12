@@ -126,13 +126,9 @@ module write_box #(
           end
           DATA: begin
 
-            // The memory may start a read transaction if the memory isnt busy.
-
             // If a transaction is started, the unit may read if there is data on the wire, we havent reached the maximum transaction size, and we're within limits of our transaction.
 
             // Once finished with a row, start a new row in a new transaction.
-            if (!mem_busy) begin
-              // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
 
               if (mem_data_on_wire) begin
@@ -164,7 +160,6 @@ module write_box #(
                   written_bytes <= written_bytes + 16'd1;
                   write_box_r_en <= mem_data_on_wire;
                 end
-              end
             end
           end
           DONE: begin

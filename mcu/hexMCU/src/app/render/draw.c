@@ -53,6 +53,8 @@ static struct {
     uint8_t  mat;                           /* material_t                */
     unsigned in_flight;
     bool     failed;                        /* a WRITE_BOX failed        */
+    bool     wait_release;                  /* no placing until the place /
+                                               erase buttons are all let go */
 
     /* HUD, bottom left: one sprite per text, the current one shown */
     sprite_t *panel;
@@ -149,6 +151,9 @@ static void outline_at(int32_t x, int32_t y)
 void draw_enter(void)
 {
     d.active = true;
+    /* the click / cross that chose Draw in the menu is most likely still
+     * down: don't let it place a box the moment drawing starts */
+    d.wait_release = true;
     hud_show(true);
     LOG_INFO("drawing: material %u, %ux%u", d.mat, d.size[d.cur_size], d.size[d.cur_size]);
 }
@@ -255,6 +260,10 @@ bool draw_frame(const input_t *in, int32_t cx, int32_t cy)
     /* place / erase while held */
     bool erase = mouse_held(in, MOUSE_RIGHT) || any_pad_held(in, PAD_EAST | PAD_L2);
     bool put   = mouse_held(in, MOUSE_LEFT)  || any_pad_held(in, PAD_SOUTH | PAD_R2);
+    if (d.wait_release) {
+        if (erase || put) return true;
+        d.wait_release = false;
+    }
     if (erase)    place(MAT_AIR, cx, cy);
     else if (put) place(d.mat, cx, cy);
     return true;

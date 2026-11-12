@@ -12,6 +12,8 @@
  *   brush size     W / S, up / down          d-pad up / down
  *
  * Holding a button keeps placing every frame, so sand pours and lines draw.
+ * After draw_enter() nothing is placed until those buttons have all been let
+ * go once, so the click or cross that chose Draw in the menu doesn't place.
  * Brush sizes are 1, 2, 4, 8, 16 and then the biggest square one WRITE_BOX
  * can carry (31 x 31 at N = 1024), so every placement is one command.
  * The bottom-left corner shows the material and the size, and an outline

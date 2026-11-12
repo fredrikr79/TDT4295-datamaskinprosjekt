@@ -12,8 +12,9 @@
  *     |  [      Draw      ]  |    drawing mode
  *     +----------------------+
  *
- * The button under the mouse cursor is highlighted, or the one picked with
- * the arrow keys or the d-pad. A left click, Enter or cross chooses it;
+ * One button is always highlighted: Save when the menu opens, then the one
+ * the mouse moves onto, or the one picked with the arrow keys, the d-pad
+ * or the left stick (held: repeats). A left click, Enter or cross chooses it;
  * Esc, the PS button or circle closes the menu. menu_frame() only
  * says what was chosen; game.c does it (and pauses / starts the simulation).
  *

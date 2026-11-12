@@ -21,6 +21,11 @@
 #define GAP          6      /* between buttons                            */
 #define MIN_BTN_W    120    /* buttons are at least this wide             */
 
+/* holding up / down (d-pad, left stick, arrow keys) repeats, in frames */
+#define REPEAT_FIRST 12     /* first repeat after this long               */
+#define REPEAT_NEXT  5      /* then this often                            */
+#define STICK_NAV    64     /* left stick this far up / down counts       */
+
 /* ---- the buttons, top to bottom ---------------------------------------------- */
 #define NBTN 4
 
@@ -31,6 +36,9 @@ static struct {
     bool     open;
     int      hover;                     /* button highlighted, -1 = none   */
     int32_t  last_cx, last_cy;          /* cursor at the last frame        */
+    bool     fresh;                     /* just opened: last_cx/cy not set */
+    int      nav_dir;                   /* up / down held: -1, +1, 0       */
+    unsigned nav_frames;                /* ... for this many frames        */
 
     /* layout, screen coordinates */
     int16_t  px, py, pw, ph;            /* panel (inside the frame)        */
@@ -148,8 +156,10 @@ static int button_at(int32_t cx, int32_t cy)
 void menu_open(void)
 {
     if (m.open) return;
-    m.open  = true;
-    m.hover = -1;
+    m.open    = true;
+    m.hover   = 0;      /* the first button, so a controller can pick right away */
+    m.fresh   = true;
+    m.nav_dir = 0;
     show_all(true);
 }
 
@@ -170,23 +180,54 @@ static bool pad_any(const input_t *in, uint32_t b)
     return false;
 }
 
+/* Up / down this frame: -1, +1 or 0. A press moves at once; holding it
+ * (arrow key, d-pad or left stick) repeats after a moment. */
+static int nav_step(const input_t *in)
+{
+    int dir = 0;
+    if (key_held(in, KEY_UP))   dir--;
+    if (key_held(in, KEY_DOWN)) dir++;
+    for (unsigned p = 0; p < INPUT_PADS; p++) {
+        const pad_t *pad = &in->pad[p];
+        if (!pad->connected) continue;
+        if ((pad->held & PAD_UP)   || pad->ly < -STICK_NAV) dir--;
+        if ((pad->held & PAD_DOWN) || pad->ly >  STICK_NAV) dir++;
+    }
+    dir = dir < 0 ? -1 : dir > 0 ? 1 : 0;
+
+    /* a tap shorter than a frame is pressed but no longer held */
+    int tap = 0;
+    if (key_pressed(in, KEY_UP)   || pad_any(in, PAD_UP))   tap--;
+    if (key_pressed(in, KEY_DOWN) || pad_any(in, PAD_DOWN)) tap++;
+
+    if (dir == 0) { m.nav_dir = 0; return tap < 0 ? -1 : tap > 0 ? 1 : 0; }
+    if (dir != m.nav_dir) { m.nav_dir = dir; m.nav_frames = 0; return dir; }
+    m.nav_frames++;
+    if (m.nav_frames >= REPEAT_FIRST && (m.nav_frames - REPEAT_FIRST) % REPEAT_NEXT == 0)
+        return dir;
+    return 0;
+}
+
 menu_action_t menu_frame(const input_t *in, int32_t cx, int32_t cy)
 {
     if (!m.open) return MENU_NONE;
 
     if (key_pressed(in, KEY_ESCAPE) || pad_any(in, PAD_HOME | PAD_EAST)) return MENU_CLOSE;
 
-    /* the mouse picks when it moves (so the arrow keys aren't overruled
-     * by a cursor that just sits on another button) */
-    bool moved = cx != m.last_cx || cy != m.last_cy;
+    /* The mouse picks a button by moving onto it. Moving elsewhere keeps
+     * the highlight, so there is always one for the controller / Enter,
+     * and a cursor that sits still never overrules the d-pad. */
+    bool moved = !m.fresh && (cx != m.last_cx || cy != m.last_cy);
+    m.fresh   = false;
     m.last_cx = cx;
     m.last_cy = cy;
-    if (moved) set_hover(button_at(cx, cy));
+    if (moved) {
+        int i = button_at(cx, cy);
+        if (i >= 0) set_hover(i);
+    }
 
-    if (key_pressed(in, KEY_DOWN) || pad_any(in, PAD_DOWN))
-        set_hover(m.hover < 0 ? 0 : (m.hover + 1) % NBTN);
-    if (key_pressed(in, KEY_UP) || pad_any(in, PAD_UP))
-        set_hover(m.hover <= 0 ? NBTN - 1 : m.hover - 1);
+    int step = nav_step(in);
+    if (step) set_hover(m.hover < 0 ? 0 : (m.hover + step + NBTN) % NBTN);
 
     if (mouse_pressed(in, MOUSE_LEFT)) {
         int i = button_at(cx, cy);          /* only a click on a button counts */

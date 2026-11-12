@@ -55,7 +55,7 @@ package memory_pkg;
   localparam int unsigned MemoryClockSlowDownFactor = 2;
   localparam int unsigned MemoryClockFrequency =
     config_pkg::GlobalClockFrequency / MemoryClockSlowDownFactor;
-  localparam int unsigned ReadDataDelay = 5;
+  localparam int unsigned ReadDataDelay = 5 / 2 + 1;
 
   localparam int unsigned LatencyCount = MemoryClockFrequency < 85_000_000 ? 3
   : MemoryClockFrequency < 104_000_000 ? 4

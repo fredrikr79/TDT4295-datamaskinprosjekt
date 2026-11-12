@@ -41,6 +41,7 @@ module spi #(
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_op_e sprite_req_op,
     output hud_pkg::sprite_mem_id write_sprite_mem_id,
+    output logic [31:0] write_sprite_base_addr,
     output logic write_sprite_valid,
     mem_toggle,
     sprite_req_valid
@@ -233,6 +234,7 @@ module spi #(
       .sprite_id_bitmap(sprite_id_bitmap),
       .write_sprite_valid(write_sprite_valid),
       .write_sprite_mem_id(write_sprite_mem_id),
+      .write_sprite_base_addr(write_sprite_base_addr),
       .sim_running(sim_running),
       .error_event(error_event),
       .error_valid(processor_error_valid),

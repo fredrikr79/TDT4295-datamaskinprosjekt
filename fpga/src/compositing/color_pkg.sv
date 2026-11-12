@@ -18,7 +18,14 @@ package color_pkg;
     localparam color_t Black = color_t'(12'h000);
   `endif
 
+  typedef logic unsigned [7:0] hud_color_t;
+  function automatic hud_color_t rgb565_to_hud_color(input logic [15:0] c);
+    return {1'b1, c[15:13], c[10:9], c[4:3]};
+  endfunction
+
   function automatic logic [15:0] color_lookup(input logic [7:0] pixel);
+    // Bit 8 decides if the pixel is a hud-pixel
+    if (pixel[7]) return hud_colors(pixel[6:0]);
     case (sim_pkg::material_t'(pixel[7:4]))
       sim_pkg::MatStone:   return stone_colors(pixel[3:0]);
       sim_pkg::MatSand:    return sand_colors(pixel[3:0]);
@@ -30,6 +37,15 @@ package color_pkg;
       sim_pkg::MatExplo:   return explo_colors(pixel[3:0]);
       default     return air_colors(pixel[3:0]); // Air
     endcase
+  endfunction
+
+  // We only have space for 8 bit into the framebuffer.
+  // Might have to come up with a more clever solution to get 565 out of HUD
+  function automatic logic [15:0] hud_colors (input logic [6:0] code);
+    automatic logic [2:0] r = code[6:4];
+    automatic logic [1:0] g = code[3:2];
+    automatic logic [1:0] b = code[1:0];
+    return {r, r[2:1], g, g, g, b, b, b[1]};
   endfunction
 
   function automatic logic [15:0] explo_colors (input logic [3:0] meta);

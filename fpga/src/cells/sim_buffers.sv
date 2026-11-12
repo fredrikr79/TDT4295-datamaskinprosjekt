@@ -5,6 +5,7 @@ module sim_buffers #(
     input logic reset,
     input logic sim_running,
     input logic fb_ready,
+    input logic fb_row_ready,
 
     output logic pulse_new_row,
     output sim_pkg::row_buffer_t buffers[3],
@@ -228,7 +229,7 @@ module sim_buffers #(
 
         WRITE_BACK: begin
           if (xfer_idle) begin
-            if (write_lower) begin
+            if (write_lower && fb_row_ready) begin
               write_lower <= 1'b0;
               start_xfer <= 1'b1;
               start_is_write <= 1'b1;
@@ -237,7 +238,7 @@ module sim_buffers #(
               pulse_row_commit <= 1'b1;
               commit_y <= mem_map_pkg::fb_y_t'(xfer_row + row_idx_t'(1));
               commit_res_buffer <= 1'b0;
-            end else begin
+            end else if (!write_lower) begin
               if (32'(row_index) + 2 < GridHeight) begin
                 start_xfer <= 1'b1;
                 start_is_write <= 1'b0;

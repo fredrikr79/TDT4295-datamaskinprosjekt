@@ -18,7 +18,8 @@ typedef struct
 
 velocity_box_t create_velocity_box(
     float pos_x, float pos_y,
-    uint8_t size_x, uint8_t size_y
+    uint8_t size_x, uint8_t size_y,
+    float vel_x, float vel_y
 );
 
 bool perform_object_movement(

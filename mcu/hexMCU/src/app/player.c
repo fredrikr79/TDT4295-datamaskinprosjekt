@@ -43,12 +43,30 @@ static void perform_jump(
     uint16_t in_acid
 )
 {
-    jump_next_frame = false;
+    if (in_water && JUMP_WATER < player->velocity_y) player->velocity_y = JUMP_WATER;
+    else if (in_lava && JUMP_LAVA < player->velocity_y) player->velocity_y = JUMP_LAVA;
+    else if (in_acid && JUMP_ACID < player->velocity_y) player->velocity_y = JUMP_ACID;
+    else if (is_grounded && JUMP_AIR < player->velocity_y) player->velocity_y = JUMP_AIR;
+    else if (
+        player->fly_meter
+        && !in_water && !in_lava && !in_acid
+        && MAX_FLY_SPEED < player->velocity_y
+    )
+    {
+        float fly_force = FLY_FORCE;
+        if (
+            fly_force + player->velocity_y < MAX_FLY_SPEED
+            && MAX_FLY_SPEED < player->velocity_y
+        )
+        {
+            player->velocity_y = MAX_FLY_SPEED;
+        }
+        else if (0 < player->velocity_y)
+            player->velocity_y += 2.5*fly_force;
+        else player->velocity_y += fly_force;
 
-    if (in_water && -JUMP_WATER < player->velocity_y) player->velocity_y = -JUMP_WATER;
-    else if (in_lava && -JUMP_LAVA < player->velocity_y) player->velocity_y = -JUMP_LAVA;
-    else if (in_acid && -JUMP_ACID < player->velocity_y) player->velocity_y = -JUMP_ACID;
-    else if (is_grounded && -JUMP_AIR < player->velocity_y) player->velocity_y = -JUMP_AIR;
+        player->fly_meter--;
+    }
 }
 
 void damage_player(player_t *player, uint16_t amount)
@@ -138,20 +156,16 @@ void update_player(
 
     // Apply friction
     if (on_ground || in_water || in_acid)
+    {
         player->velocity_x *= 0.7;
+        player->fly_meter += FLY_REGEN_SPEED;
+        if (MAX_FLY_TIME < player->fly_meter)
+            player->fly_meter = MAX_FLY_TIME;
+    }
     else if (in_lava)
         player->velocity_x *= 0.4;
     else
         player->velocity_x *= 0.9;
-
-    // Jump & swim
-    if (jump_next_frame) perform_jump(
-        player,
-        on_ground,
-        in_water,
-        in_lava,
-        in_acid
-    );
 
     // Accelerate from input
     if (move_direction)
@@ -170,13 +184,31 @@ void update_player(
 
     // Calculate gravity with bouyancy included
     float gravity_force = GRAVITY_AIR;
+    if (0 < player->velocity_y || !jump_next_frame) gravity_force = GRAVITY_AIR_FALL;
     if (in_lava) gravity_force = GRAVITY_LAVA;
     else if (in_water) gravity_force = GRAVITY_WATER;
     else if (in_acid) gravity_force = GRAVITY_ACID;
-    float gravity_force_from_max = PLAYER_MAX_GRAVITY - player->velocity_y;
+
+    float max_gravity = MAX_GRAVITY_AIR;
+    if (in_lava) max_gravity = MAX_GRAVITY_LAVA;
+    if (in_water) max_gravity = MAX_GRAVITY_WATER;
+    if (in_acid) max_gravity = MAX_GRAVITY_ACID;
+
+    float gravity_force_from_max = max_gravity - player->velocity_y;
+    if (gravity_force_from_max < 0) gravity_force_from_max = 0;
     if (gravity_force < gravity_force_from_max) force_y = gravity_force;
     else force_y = gravity_force_from_max;
-    //LOG_DBG("gravity_force: %f, force_y: %f", gravity_force, force_y);
+    // LOG_DBG("gravity_force: %f, force_y: %f", gravity_force, force_y);
+
+    // Jump, fly & swim
+    if (jump_next_frame) perform_jump(
+        player,
+        on_ground,
+        in_water,
+        in_lava,
+        in_acid
+    );
+    jump_next_frame = false;
 
     // Apply first half of acceleration
     player->velocity_x += force_x / 2;
@@ -287,7 +319,8 @@ void update_player(
     // Create the next velocity box
     velocity_box_t next_velocity_box = create_velocity_box(
         player->x, player->y,
-        PLAYER_SIZE_X, PLAYER_SIZE_Y
+        PLAYER_SIZE_X, PLAYER_SIZE_Y,
+        player->velocity_x, player->velocity_y
     );
     set_next_velocity_box(&next_velocity_box);
     sprite_follow(player);                  /* sprite_poll() sends it */
@@ -321,6 +354,7 @@ void player_init()
         .x = 318, .y = 120,
         .velocity_x = 0, .velocity_y = 0,
         .health = PLAYER_MAX_HEALTH,
+        .fly_meter = MAX_FLY_TIME,
         .breath_meter = PLAYER_MAX_BREATH,
         .burn_timer = 0,
         .still_in_portal = 0
@@ -331,7 +365,8 @@ void player_init()
     // Create the next velocity box
     velocity_box_t next_velocity_box = create_velocity_box(
         player.x, player.y,
-        PLAYER_SIZE_X, PLAYER_SIZE_Y
+        PLAYER_SIZE_X, PLAYER_SIZE_Y,
+        player.velocity_x, player.velocity_y
     );
     set_next_velocity_box(&next_velocity_box);
 }

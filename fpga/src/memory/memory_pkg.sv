@@ -73,10 +73,9 @@ package memory_pkg;
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
     memory_pkg::message_length_t latency_count;
-    latency_count = 5'(MemoryClockSlowDownFactor)
-                    * (double_latency ? 5'(2 * LatencyCount) : 5'(LatencyCount));
+    latency_count = message_length_t'(2  * (double_latency ? 2 * LatencyCount : LatencyCount));
 
-    return amount_of_latency_ticks > latency_count;
+    return amount_of_latency_ticks > latency_count - 1'b1;
   endfunction
   function automatic logic transaction_is_finished(input message_length_t amount_of_rws,
                                                    input transaction_e transaction,
@@ -85,7 +84,7 @@ package memory_pkg;
   endfunction
 
   localparam bit UseFixedLatency = 0;
-  localparam bit [1:0] BurstLength = 'b00; // burst length of 128 bits
+  localparam bit [1:0] BurstLength = 'b11; // burst length of 32 bytes
 
 
   // Possible drive strengths

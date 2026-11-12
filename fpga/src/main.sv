@@ -42,7 +42,10 @@ module main #(
     .clk(clk),
     .mem_clk(mem_clk_raw)
   );
-  assign mem_clk = mem_run_clock ? mem_clk_raw : 0;
+
+  logic ck_q = 1'b0;
+  always_ff @(posedge clk) ck_q <= mem_run_clock ? ~ck_q : 1'b0;
+  assign mem_clk = ck_q;
 
   logic active_area, pixel_pulse;
   vga_sync_params::x_coordinate_t coord_x;

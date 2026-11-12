@@ -9,14 +9,19 @@
  * the sprite functions take NULL and do nothing, so the game runs on. */
 
 #include "sprite.h"
-
-typedef enum { MAT_SAND, MAT_WATER, MAT_LIFE, MAT_COUNT } material_t;
+#include "fpga.h"                           /* material_t, MAT_COUNT (the FPGA's IDs) */
+#include "draw.h"                           /* DRAW_SIZES_MAX */
 
 typedef struct {
     sprite_img_t *cursor;                   /* sprites/cursor.spr, or a white square */
     sprite_img_t *title;                    /* test sentence                         */
-    sprite_img_t *paused, *save_game, *load_game;
-    sprite_img_t *material[MAT_COUNT];      /* names, for the element picker         */
+    sprite_img_t *player;                   /* PLAYER_SIZE_X x _Y, the hitbox (player.c) */
+    /* the pause menu (menu.c) */
+    sprite_img_t *menu_title;               /* "Sim paused", not a button            */
+    sprite_img_t *menu_save, *menu_load, *menu_restart, *menu_draw;
+    sprite_img_t *material[MAT_COUNT];      /* names, for the element picker, by material_t */
+    sprite_img_t *draw_size[DRAW_SIZES_MAX]; /* "1x1", "2x2" ... by draw_sizes()           */
+    sprite_img_t *draw_paused, *draw_running;  /* the simulation, while drawing          */
 } assets_t;
 
 extern assets_t assets;

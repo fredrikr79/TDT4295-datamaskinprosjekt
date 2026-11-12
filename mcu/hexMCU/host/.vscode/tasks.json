@@ -1,0 +1,62 @@
+{
+    // What the old hexMCU/Makefile did for the host build. ${workspaceFolder}
+    // is hexMCU/host; the build goes to hexMCU/build/host as before.
+    // Run from Terminal > Run Task..., or let Run and Debug run them.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build host",
+            "type": "shell",
+            "options": { "cwd": "${workspaceFolder}" },
+            // a failed configure (e.g. a stale cache) starts over from scratch
+            "command": "cmake -S . -B ../build/host -G Ninja || { echo 'reconfiguring from scratch'; rm -rf ../build/host && cmake -S . -B ../build/host -G Ninja; } && cmake --build ../build/host",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": { "base": "$gcc", "fileLocation": ["autoDetect", "${workspaceFolder}/../build/host"] }
+        },
+        {
+            // host/card.img: 512 MB FAT32, 8 sectors (4 KiB) per cluster -- match
+            // the real card. Made once; "card image: reset" starts it over.
+            "label": "card image",
+            "type": "shell",
+            "options": { "cwd": "${workspaceFolder}" },
+            "command": "if command -v losetup >/dev/null && losetup -j card.img | grep -q .; then echo 'card.img is attached to a loop device -- unmount it first'; exit 1; fi; test -f card.img || { echo 'creating card.img (512M, FAT32, 8 sectors/cluster)'; truncate -s 512M card.img && mkfs.vfat -F 32 -S 512 -s 8 -n GAMECARD card.img >/dev/null; }",
+            "problemMatcher": []
+        },
+        {
+            "label": "card image: reset",
+            "type": "shell",
+            "options": { "cwd": "${workspaceFolder}" },
+            "command": "rm -f card.img && truncate -s 512M card.img && mkfs.vfat -F 32 -S 512 -s 8 -n GAMECARD card.img >/dev/null && echo 'card.img made new'",
+            "problemMatcher": []
+        },
+        {
+            "label": "card image: list",
+            "type": "shell",
+            "options": { "cwd": "${workspaceFolder}" },
+            "command": "mdir -i card.img -/ ::",
+            "problemMatcher": []
+        },
+        {
+            // test_host wants a 640x360 RGB565 BMP, made from host/test.bmp with
+            // ImageMagick when that is newer. -alpha off matters: with alpha,
+            // ImageMagick ignores the RGB565 subtype and writes 24-bit.
+            "label": "test picture",
+            "type": "shell",
+            "options": { "cwd": "${workspaceFolder}" },
+            "command": "M=$(command -v magick || echo convert); if [ -f test.bmp ] && { [ ! -f test565.bmp ] || [ test.bmp -nt test565.bmp ]; }; then echo 'converting test.bmp -> test565.bmp (640x360 RGB565)'; $M test.bmp -alpha off -resize '640x360!' -define bmp:subtype=RGB565 test565.bmp; elif [ ! -f test565.bmp ]; then echo 'need host/test.bmp (or a ready host/test565.bmp)'; exit 1; fi",
+            "problemMatcher": []
+        },
+        {
+            "label": "host: before the game",
+            "dependsOn": ["build host", "card image"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "host: before test_host",
+            "dependsOn": ["build host", "test picture"],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        }
+    ]
+}

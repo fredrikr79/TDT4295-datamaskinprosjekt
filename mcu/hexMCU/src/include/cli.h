@@ -9,3 +9,5 @@ void cli_async_begin(void);
 void cli_async_end(void);
 
 void cli_quit(const char *why);
+
+void cli_status(const char *text);

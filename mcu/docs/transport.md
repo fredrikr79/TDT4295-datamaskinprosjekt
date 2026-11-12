@@ -162,7 +162,7 @@ It models only the wires; what the FPGA does is `fake_fpga.c`.
 |---|---|
 | Screen | 640 × 360 (`DISPLAY_W/H`), reported by INFO |
 | N | 1024 bytes (input FIFO); bytes beyond it are dropped with a warning |
-| Grid | the SIM layer: a 4-bit material ID per cell, shown through a stand-in colour table (air black, sand tan, water blue, wall grey, life green, unused IDs bright magenta); CONS and BOX read and write IDs, one or two per byte (`FPGA_SIM_IDS_PER_BYTE`) |
+| Grid | the SIM layer: a byte per cell, the material in its high 4 bits, shown through a stand-in colour table (air black, stone grey, sand tan, water blue, lava orange, acid yellow-green, life white, explosive red, unused IDs bright magenta). The low 4 bits are kept as written. CONS and BOX read and write cells, one or two per byte (`FPGA_SIM_IDS_PER_BYTE`) |
 | Sprite memory | 2 MB, append-only; memIDs 1–1023, each WRITE_SPRITE takes one |
 | Sprite instances | 1024 (spriteIDs 0–1023); redrawn into the HUD layer every frame in ID order, 0xF81F see-through |
 | READY | 200 µs after each command |

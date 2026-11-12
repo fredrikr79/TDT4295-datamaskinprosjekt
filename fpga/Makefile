@@ -11,7 +11,7 @@ DUMP_DIR := dump-data
 VCD_DUMP := $(TOP_MODULE).vcd
 DUMP_MOVIE_NAME := movie.mp4
 DUMP_MOVIE_FPS := 10
-DUMP_MOVIE_MAX_FRAME ?= 300
+DUMP_MOVIE_MAX_FRAME ?= 99
 DUMP_FRAMES := $(foreach n,$(shell seq -f '%04g' 0 $(DUMP_MOVIE_MAX_FRAME)),$(DUMP_DIR)/frame_$(n).ppm)
 
 DUMP_FLAGS :=
@@ -43,7 +43,7 @@ lint: $(SOURCES) lint/spi_fifo_stubs.sv
 		$(SOURCES) lint/spi_fifo_stubs.sv
 dump-movie: $(DUMP_DIR)/$(DUMP_MOVIE_NAME)
 $(DUMP_DIR)/$(DUMP_MOVIE_NAME): $(DUMP_FRAMES)
-	ffmpeg \
+	ffmpeg -y \
 		-framerate $(DUMP_MOVIE_FPS) \
 		-i $(DUMP_DIR)/frame_%04d.ppm \
 		-c:v libopenh264 \

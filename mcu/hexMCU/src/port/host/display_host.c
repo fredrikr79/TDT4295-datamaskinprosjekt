@@ -15,11 +15,12 @@
 
 #include "display_host.h"
 #include "log.h"
+#include "fpga.h"          /* FPGA_FRAME_HZ */
 
 #include <SDL3/SDL.h>
 #include <string.h>
 
-#define FRAME_NS (1000000000ull / 30u)   /* present at 30 Hz */
+#define FRAME_NS (1000000000ull / FPGA_FRAME_HZ)   /* present at the FPGA's frame rate */
 #define NPIX     ((size_t)DISPLAY_W * DISPLAY_H)
 
 static SDL_Window   *win;
@@ -119,7 +120,7 @@ bool display_poll(void)
     SDL_PumpEvents();
     if (SDL_PeepEvents(NULL, 0, SDL_PEEKEVENT, SDL_EVENT_QUIT, SDL_EVENT_QUIT) > 0)
         return false;
-    if (SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F4])    /* quit key (was Esc) */
+    if (SDL_GetKeyboardState(NULL)[SDL_SCANCODE_F4])
         return false;
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_KEY_DOWN - 1);
     SDL_FlushEvents(SDL_EVENT_KEY_UP + 1, SDL_EVENT_MOUSE_MOTION - 1);

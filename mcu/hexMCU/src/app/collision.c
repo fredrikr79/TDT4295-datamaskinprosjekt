@@ -186,7 +186,10 @@ bool perform_object_movement(
             vertical_movement_after_force = true;
             if (abs(vertical_max) <= abs(vertical_progress))
             {
-                if (velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y)
+                if (
+                    (y_is_down && velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y)
+                    || (!y_is_down && velocity_box.box.y1 == 0)
+                )
                     vertical_collision = true;
                 vertical_done = true;
                 vertical_movement_after_force = false;
@@ -274,7 +277,10 @@ bool perform_object_movement(
             horizontal_movement_after_force = true;
             if (abs(horizontal_max) <= abs(horizontal_progress))
             {
-                if (velocity_box.box.x1 + velocity_box.box.x2 == ROOM_X)
+                if (
+                    (x_is_right && velocity_box.box.x1 + velocity_box.box.x2 == ROOM_X)
+                    || (!x_is_right && velocity_box.box.x1 == 0)
+                )
                     horizontal_collision = true;
                 horizontal_done = true;
                 horizontal_movement_after_force = false;

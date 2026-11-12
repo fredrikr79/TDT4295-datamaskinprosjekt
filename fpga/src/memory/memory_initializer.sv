@@ -1,4 +1,6 @@
-module memory_initializer (
+module memory_initializer #(
+  parameter int unsigned StartupDelayCycles = config_pkg::GlobalClockFrequency / 1000 * 300
+)(
     input clk,
     reset,
     enable,
@@ -14,7 +16,8 @@ module memory_initializer (
 
   localparam int NInitTransactions = 9;
   localparam int TransactionCount  = $clog2(NInitTransactions + 1);
-  typedef enum logic [1:0] {
+  typedef enum logic [2:0] {
+    POWER_UP_DELAY,
     READY,
     WAIT_BUSY,
     WAIT_DONE
@@ -100,6 +103,13 @@ module memory_initializer (
           write_data: '{default: 'h00}
       }
   };
+
+  // Ensure 0 delay case is handled
+  localparam int unsigned StartupCountWidth = (StartupDelayCycles > 1)
+    ? $clog2(StartupDelayCycles)
+    : 1;
+  logic [StartupCountWidth-1:0] start_delay_cycles_count;
+
   logic [TransactionCount-1:0] i_current_transactions;
   memory_pkg::message_length_t current_byte_written;
   init_state_t state;
@@ -114,9 +124,16 @@ module memory_initializer (
       write <= 0;
       i_current_transactions <= 0;
       current_byte_written <= 0;
-      state <= READY;
+      start_delay_cycles_count <= 0;
+      state <= (StartupDelayCycles == 0 ? READY : POWER_UP_DELAY);
     end else if (enable) begin
       case (state)
+        POWER_UP_DELAY: begin
+          if(start_delay_cycles_count == StartupCountWidth'(StartupDelayCycles - 1))
+            state <= READY;
+          else
+            start_delay_cycles_count <= start_delay_cycles_count + 1'b1;
+        end
         READY: begin
           if (i_current_transactions == TransactionCount'(NInitTransactions)) begin
             finished <= 1;

@@ -13,7 +13,6 @@
 #include "usb_input.h"
 #include "sprite.h"
 #include "assets.h"
-#include "funny_man.h"
 #include "demo.h"
 #include "probe.h"
 #include "led.h"
@@ -146,13 +145,13 @@ static void r_go(run_state_t s)
     LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
     if (run_state == RS_DRAW) {         /* leaving drawing: the player is back */
         draw_leave();
-        funny_man_show(true);
+        player_show(true);
     }
     run_state = s;
     if (s == RS_MENU) menu_open();
     else              menu_close();
     if (s == RS_DRAW) {                 /* drawing: no player, no player controls */
-        funny_man_show(false);
+        player_show(false);
         draw_enter();
     }
 }
@@ -345,7 +344,7 @@ static void sprites_setup(void)
     assets_init();              /* reads the sprite files' headers from the card */
 
     const fpga_info_t *scr = fpga_link_info();
-    player_init_old(100, 100);      /* start position for the room */
+    player_sprite_init(100, 100);   /* the player's picture, until it first moves */
 
     /* test: a sentence centred near the top */
     int32_t w = sprite_img_w(assets.title);
@@ -397,12 +396,7 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
         return;
     }
 
-    float old_x = player.x;
-    float old_y = player.y;
-
-    update_player(&player, cmd->rx, velocity_box);
-
-    if(player.x != old_x || player.y != old_y) funny_man_move(player.x, player.y);
+    update_player(&player, cmd->rx, velocity_box);  /* moves its sprite too */
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */

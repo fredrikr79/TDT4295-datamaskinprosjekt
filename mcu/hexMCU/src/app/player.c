@@ -2,11 +2,20 @@
 #include "log.h"
 #include "rooms.h"
 #include "game.h"
+#include "sprite.h"
+#include "assets.h"
 #include <math.h>
 #include <stdint.h>
 
 float move_direction = 0;
 bool jump_next_frame = false;
+
+static sprite_t *spr;                   /* the picture, at the player's top-left */
+
+static void sprite_follow(const player_t *player)
+{
+    sprite_move(spr, (int16_t)player->x, (int16_t)player->y);
+}
 
 uint16_t ticks_since_last_damage = 0;
 uint16_t ticks_since_last_heal = 0;
@@ -281,6 +290,7 @@ void update_player(
         PLAYER_SIZE_X, PLAYER_SIZE_Y
     );
     set_next_velocity_box(&next_velocity_box);
+    sprite_follow(player);                  /* sprite_poll() sends it */
     //LOG_DBG("end vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 }
 
@@ -316,6 +326,7 @@ void player_init()
         .still_in_portal = 0
     };
     set_player(player);
+    sprite_follow(&player);
 
     // Create the next velocity box
     velocity_box_t next_velocity_box = create_velocity_box(
@@ -323,4 +334,16 @@ void player_init()
         PLAYER_SIZE_X, PLAYER_SIZE_Y
     );
     set_next_velocity_box(&next_velocity_box);
+}
+
+void player_sprite_init(int16_t x, int16_t y)
+{
+    if (!spr)       /* after sprite_init() and assets_init() */
+        spr = sprite_new(assets.player, x, y, true);
+    sprite_move(spr, x, y);
+}
+
+void player_show(bool visible)
+{
+    sprite_show(spr, visible);
 }

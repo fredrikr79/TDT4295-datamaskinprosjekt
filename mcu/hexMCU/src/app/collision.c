@@ -14,22 +14,29 @@ bool tile_has_collision(uint8_t id)
 
 velocity_box_t create_velocity_box(
     float pos_x, float pos_y,
-    uint8_t size_x, uint8_t size_y
+    uint8_t size_x, uint8_t size_y,
+    float vel_x, float vel_y
 )
 {
+    // Set up ideal velocity box
     int dx = VELOCITY_BOX_X;
     int dy = VELOCITY_BOX_Y;
     int rel_x = (dx - size_x) / 2;
     int rel_y = (dy - size_y) / 2;
+    if (vel_y < -5) rel_y += rel_y / 2;
+    else if (5 < vel_y) rel_y /= 2;
 
+    // Player position
     int x = floorf(pos_x + 0.5);
     int y = floorf(pos_y + 0.5);
 
+    // Ensure velocity box stays within bounds
     if (x - rel_x < 0) rel_x = x;
     else if (x - rel_x + dx >= ROOM_X) rel_x = x + dx - ROOM_X;
     if (y - rel_y < 0) rel_y = y;
     else if (y - rel_y + dy >= ROOM_Y) rel_y = y + dy - ROOM_Y;
 
+    // Create velocity box
     fpga_box_t box = {
         x - rel_x, y - rel_y,
         dx, dy
@@ -176,10 +183,10 @@ bool perform_object_movement(
                         horizontal_progress += slide_start ? slide_amount : -slide_amount;
                         horizontal_movement_after_force = false;
                     }
-                    LOG_DBG(
-                        "Tried to slide %u. Slided %u. Hit wall: %u",
-                        slide_start + slide_end, slide_amount, hit_wall
-                    );
+                    // LOG_DBG(
+                    //     "Tried to slide %u. Slided %u. Hit wall: %u",
+                    //     slide_start + slide_end, slide_amount, hit_wall
+                    // );
                 }
             }
             vertical_progress += dir_y;
@@ -267,10 +274,10 @@ bool perform_object_movement(
                         vertical_progress -= step_amount;
                         vertical_movement_after_force = false;
                     }
-                    LOG_DBG(
-                        "Tried to step %u. Stepped %u. Hit roof: %u",
-                        step_end, step_amount, hit_roof
-                    );
+                    // LOG_DBG(
+                    //     "Tried to step %u. Stepped %u. Hit roof: %u",
+                    //     step_end, step_amount, hit_roof
+                    // );
                 }
             }
             horizontal_progress += dir_x;

@@ -75,6 +75,20 @@ static struct {
  * any box; it stays valid while the DMA sends it. */
 static uint8_t fill[MAT_COUNT][FILL_BYTES];
 
+/* The byte a drawn cell gets: the material in the top 4 bits, and in the
+ * low 4 bits what the material needs to start out right. */
+#define LIFE_ALIVE      0x8     /* game of life: a live cell (0 = dead)        */
+#define EXPLOSIVE_POWER 0xF     /* explosive: full power; the sim burns it down */
+
+static uint8_t draw_cell(unsigned m)
+{
+    switch (m) {
+    case MAT_LIFE:      return (uint8_t)(SIM_CELL(m) | LIFE_ALIVE);       /* 0x68 */
+    case MAT_EXPLOSIVE: return (uint8_t)(SIM_CELL(m) | EXPLOSIVE_POWER);  /* 0x7F */
+    default:            return SIM_CELL(m);
+    }
+}
+
 static int16_t max16(int16_t a, int16_t b) { return a > b ? a : b; }
 
 void draw_init(uint16_t screen_w, uint16_t screen_h)
@@ -86,7 +100,7 @@ void draw_init(uint16_t screen_w, uint16_t screen_h)
     d.nsizes = draw_sizes(d.size);
     if (d.cur_size >= d.nsizes) d.cur_size = d.nsizes - 1u;
 
-    for (unsigned m = 0; m < MAT_COUNT; m++) memset(fill[m], SIM_CELL(m), sizeof fill[m]);
+    for (unsigned m = 0; m < MAT_COUNT; m++) memset(fill[m], draw_cell(m), sizeof fill[m]);
 
     /* HUD panel: as wide as the longest name and the longest size */
     int16_t mw = 0, sw = 0, th = 0;

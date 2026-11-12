@@ -14,7 +14,7 @@ module memory_initializer #(
     output logic [7:0] write
 );
 
-  localparam int NInitTransactions = 10;
+  localparam int NInitTransactions = 9;
   localparam int TransactionCount  = $clog2(NInitTransactions + 1);
   typedef enum logic [1:0] {
     WAIT_STARTUP,
@@ -31,12 +31,6 @@ module memory_initializer #(
 
   localparam memory_meta_data_t InitTransactions[NInitTransactions] = '{
       '{
-          transaction: memory_pkg::DEEP_POWER_UP,
-          address: 32'b0,
-          length: 0,
-          write_data: '{default: 'h00}
-      },
-      '{
           transaction: memory_pkg::WRITE_ENABLE,
           address: 32'b0,
           length: 0,
@@ -49,7 +43,7 @@ module memory_initializer #(
           length: 2,
           write_data: '{
             0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            1: {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
+            1: {memory_pkg::InitialLatency, memory_pkg::FixedLatency, memory_pkg::HybridBurst, memory_pkg::BurstLength},
             default: 8'b0
           }
       },
@@ -61,11 +55,11 @@ module memory_initializer #(
       },
       '{
           transaction: memory_pkg::WRITE_ANY_REGISTER,
-          address: 'h00800004,
+          address: 'h00400004,
           length: 2,
           write_data: '{
             0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            1: {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
+            1: {memory_pkg::InitialLatency, memory_pkg::FixedLatency, memory_pkg::HybridBurst, memory_pkg::BurstLength},
             default: 8'b0
           }
       },
@@ -94,7 +88,7 @@ module memory_initializer #(
       },
       '{
           transaction: memory_pkg::WRITE_ANY_REGISTER,
-          address: 'h00800006,
+          address: 'h00400006,
           length: 2,
           write_data: '{
             0: 8'hFF,

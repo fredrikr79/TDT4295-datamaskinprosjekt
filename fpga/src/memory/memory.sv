@@ -47,7 +47,14 @@ module memory #(
   assign controller_write_data = initializer_finished ? write_data : initializer_write_data;
 
   logic initializer_toggle, controller_toggle;
-  assign controller_toggle = initializer_finished ? transaction_toggle : initializer_toggle;
+  logic toggle_offset;
+  always_ff @(posedge clk) begin
+    if (reset)                     toggle_offset <= 1'b0;
+    else if (!initializer_finished) toggle_offset <= initializer_toggle ^ transaction_toggle;
+  end
+
+  assign controller_toggle = initializer_finished ? (transaction_toggle ^ toggle_offset)
+                                                  : initializer_toggle;
 
   memory_controller controller (
       .clk,

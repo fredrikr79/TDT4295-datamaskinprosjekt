@@ -111,7 +111,7 @@ module write_sprite #(
               else begin
                 write_sprite_r_en <= mem_data_on_wire;
               end
-            end else if (!mem_busy && mem_data_on_wire) begin
+            end else if (mem_data_on_wire) begin
               write_sprite_r_en <= 1'b1;
             end
           end

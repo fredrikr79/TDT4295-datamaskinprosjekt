@@ -33,20 +33,23 @@ module main #(
     inout wire mem_rwds
 );
 
-  always @(posedge clk) begin
-    if(mem_rwds_in)
-      led_r_n <= 1'b0;
-  end
-
   wire mem_run_clock;
-  wire mem_clk_debug;
-  wire clk;
+  wire clk, mem_clk_raw;
   // Main onboard clock
   clk_wiz_0 clk_master (
     .clk_in(clk_in),
     .clk(clk),
-    .mem_clk()
+    .mem_clk(mem_clk_raw)
   );
+
+  // Remove the BUFGCE block. mem_clk = clk/2, edges in the middle of each byte:
+  (* IOB = "TRUE" *) logic ck_q = 1'b0;
+  always_ff @(posedge clk) ck_q <= mem_run_clock ? ~ck_q : 1'b0;
+  assign mem_clk = ck_q;
+
+  // start_phase: alternates every clk cycle
+  logic mem_start_phase = 1'b0;
+  always_ff @(posedge clk) mem_start_phase <= ~mem_start_phase;
 
   logic active_area, pixel_pulse;
   vga_sync_params::x_coordinate_t coord_x;
@@ -189,8 +192,6 @@ module main #(
   // );
 
   if(ON_BOARD_MEMORY) begin : g_mem_onboard
-    assign mem_clk = 1'b0;
-    assign mem_clk_debug = 1'b0;
     assign mem_dq_in = '0;
     assign mem_rwds_in = 1'b0;
     assign mem_run_clock = 1'b0;
@@ -211,33 +212,6 @@ module main #(
       .read_data(mem_out)
     );
   end else begin : g_mem
-    // CK is half the controller clock: one byte is sent on each CK edge.
-    // ODDR registers both halves of the forwarded clock to avoid gating glitches.
-    logic mem_clk_phase;
-    always_ff @(posedge clk) begin
-      if (!ck_rst) mem_clk_phase <= 1'b0;
-      else mem_clk_phase <= ~mem_clk_phase;
-    end
-    wire mem_clk_drive = mem_clk_phase & mem_run_clock;
-
-    // Mirror the ODDR input for the ILA; the ODDR output must drive only the pad.
-    logic mem_clk_debug_q;
-    always_ff @(posedge clk) begin
-      if (!ck_rst) mem_clk_debug_q <= 1'b0;
-      else mem_clk_debug_q <= mem_clk_drive;
-    end
-    assign mem_clk_debug = mem_clk_debug_q;
-
-    ODDR #(.DDR_CLK_EDGE("SAME_EDGE")) mem_clk_oddr (
-      .Q(mem_clk),
-      .C(clk),
-      .CE(1'b1),
-      .D1(mem_clk_drive),
-      .D2(mem_clk_drive),
-      .R(~ck_rst),
-      .S(1'b0)
-    );
-
     wire [7:0] dq_out;
     wire dq_oe;
     wire rwds_out, rwds_oe;
@@ -262,7 +236,6 @@ module main #(
       .clk(clk),
       .reset(~ck_rst),
       .enable(1'b1),
-      .start_phase(mem_clk_phase),
       .transaction_toggle(mem_toggle),
       .next_transaction(mem_transaction),
       .address(mem_addr),
@@ -281,29 +254,40 @@ module main #(
       .dq_oe(dq_oe),
       .rwds_in(mem_rwds_in),
       .rwds_out(rwds_out),
-      .rwds_oe(rwds_oe)
+      .rwds_oe(rwds_oe),
+
+      .start_phase(mem_start_phase)
+    );
+
+     // Fabric copy of the CK generator (the real ck_q must stay load-free for IOB packing)
+    (* DONT_TOUCH = "TRUE" *) logic ck_dbg = 1'b0;
+    always_ff @(posedge clk) ck_dbg <= mem_run_clock ? ~ck_dbg : 1'b0;
+
+    // Read data sampled on both clk edges, to find where it is stable
+    logic [7:0] dq_pos, dq_neg;
+    always_ff @(posedge clk) dq_pos <= mem_dq_in;
+    always_ff @(negedge clk) dq_neg <= mem_dq_in;
+
+
+    logic [7:0] dq_in_q;
+    logic       rwds_in_q;
+    always_ff @(posedge clk) begin
+      dq_in_q   <= mem_dq_in;
+      rwds_in_q <= mem_rwds_in;
+    end
+
+    ila_2 ila (
+      .clk   (clk),
+      .probe0(ck_dbg),
+      .probe1(dq_oe),
+      .probe2(mem_cs_n),
+      .probe3(dq_out),   // exactly what the FPGA drives: no in-between values
+      .probe4(dq_pos),   // read data, posedge sample
+      .probe5(rwds_in_q),
+      .probe6(dq_neg),   // read data, negedge sample (needs an 8-bit probe)
+      .probe7(mem_data_on_wire),
+      .probe8(mem_busy),
+      .probe9(mem_toggle)
     );
   end
-
-  logic [7:0] dq_in_q;
-  logic       rwds_in_q;
-  always_ff @(posedge clk) begin
-    dq_in_q   <= mem_dq_in;
-    rwds_in_q <= mem_rwds_in;
-  end
-
-  ila_2 ila (
-    .clk(clk),
-    .probe0(mem_run_clock),
-    .probe1(mem_clk_debug),
-    .probe2(mem_cs_n),
-    .probe3(dq_in_q),
-    .probe4(mem_reset_n),
-    .probe5(rwds_in_q),
-    .probe6(mem_busy),
-    .probe7(mem_data_on_wire),
-    .probe8(ck_rst),
-    .probe9(mem_toggle)
-  );
-
 endmodule

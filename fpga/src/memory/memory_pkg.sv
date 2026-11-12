@@ -21,8 +21,13 @@ package memory_pkg;
     SENDING_ADDRESS = 3,
     WAITING_ON_LATENCY = 4,
     READING = 5,
-    WRITING = 6
+    WRITING = 6,
+    READ_TAIL = 7
   } state_e;
+
+  localparam int unsigned ReadSampleHalfCycles = 5;
+  localparam bit          ReadSampleOnNegedge = ReadSampleHalfCycles[0];
+  localparam int unsigned ReadDataDelay = ReadSampleHalfCycles / 2 + 1;
 
   typedef struct {
     logic rwds;
@@ -67,6 +72,9 @@ package memory_pkg;
   : MemoryClockFrequency < 166_000_000 ? 'b0001
   : 'b0010;
 
+  localparam bit       FixedLatency = 1'b1;   // dual-die 128 Mb: fixed 2X only (replaces UseFixedLatency = 0)
+  localparam bit       HybridBurst  = 1'b1;   // legacy wrapped burst (default)
+  localparam bit [1:0] BurstLength  = 2'b11;  // 32 bytes (default); only matters for wrapped bursts
 
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
@@ -85,8 +93,6 @@ package memory_pkg;
   endfunction
 
   localparam bit UseFixedLatency = 0;
-  localparam bit [1:0] BurstLength = 'b00; // burst length of 128 bits
-
 
   // Possible drive strengths
   // 000:  34 ohm

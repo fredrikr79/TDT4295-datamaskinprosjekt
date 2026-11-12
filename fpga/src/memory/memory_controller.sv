@@ -40,9 +40,31 @@ module memory_controller (
 
   memory_pkg::state_e current_state, previous_state;
   assign busy = current_state != memory_pkg::IDLE;
-  assign data_on_cable =
-    current_state == memory_pkg::READING ||
-    current_state == memory_pkg::WRITING;
+
+  // ---- Read sampling at a fixed, configurable delay after each CK edge ----
+  logic [7:0] dq_p;
+  always_ff @(posedge clk) dq_p <= dq_in;
+  always @(negedge clk) read_data <= memory_pkg::ReadSampleOnNegedge ? dq_in : dq_p;
+
+  // reading_pipe[i] during slot k = (state was READING in slot k-1-i)
+  logic [7:0] reading_pipe = '0;
+  always @(negedge clk) reading_pipe <= {reading_pipe[6:0], current_state == memory_pkg::READING};
+
+  assign data_on_cable = (current_state == memory_pkg::WRITING) ||
+                         reading_pipe[memory_pkg::ReadDataDelay - 1];
+
+  // ---- Insert READ_TAIL after any READING, without touching the txn modules ----
+  memory_pkg::transaction_output_t txn_out;
+  always_comb begin
+    txn_out = find_transaction_output(current_transaction);
+    if (current_state == memory_pkg::READ_TAIL) begin
+      txn_out = none_out;
+      txn_out.next_state = (bytes_this_state == memory_pkg::message_length_t'(memory_pkg::ReadDataDelay - 1))
+                           ? memory_pkg::IDLE : memory_pkg::READ_TAIL;
+    end else if (current_state == memory_pkg::READING && txn_out.next_state == memory_pkg::IDLE) begin
+      txn_out.next_state = memory_pkg::READ_TAIL;
+    end
+  end
 
   always_comb begin
     case (current_state)
@@ -89,6 +111,12 @@ module memory_controller (
         cs_n = 0;
         run_clock = 1;
       end
+      memory_pkg::READ_TAIL: begin
+        dq_oe = 0;
+        rwds_oe = 0;
+        cs_n = 0;
+        run_clock = 0;
+      end
       default: begin
         dq_oe = 0;
         rwds_oe = 0;
@@ -117,7 +145,6 @@ module memory_controller (
     current_state <= transaction_out.next_state;
     dq_out <= transaction_out.dq;
     rwds_out <= transaction_out.rwds;
-    read_data <= transaction_out.read_data;
   endfunction
 
   always_ff @(posedge clk) begin
@@ -143,7 +170,7 @@ module memory_controller (
     end else if (enable &&
                  (current_state != memory_pkg::IDLE &&
                   current_state != memory_pkg::STARTING_TRANSACTION || start_phase)) begin
-      update_outputs(find_transaction_output(current_transaction));
+      update_outputs(txn_out);
     end
   end
 

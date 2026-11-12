@@ -35,12 +35,11 @@ module main #(
 
 
   wire mem_run_clock;
-  wire clk, mem_clk_raw;
+  wire clk;
   // Main onboard clock
   clk_wiz_0 clk_master (
     .clk_in(clk_in),
-    .clk(clk),
-    .mem_clk(mem_clk_raw)
+    .clk(clk)
   );
 
   logic ck_q = 1'b0;

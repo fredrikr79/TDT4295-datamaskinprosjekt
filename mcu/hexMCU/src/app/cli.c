@@ -18,6 +18,10 @@
 #include "platform.h"
 #include "transport.h"
 #include "fpga.h"
+#include "demo.h"
+#include "led.h"
+#include "storage.h"
+#include "game.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -36,6 +40,14 @@
 static uint32_t ready_seen, used_seen;   /* written by main loop only */
 static int32_t  ready_spare;             /* READYs not (yet) consumed  */
 
+/* Spare READYs are reported at most once a second (READY_REPORT_MS): one
+ * on its own straight away, a storm as one line a second with the count. */
+#define READY_REPORT_MS  1000u
+#define READY_STORM_RATE 100u            /* per second: call it a storm */
+static uint32_t ready_report_at;         /* the last "fpga ready" line  */
+static uint32_t ready_unreported;        /* spare READYs since then     */
+static uint32_t ready_first_at;          /* the first of those          */
+
 /* ======================================================================
  * Line editor state + async redraw hooks
  *
@@ -52,24 +64,51 @@ static int32_t  ready_spare;             /* READYs not (yet) consumed  */
  * ====================================================================== */
 static char     line[LINE_MAX];      /* what the user is currently typing */
 static uint16_t line_len;
-static bool     prompt_visible;      /* is "> " + line on screen right now? */
+static bool     prompt_visible;      /* is status + "> " + line on screen right now? */
+
+/* Status text shown in front of the prompt ("probing FPGA: attempt 7 > "),
+ * set with cli_status(). It lives on the prompt line, so it updates in
+ * place without filling the terminal, using only \r like the rest. */
+#define STATUS_MAX    64
+static char     status[STATUS_MAX];
+static uint16_t status_len;
 
 void cli_async_begin(void)
 {
     if (!prompt_visible) return;
-    char blank[PROMPT_LEN + LINE_MAX];
-    uint16_t n = (uint16_t)(PROMPT_LEN + line_len);
+    char blank[STATUS_MAX + PROMPT_LEN + LINE_MAX];
+    uint16_t n = (uint16_t)(status_len + PROMPT_LEN + line_len);
     memset(blank, ' ', n);
     io_write("\r", 1);
     io_write(blank, n);
     io_write("\r", 1);
 }
 
+static void prompt_write(void)
+{
+    io_write(status, status_len);
+    io_write(PROMPT, PROMPT_LEN);
+}
+
 void cli_async_end(void)
 {
     if (!prompt_visible) return;
-    io_write(PROMPT, PROMPT_LEN);
+    prompt_write();
     io_write(line, line_len);
+}
+
+void cli_status(const char *text)
+{
+    char next[STATUS_MAX];
+    size_t n = text ? strlen(text) : 0;
+    if (n > STATUS_MAX - 1) n = STATUS_MAX - 1;
+    if (n) memcpy(next, text, n);
+    if (n) next[n++] = ' ';             /* a gap before "> "                 */
+    if (n == status_len && memcmp(status, next, n) == 0) return;
+    cli_async_begin();                  /* wipe the line with the old status */
+    memcpy(status, next, n);
+    status_len = (uint16_t)n;
+    cli_async_end();
 }
 
 /* Hex rows only, no hooks. Callers wrap the whole block in
@@ -343,13 +382,6 @@ static bool parse_num(const char *s, unsigned long min, unsigned long max,
 }
 
 static void cmd_help(int argc, char **argv);
-
-static void cmd_toggle(int argc, char **argv)
-{
-    (void)argc; (void)argv;
-    plat_led_toggle();
-    log_raw("led toggled\r\n");
-}
 
 /* parse_num + an error message naming the argument. */
 static bool parse_arg(const char *what, const char *s, unsigned long max,
@@ -633,6 +665,210 @@ static void cmd_abort(int argc, char **argv)
 }
 
 /* trace [on|off] -- one debug line per FPGA transfer and step */
+static void cmd_demo(int argc, char **argv)
+{
+    if (argc == 1)                          { demo_list(); return; }
+    if (argc == 2 && !strcmp(argv[1], "stop")) { demo_stop(); return; }
+    if (argc == 2 && demo_start(argv[1]))   return;
+    if (argc == 2) log_raw("no demo '%s'\r\n", argv[1]);
+    else           log_raw("usage: demo [<test> | stop]\r\n");
+    demo_list();
+}
+
+/* log_raw formats into a buffer of its own, so a long text is cut short:
+ * print it a line at a time. */
+static void print_lines(const char *s)
+{
+    while (*s) {
+        const char *e = strchr(s, '\n');
+        int n = e ? (int)(e - s + 1) : (int)strlen(s);
+        log_raw("%.*s", n, s);
+        s += n;
+    }
+}
+
+static void cmd_led(int argc, char **argv)
+{
+    static const struct { const char *name; uint8_t rgb; } colours[] = {
+        { "off", LED_OFF }, { "r", LED_RED }, { "g", LED_GREEN }, { "b", LED_BLUE },
+        { "y", LED_YELLOW }, { "c", LED_CYAN }, { "m", LED_MAGENTA }, { "w", LED_WHITE },
+    };
+    if (argc == 2 && !strcmp(argv[1], "auto")) {
+        led_auto();
+    } else if (argc == 2 && !strcmp(argv[1], "list")) {
+        for (unsigned i = 0; i < LED_COUNT; i++)          /* in priority order */
+            log_raw("  %-9s %s\r\n", led_id((led_state_t)i), led_name((led_state_t)i));
+    } else if (argc == 2 && !strcmp(argv[1], "pins")) {
+        static char buf[320];
+        plat_led_pins(buf, sizeof buf);
+        print_lines(buf);
+        return;
+    } else if (argc == 2 && !strcmp(argv[1], "cycle")) {
+        led_cycle();
+    } else if (argc == 3 && !strcmp(argv[1], "show")) {
+        int s = led_find(argv[2]);
+        if (s < 0) {
+            log_raw("no state '%s' (led list)\r\n", argv[2]);
+            return;
+        }
+        led_show((led_state_t)s);
+    } else if (argc == 2) {
+        unsigned i;
+        for (i = 0; i < sizeof colours / sizeof colours[0]; i++)
+            if (!strcmp(argv[1], colours[i].name)) { led_test(colours[i].rgb); break; }
+        if (i == sizeof colours / sizeof colours[0]) {
+            log_raw("usage: led [r|g|b|y|c|m|w|off | list | show <state> | cycle | pins | auto]\r\n");
+            return;
+        }
+    }
+    log_raw("led: %s\r\n", led_now());
+}
+
+/* button             the board button now: up/down, presses so far
+ * button watch       for BUTTON_WATCH_MS, every change of the pin and every
+ *                    press the interrupt sees, then what that means
+ * Reads the pin directly as well as counting interrupts, so it tells a
+ * dead button from a button whose interrupt isn't set up. */
+#define BUTTON_WATCH_MS 15000u
+
+static struct {
+    bool     on;
+    uint32_t until;
+    bool     down;                  /* pin, last poll       */
+    uint32_t edges, presses;        /* at the last poll     */
+    uint32_t edges0, presses0;      /* when the watch began */
+    uint32_t changes;               /* pin changes seen     */
+} bw;
+
+static void button_watch_poll(void)
+{
+    if (!bw.on) return;
+    uint32_t now = plat_millis(), edges, presses;
+    bool down = plat_button_down();
+    plat_button_counts(&edges, &presses);
+
+    if (down != bw.down) {
+        bw.down = down;
+        bw.changes++;
+        log_raw("button: pin %s (%s) at %lu ms\r\n", down ? "DOWN" : "up",
+                down ? "pressed" : "released", (unsigned long)now);
+    }
+    if (presses != bw.presses || edges != bw.edges) {
+        log_raw("button: interrupt, press #%lu (%lu edges so far, bounces included)\r\n",
+                (unsigned long)(presses - bw.presses0), (unsigned long)(edges - bw.edges0));
+        bw.presses = presses;
+        bw.edges   = edges;
+    }
+    if ((int32_t)(now - bw.until) < 0) return;
+
+    bw.on = false;
+    uint32_t p = presses - bw.presses0, e = edges - bw.edges0;
+    log_raw("button watch done: pin changed %lu times, %lu presses through the interrupt (%lu edges)\r\n",
+            (unsigned long)bw.changes, (unsigned long)p, (unsigned long)e);
+    if (bw.changes == 0 && p == 0)
+        log_raw("  -> nothing at all: the pin never moved. The button, its wiring, or the "
+                "pull-up (USER_BUTTON: pull-up in CubeMX)\r\n");
+    else if (bw.changes > 0 && p == 0)
+        log_raw("  -> the pin works but no interrupt: check EXTI13 is enabled in CubeMX's NVIC "
+                "tab and that EXTI13_IRQHandler calls HAL_GPIO_EXTI_IRQHandler\r\n");
+    else if (bw.changes == 0 && p > 0)
+        log_raw("  -> interrupts but the pin looked still: presses shorter than a poll; fine\r\n");
+    else
+        log_raw("  -> the button works\r\n");
+}
+
+static void cmd_button(int argc, char **argv)
+{
+    uint32_t edges, presses;
+    plat_button_counts(&edges, &presses);
+    if (argc == 2 && !strcmp(argv[1], "watch")) {
+        bw.on       = true;
+        bw.until    = plat_millis() + BUTTON_WATCH_MS;
+        bw.down     = plat_button_down();
+        bw.edges    = bw.edges0   = edges;
+        bw.presses  = bw.presses0 = presses;
+        bw.changes  = 0;
+        log_raw("button watch: press the button a few times in the next %u s (now %s)\r\n",
+                BUTTON_WATCH_MS / 1000u, bw.down ? "DOWN" : "up");
+        return;
+    }
+    if (argc != 1) {
+        log_raw("usage: button [watch]\r\n");
+        return;
+    }
+    log_raw("button: %s now, %lu presses since start (%lu interrupt edges)\r\n",
+            plat_button_down() ? "DOWN" : "up", (unsigned long)presses, (unsigned long)edges);
+}
+
+/* sd                status: mounted?, size, free, the last thing that happened
+ * sd ls [<folder>]  what's in a folder (the root if none) */
+static void print_bytes(const char *what, uint64_t b)
+{
+    if (b >= 1024ull * 1024 * 1024)
+        log_raw("  %-6s %lu.%02lu GB\r\n", what, (unsigned long)(b >> 30),
+                (unsigned long)(((b & ((1ull << 30) - 1)) * 100) >> 30));
+    else
+        log_raw("  %-6s %lu MB\r\n", what, (unsigned long)(b >> 20));
+}
+
+static void sd_ls_entry(void *ctx, const char *name, uint32_t size, bool is_dir)
+{
+    unsigned *n = ctx;
+    (*n)++;
+    if (is_dir) log_raw("  %-24s <dir>\r\n", name);
+    else        log_raw("  %-24s %lu\r\n", name, (unsigned long)size);
+}
+
+static void cmd_sd(int argc, char **argv)
+{
+    if (argc >= 2 && !strcmp(argv[1], "ls")) {
+        const char *dir = argc >= 3 ? argv[2] : "";
+        unsigned n = 0;
+        storage_status_t st = storage_list(dir, sd_ls_entry, &n);
+        if (st != STORAGE_OK)
+            log_raw("sd ls '%s': %s\r\n", *dir ? dir : "/", storage_status_str(st));
+        else
+            log_raw("%u %s in '%s'\r\n", n, n == 1 ? "entry" : "entries", *dir ? dir : "/");
+        return;
+    }
+    if (argc != 1) {
+        log_raw("usage: sd [ls [<folder>]]\r\n");
+        return;
+    }
+    storage_info_t in;
+    storage_status_t st = storage_info(&in);
+    log_raw("sd: %s, %s\r\n", in.where, in.mounted ? "mounted" : "NOT mounted");
+    log_raw("  last:  %s\r\n", in.note);
+    if (in.mounted && in.total) {
+        print_bytes("size:", in.total);
+        print_bytes("free:", in.free);
+    }
+    if (st != STORAGE_OK && in.mounted)
+        log_raw("  error: %s\r\n", storage_status_str(st));
+}
+
+static void cmd_reset(int argc, char **argv)
+{
+    if (argc == 1)                          game_reset_all();
+    else if (argc == 2 && !strcmp(argv[1], "fpga")) game_reset_fpga();
+    else if (argc == 2 && !strcmp(argv[1], "mcu"))  game_reset_mcu();
+    else log_raw("usage: reset [fpga | mcu]   (no argument: both)\r\n");
+}
+
+static void cmd_loading(int argc, char **argv)
+{
+    if (argc == 2) {
+        const char *a = argv[1];
+        if      (!strcmp(a, "on")  || !strcmp(a, "true")  || !strcmp(a, "1")) game_set_loading(true);
+        else if (!strcmp(a, "off") || !strcmp(a, "false") || !strcmp(a, "0")) game_set_loading(false);
+        else { log_raw("usage: loading [on|off]\r\n"); return; }
+    } else if (argc != 1) {
+        log_raw("usage: loading [on|off]\r\n");
+        return;
+    }
+    log_raw("loading: %s\r\n", game_loading() ? "on" : "off (the game holds, no probing)");
+}
+
 static void cmd_trace(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "on") == 0)       transport_set_trace(true);
@@ -684,7 +920,6 @@ static void cmd_exit(int argc, char **argv)
 }
 static const cli_cmd_t cmds[] = {
     { "help",    cmd_help,     "list commands" },
-    { "toggle",  cmd_toggle,   "toggle user LED" },
     { "send",    cmd_send,     "send <op> [<x> <y> [<n> | <w> <h>]]  header only, e.g. send 0xB0" },
     { "read",    cmd_read,     "read <len>          e.g. read 4" },
     { "fecho",   cmd_fecho,    "fecho [-r N] <n> | <b0> <b1> ...  echo random / given bytes, N rounds" },
@@ -692,6 +927,12 @@ static const cli_cmd_t cmds[] = {
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
+    { "button",  cmd_button,   "button [watch]      the board button now / watch it for 15 s" },
+    { "sd",      cmd_sd,       "sd [ls [<folder>]]  SD card status (mounts now if it can) / list a folder" },
+    { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
+    { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
+    { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
@@ -742,7 +983,7 @@ static void handle_char(char c)
         io_write("\r\n", 2);          /* print during it doesn't redraw the  */
         prompt_visible = false;       /* old command                         */
         dispatch(cmdline);
-        io_write(PROMPT, PROMPT_LEN); /* prompt is always back right away;   */
+        prompt_write();               /* prompt is always back right away;   */
         prompt_visible = true;        /* job results arrive as async lines   */
     } else if (c == '\b' || c == 0x7F) {                 /* backspace / DEL */
         if (line_len) { line_len--; io_write("\b \b", 3); }
@@ -768,6 +1009,8 @@ void cli_init(void)
 
 void cli_poll(void)
 {
+    button_watch_poll();
+
     /* Results arrive through cli_done(), called from fpga_poll() just
      * before this. Here: retry a submit that found the queue full. */
     if (pend.waiting) {
@@ -788,10 +1031,22 @@ void cli_poll(void)
     ready_seen = rc;
     used_seen  = used;
     if (ready_spare < 0) ready_spare = 0;
+    uint32_t now = plat_millis();
     if (ready_spare > 0 && fpga_queued() == 0) {
-        if (ready_spare == 1) LOG_INFO("fpga ready");
-        else LOG_INFO("fpga ready (x%ld)", (long)ready_spare);
+        if (!ready_unreported) ready_first_at = now;
+        ready_unreported += (uint32_t)ready_spare;
         ready_spare = 0;
+    }
+    if (ready_unreported && now - ready_report_at >= READY_REPORT_MS) {
+        uint32_t ms = now - ready_first_at, n = ready_unreported;
+        if (n == 1)
+            LOG_INFO("fpga ready");
+        else
+            LOG_INFO("fpga ready x%lu in %lu ms%s", (unsigned long)n, (unsigned long)ms,
+                     n >= 10u && (uint64_t)n * 1000u >= (uint64_t)READY_STORM_RATE * (ms ? ms : 1u)
+                         ? " (READY storm)" : "");
+        ready_unreported = 0;
+        ready_report_at  = now;
     }
 
     int c;

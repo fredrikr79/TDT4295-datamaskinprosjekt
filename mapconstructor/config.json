@@ -49,6 +49,10 @@
                 {
                     "from": [632, 106], "to": [640, 122],
                     "room": [-2, 0], "pos": [0, 105]
+                },
+                {
+                    "from": [0, 0], "to": [8, 360],
+                    "room": [-4, 0], "pos": [632, null]
                 }
             ]
         },
@@ -75,6 +79,114 @@
                 {
                     "from": [0, 218], "to": [8, 307],
                     "room": [1, 0], "pos": [632, 291]
+                }
+            ]
+        },
+        "-4,0": {
+            "path": "full/ocean_sky_temple_enterance.png",
+            "portals": [
+                {
+                    "from": [632, 0], "to": [640, 360],
+                    "room": [-3, 0], "pos": [0, null]
+                },
+                {
+                    "from": [0, 94], "to": [8, 171],
+                    "room": [-5, 0], "pos": [632, null]
+                }
+            ]
+        },
+        "-5,0": {
+            "path": "full/ocean_sky_temple_level_1.png",
+            "portals": [
+                {
+                    "from": [632, 94], "to": [640, 171],
+                    "room": [-4, 0], "pos": [0, null]
+                },
+                {
+                    "from": [232, 0], "to": [397, 8],
+                    "room": [-5, -1], "pos": [null, 344]
+                }
+            ]
+        },
+        "-5,-1": {
+            "path": "full/ocean_sky_temple_level_2.png",
+            "portals": [
+                {
+                    "from": [232, 352], "to": [397, 360],
+                    "room": [-5, 0], "pos": [null, 0]
+                },
+                {
+                    "from": [232, 0], "to": [397, 8],
+                    "room": [-5, -2], "pos": [null, 344]
+                }
+            ]
+        },
+        "-5,-2": {
+            "path": "full/ocean_sky_temple_level_3.png",
+            "portals": [
+                {
+                    "from": [232, 352], "to": [397, 360],
+                    "room": [-5, -1], "pos": [null, 0]
+                },
+                {
+                    "from": [12, 0], "to": [164, 8],
+                    "room": [-5, -3], "pos": [null, 344]
+                },
+                {
+                    "from": [506, 0], "to": [620, 8],
+                    "room": [-5, -3], "pos": [null, 344]
+                },
+                {
+                    "from": [632, 150], "to": [640, 263],
+                    "room": [-4, -2], "pos": [0, null]
+                },
+                {
+                    "from": [0, 141], "to": [8, 265],
+                    "room": [-6, -2], "pos": [632, null]
+                }
+            ]
+        },
+        "-5,-3": {
+            "path": "full/ocean_sky_temple_level_4.png",
+            "portals": [
+                {
+                    "from": [12, 352], "to": [164, 360],
+                    "room": [-5, -2], "pos": [null, 0]
+                },
+                {
+                    "from": [506, 352], "to": [620, 360],
+                    "room": [-5, -2], "pos": [null, 0]
+                }
+            ]
+        },
+        "-4,-2": {
+            "path": "full/ocean_sky_temple_level_3_right.png",
+            "portals": [
+                {
+                    "from": [0, 150], "to": [8, 263],
+                    "room": [-5, -2], "pos": [632, null]
+                },
+                {
+                    "from": [71, 352], "to": [640, 360],
+                    "room": [-4, -1], "pos": [null, 0]
+                }
+            ]
+        },
+        "-4,-1": {
+            "path": "full/ocean_sky_temple_level_3_right_fall.png",
+            "portals": [
+                {
+                    "from": [57, 352], "to": [640, 360],
+                    "room": [-4, 0], "pos": [null, 0]
+                }
+            ]
+        },
+        "-6,-2": {
+            "path": "full/ocean_sky_temple_level_3_left.png",
+            "portals": [
+                {
+                    "from": [632, 141], "to": [640, 265],
+                    "room": [-5, -2], "pos": [0, null]
                 }
             ]
         }

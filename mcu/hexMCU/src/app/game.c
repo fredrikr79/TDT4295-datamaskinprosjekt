@@ -431,8 +431,11 @@ static void run_poll(void)
     /* input_log(&run.keys); */
     int32_t dx = run.keys.mouse_dx, dy = run.keys.mouse_dy;
     pad_pointer(&run.keys, &dx, &dy);
-    run.cx = clamp32(run.cx + dx, 0, (int32_t)scr->width  - cursor_w());
-    run.cy = clamp32(run.cy + dy, 0, (int32_t)scr->height - cursor_h());
+    /* The tip (the sprite's top-left) stays on the screen, so every cell
+     * can be pointed at; the rest of the picture may hang off the right
+     * and bottom edges. */
+    run.cx = clamp32(run.cx + dx, 0, (int32_t)scr->width  - 1);
+    run.cy = clamp32(run.cy + dy, 0, (int32_t)scr->height - 1);
 
     switch (run_state) {
     case RS_MENU: {

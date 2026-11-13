@@ -38,13 +38,11 @@ module main #(
   wire mem_run_clock;
   wire clk;
 
-  assign clk = clk_in;
-
-  // // Main onboard clock
-  // clk_wiz_0 clk_master (
-  //   .clk_in(clk_in),
-  //   .clk(clk)
-  // );
+  // Main onboard clock
+  clk_wiz_0 clk_master (
+    .clk_in(clk_in),
+    .clk(clk)
+  );
 
   logic ck_q = 1'b0;
   always_ff @(posedge clk) ck_q <= mem_run_clock ? ~ck_q : 1'b0;
@@ -59,7 +57,7 @@ module main #(
   assign sync = frame_start;
 
   // Sim running
-  logic sim_running = 1'b0; // Temporarily 1
+  logic sim_running; // Temporarily 1
 
   sim_pkg::row_buffer_t sim_window [3];
   sim_pkg::row_buffer_t sim_res_buffer [2];
@@ -106,7 +104,7 @@ module main #(
   memory_pkg::message_length_t fb_mem_length;
 
   // HUD sprites LUT declaration
-  hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth];
+  hud_pkg::sprite_inst_entry_t sprite_entry;
   hud_pkg::sprite_op_e sprite_req_op;
   wire sprite_req_valid, sprite_id_found, write_sprite_valid;
   wire [31:0] spi_write_sprite_base_addr;
@@ -261,7 +259,7 @@ module main #(
       .clk(clk),
       .reset(~ck_rst),
 
-      .spriteLUT(spriteLUT),
+      .sprite_entry(sprite_entry),
       .lookup_mem_id(hud_lookup_mem_id),
       .lookup_mem_addr(hud_lookup_mem_addr),
 
@@ -339,7 +337,7 @@ module main #(
       .sprite_w_mem_addr(spi_write_sprite_base_addr),
       .sprite_req_op(sprite_req_op),
       .sprite_req_body(sprite_req_body),
-      .spriteLUT(spriteLUT),
+      .sprite_read_entry(sprite_entry),
       .sprite_id_bitmap(sprite_id_bitmap),
       .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),

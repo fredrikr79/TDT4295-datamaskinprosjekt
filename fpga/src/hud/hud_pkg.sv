@@ -17,44 +17,23 @@ package hud_pkg;
         logic [15:0] h;        // The height of the sprite image
     } sprite_inst_entry_t;
 
+    typedef struct packed {
+        sprite_mem_id mem_id;
+        logic [15:0] w;
+        logic [15:0] h;
+    } static_sprite_data_t;
+
+    typedef struct packed {
+        logic active;
+        logic [15:0] x;
+        logic [15:0] y;
+    } dynamic_sprite_data_t;
+
     typedef enum bit [1:0] {
+        NONE,
         LUT_WRITE,
         LUT_UPDATE,
         LUT_DELETE
     } sprite_op_e;
-
-    function automatic void addSprite (
-        ref   sprite_inst_entry_t   lut [SpriteLutDepth],
-        ref   logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
-        input sprite_inst_entry_t body
-    );
-        sprite_id_bitmap[body.id] = 1'b1;
-        lut[body.id]              = body;
-    endfunction
-
-    function automatic void updateSprite (
-        ref   sprite_inst_entry_t   lut [SpriteLutDepth],
-        input sprite_inst_entry_t body
-    );
-        lut[body.id].active = body.active;
-        lut[body.id].x      = body.x;
-        lut[body.id].y      = body.y;
-    endfunction
-
-    function automatic void deleteSprite (
-        ref   sprite_inst_entry_t   lut [SpriteLutDepth],
-        ref   logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
-        input sprite_lut_id id
-    );
-        sprite_id_bitmap[id]  = 1'b0;
-        lut[id].active        = 0;
-        lut[id].id            = 0;
-        lut[id].mem_id        = 0;
-        lut[id].x             = 0;
-        lut[id].y             = 0;
-        lut[id].w             = 0;
-        lut[id].h             = 0;
-    endfunction
-
 
 endpackage

@@ -153,18 +153,18 @@ void tick() {
   main_time++;
 
   // rising edge
-  top_module->clk = 1;
+  top_module->clk_in = 1;
   top_module->eval();
 
   // falling edge
-  top_module->clk = 0;
+  top_module->clk_in = 0;
   top_module->eval();
 }
 
 // globally reset the model
 void reset() {
   top_module->reset = 1;
-  top_module->clk = 0;
+  top_module->clk_in = 0;
   top_module->eval();
   tick();
   top_module->reset = 0;

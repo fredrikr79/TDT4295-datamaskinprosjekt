@@ -27,20 +27,18 @@ module tb_main #(
   wire mem_rwds;
 
   main dut (
-      .clk(clk),
-      .sw({reset, enable}),
-      .btn({right, left, down, up}),
+      .clk_in(clk),
+      .user_btn(1'b0),
       .vga_r(color.red),
       .vga_g(color.green),
       .vga_b(color.blue),
       .vga_hsync(vga_hsync),
       .vga_vsync(vga_vsync),
 
-      .mem_out_clk(mem_out_clk),
-      .mem_out_clk_n(mem_out_clk_n),
+      .mem_clk(mem_out_clk),
       .mem_cs_n(mem_cs_n),
       .mem_reset_n(mem_reset_n),
-      .mem_dq(mem_dq),
+      .mem_data_bus(mem_dq),
       .mem_rwds(mem_rwds)
   );
 

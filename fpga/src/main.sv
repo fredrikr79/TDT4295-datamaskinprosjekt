@@ -37,17 +37,20 @@ module main #(
 
   wire mem_run_clock;
   wire clk;
-  // Main onboard clock
-  clk_wiz_0 clk_master (
-    .clk_in(clk_in),
-    .clk(clk)
-  );
+
+  assign clk = clk_in;
+
+  // // Main onboard clock
+  // clk_wiz_0 clk_master (
+  //   .clk_in(clk_in),
+  //   .clk(clk)
+  // );
 
   logic ck_q = 1'b0;
   always_ff @(posedge clk) ck_q <= mem_run_clock ? ~ck_q : 1'b0;
   assign mem_clk = ck_q;
   logic active_area, pixel_pulse, v_blank, h_blank, frame_start, line_end, near_frame_end;
-  
+
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
@@ -57,6 +60,20 @@ module main #(
 
   // Sim running
   logic sim_running = 1'b1; // Temporarily 1
+
+  sim_pkg::row_buffer_t sim_window [3];
+  sim_pkg::row_buffer_t sim_res_buffer [2];
+
+  logic sim_mem_toggle;
+  logic [31:0] sim_mem_addr;
+  memory_pkg::message_length_t sim_mem_len;
+  logic [7:0] sim_mem_in;
+  memory_pkg::transaction_e sim_mem_transaction;
+
+  // Row-commit handshake: sim_buffers -> fb_compositor
+  logic sim_pulse_row_commit, sim_commit_res_buffer, sim_pulse_frame_restart;
+  mem_map_pkg::fb_y_t sim_commit_y;
+
 
   // Memory signals
   logic spi_mem_toggle;
@@ -75,14 +92,36 @@ module main #(
   sim_pkg::row_buffer_t buffers[3];
   sim_pkg::row_buffer_t res_buffers[2];
 
+  logic fb_sel;
+  logic fb_swap_pending;
+  logic fb_frame_done;
+  logic fb_frame_idle;
+  logic fb_row_idle;
+  logic fb_ready_for_frame;
+  logic fb_underrun;
+  logic fb_mem_toggle;
+  memory_pkg::transaction_e fb_mem_transaction;
+  memory_pkg::address_t fb_mem_address;
+  memory_pkg::message_length_t fb_mem_length;
+
+  // HUD sprites LUT declaration
+  hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth];
+  hud_pkg::sprite_op_e sprite_req_op;
+  wire sprite_req_valid, sprite_id_found, write_sprite_valid;
+  wire [31:0] spi_write_sprite_base_addr;
+  hud_pkg::sprite_mem_id sprite_mem_id;
+  hud_pkg::sprite_inst_entry_t sprite_req_body;
+  wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
+  hud_pkg::sprite_lut_id sprite_available_id;
+
   // Critical error detection (unrecoverable errors arising outside the SPI module)
   wire error_critical;
   assign error_critical = 1'b0;
 
   vga vga_controller (
       .clk(clk),
-      .reset(ck_rst),
-      .enable(sw[2]),
+      .reset(~ck_rst),
+      .enable(1'b1),
       .h_sync(vga_hsync),
       .v_sync(vga_vsync),
       .coord_x(coord_x),
@@ -112,21 +151,6 @@ module main #(
 //       .coord_y(coord_y),
 //       .pixel(cells_pixel_unused) // Temporary for implementing frame buffer
 //   );
-
-  logic pulse_new_row;
-  sim_pkg::row_buffer_t sim_window [3];
-  logic pulse_transaction_pair_done, pulse_row_done; // pulse_row_done flytt inn ny rad, pulse_transaction_pair_done
-  sim_pkg::row_buffer_t sim_res_buffer [2];
-
-  logic sim_mem_toggle;
-  logic [31:0] sim_mem_addr;
-  memory_pkg::message_length_t sim_mem_len;
-  logic [7:0] sim_mem_in;
-  memory_pkg::transaction_e sim_mem_transaction;
-
-  // Row-commit handshake: sim_buffers -> fb_compositor
-  logic sim_pulse_row_commit, sim_commit_res_buffer, sim_pulse_frame_restart;
-  mem_map_pkg::fb_y_t sim_commit_y;
 
   sim_buffers sim_line_memory_reader(
     .clk(clk),
@@ -168,12 +192,6 @@ module main #(
     .output_buffers(sim_res_buffer)
   );
 
-  logic fb_sel;
-  logic fb_swap_pending;
-  logic fb_frame_done;
-  logic fb_frame_idle;
-  logic fb_row_idle;
-
   // Swaps between fb0 and fb1, only when the compositor together with simulator has finished a frame.
   // If it has not, the scanout just renders the same fb again.
   logic v_blank_d1;
@@ -196,14 +214,7 @@ module main #(
   end
 
   // The simulation may start simulating a frame only when the compositor is ready for it.
-  logic fb_ready_for_frame;
   assign fb_ready_for_frame = fb_frame_idle && !fb_swap_pending && !fb_frame_done;
-
-  logic fb_underrun;
-  logic fb_mem_toggle;
-  memory_pkg::transaction_e fb_mem_transaction;
-  memory_pkg::address_t fb_mem_address;
-  memory_pkg::message_length_t fb_mem_length;
 
   fb_scanout fb_display (
       .clk(clk),
@@ -247,7 +258,7 @@ module main #(
   // Rasterizes one row of sprite pixels ahead of the compositor writing it.
   hud_line_buffer hud_painter (
       .clk(clk),
-      .reset(sw[3]),
+      .reset(~ck_rst),
 
       .spriteLUT(spriteLUT),
       .lookup_mem_id(hud_lookup_mem_id),
@@ -319,17 +330,6 @@ module main #(
       .layers(layers),
       .color(color)
   );
-
-  // HUD sprites LUT declaration
-  hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth];
-
-  hud_pkg::sprite_op_e sprite_req_op;
-  wire sprite_req_valid, sprite_id_found, write_sprite_valid;
-  wire [31:0] spi_write_sprite_base_addr;
-  hud_pkg::sprite_mem_id sprite_mem_id;
-  hud_pkg::sprite_inst_entry_t sprite_req_body;
-  wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
-  hud_pkg::sprite_lut_id sprite_available_id;
 
   hud hud_controller (
       .clk(clk),
@@ -409,31 +409,6 @@ module main #(
 
     // TODO: Add the other clients here when they implement the external SRAM
   end
-
-  memory memory_subsystem (
-      .clk(clk),
-      .reset(ck_rst),
-      .enable(sw[2]),
-
-      .client_toggle(mem_client_toggle),
-      .client_next_transaction(mem_client_transaction),
-      .client_address(mem_client_address),
-      .client_length(mem_client_length_burst),
-      .client_write_data(mem_client_write_data),
-      .client_allow(mem_allow),
-
-      .client_busy(mem_client_busy),
-      .client_data_on_cable(mem_client_data_on_cable),
-      .client_grant(mem_client_grant),
-      .read_data(mem_out),
-
-      .out_clk(mem_out_clk),
-      .out_clk_n(mem_out_clk_n),
-      .cs_n(mem_cs_n),
-      .reset_n(mem_reset_n),
-      .dq(mem_dq),
-      .rwds(mem_rwds)
-  );
 
   spi spi_controller (
       .clk(clk),
@@ -515,17 +490,18 @@ module main #(
       .clk(clk),
       .reset(~ck_rst),
       .enable(1'b1),
-      .transaction_toggle(mem_toggle),
-      .next_transaction(mem_transaction),
-      .address(mem_addr),
-      .length(mem_len),
-      .write_data(mem_in),
-      .busy(mem_busy),
-      .run_clock(mem_run_clock),
-      .data_on_cable(mem_data_on_wire),
+      .client_toggle(mem_client_toggle),
+      .client_next_transaction(mem_client_transaction),
+      .client_address(mem_client_address),
+      .client_length(mem_client_length_burst),
+      .client_write_data(mem_client_write_data),
+      .client_allow(mem_allow),
+      .client_busy(mem_busy),
+      .client_data_on_cable(mem_data_on_wire),
+      .client_grant(mem_client_grant),
       .read_data(mem_out),
-
       // Actual memory pins
+      .run_clock(mem_run_clock),
       .cs_n(mem_cs_n),
       .reset_n(mem_reset_n),
       .dq(mem_data_bus),

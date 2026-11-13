@@ -47,7 +47,12 @@ module memory_initializer #(
           length: 2,
           write_data: '{
             0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            1: {memory_pkg::InitialLatency, memory_pkg::FixedLatency, memory_pkg::UseHybridBurst, memory_pkg::BurstLength},
+            1: {
+              memory_pkg::InitialLatency,
+              memory_pkg::FixedLatency,
+              memory_pkg::UseHybridBurst,
+              memory_pkg::BurstLength
+            },
             default: 8'b0
           }
       },
@@ -63,7 +68,12 @@ module memory_initializer #(
           length: 2,
           write_data: '{
             0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            1: {memory_pkg::InitialLatency, memory_pkg::FixedLatency, memory_pkg::UseHybridBurst, memory_pkg::BurstLength},
+            1: {
+              memory_pkg::InitialLatency,
+              memory_pkg::FixedLatency,
+              memory_pkg::UseHybridBurst,
+              memory_pkg::BurstLength
+            },
             default: 8'b0
           }
       },

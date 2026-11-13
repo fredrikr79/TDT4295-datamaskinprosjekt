@@ -35,6 +35,7 @@ module memory_controller (
   logic                              current_transaction_toggle;
   memory_pkg::address_t              current_address;
   memory_pkg::message_length_t       current_length;
+  memory_pkg::transaction_e          current_transaction;
 
 
   assign dq_in   = dq;
@@ -55,7 +56,8 @@ module memory_controller (
 
   // Keep track of clk where reading occured
   logic [7:0] read_alignment_buff = '0;
-  always @(negedge clk) read_alignment_buff <= {read_alignment_buff[6:0], current_state == memory_pkg::READING};
+  always @(negedge clk) read_alignment_buff
+    <= {read_alignment_buff[6:0], current_state == memory_pkg::READING};
 
   // Delay reads by ReadDataDelay cycles.
   // This way data_on_cable is only issued when the data is actually present.
@@ -141,8 +143,6 @@ module memory_controller (
       .count(bytes_this_state_raw)
   );
 
-  memory_pkg::transaction_e current_transaction;
-
   function automatic void update_outputs(input memory_pkg::transaction_output_t transaction_out);
     previous_state <= current_state;
     current_state <= transaction_out.next_state;
@@ -163,15 +163,6 @@ module memory_controller (
       end else begin
         current_transaction <= memory_pkg::NONE;
       end
-    end
-  end
-  always @(negedge clk) begin
-    if (reset) begin
-      update_outputs(find_transaction_output(memory_pkg::NONE));
-    end else if (enable) begin
-      update_outputs(txn_data_out);
-      if (current_state == memory_pkg::SENDING_CMD || current_state == memory_pkg::SENDING_ADDRESS)
-        double_latency <= rwds_in;
     end
   end
 
@@ -302,6 +293,16 @@ module memory_controller (
       txn_data_out.next_state == memory_pkg::IDLE
     ) begin
         txn_data_out.next_state = memory_pkg::READ_TAIL;
+    end
+  end
+
+  always @(negedge clk) begin
+    if (reset) begin
+      update_outputs(find_transaction_output(memory_pkg::NONE));
+    end else if (enable) begin
+      update_outputs(txn_data_out);
+      if (current_state == memory_pkg::SENDING_CMD || current_state == memory_pkg::SENDING_ADDRESS)
+        double_latency <= rwds_in;
     end
   end
 

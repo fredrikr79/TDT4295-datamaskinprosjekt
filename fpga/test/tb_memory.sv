@@ -21,6 +21,15 @@ module tb_memory #(
   logic busy, data_on_cable;
   int command_count = 0;
 
+  logic [memory_pkg::NumMemClients-1:0] client_toggle;
+  memory_pkg::transaction_e client_transaction[memory_pkg::NumMemClients];
+  memory_pkg::address_t client_address[memory_pkg::NumMemClients];
+  memory_pkg::message_length_t client_length[memory_pkg::NumMemClients];
+  logic [7:0] client_write_data[memory_pkg::NumMemClients];
+  logic [memory_pkg::NumMemClients-1:0] client_allow;
+  logic [memory_pkg::NumMemClients-1:0] client_busy, client_data_on_cable, client_grant;
+
+
   initial begin
     $dumpfile(DUMPFILEPATH);
     $dumpvars;
@@ -52,20 +61,10 @@ module tb_memory #(
 
   always @(negedge cs_n) if (!reset) command_count++;
 
-  logic reset, enable;
-  logic [7:0] read_data;
-
   // `memory` now fronts a fixed-priority arbiter rather than a single client
   // port. This testbench only exercises memory_initializer, which outranks the
   // arbiter entirely, so every client slot stays idle -- an idle slot never
   // inverts its toggle and is never granted.
-  logic [memory_pkg::NumMemClients-1:0] client_toggle;
-  memory_pkg::transaction_e client_transaction[memory_pkg::NumMemClients];
-  memory_pkg::address_t client_address[memory_pkg::NumMemClients];
-  memory_pkg::message_length_t client_length[memory_pkg::NumMemClients];
-  logic [7:0] client_write_data[memory_pkg::NumMemClients];
-  logic [memory_pkg::NumMemClients-1:0] client_allow;
-  logic [memory_pkg::NumMemClients-1:0] client_busy, client_data_on_cable, client_grant;
 
   memory memory_module (
       .clk,

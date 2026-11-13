@@ -122,17 +122,16 @@ module memory #(
   // Initializer may cause the initializer_toggle to be misaligned with controller_toggle.
   // This may cause an unexpected extra transaction. Check for odd number of transactions.
   // And compensate if necessary.
-  logic initializer_toggle, controller_toggle;
   logic toggle_offset;
   always_ff @(posedge clk) begin
     if(reset) toggle_offset <= 1'b0;
-    else if (!initializer_finished) toggle_offset <= initializer_toggle ^ transaction_toggle;
+    else if (!initializer_finished) toggle_offset <= initializer_toggle ^ client_toggle;
   end
 
   assign controller_toggle = initializer_finished
-    ? (transaction_toggle ^ toggle_offset)
+    ? (client_toggle ^ toggle_offset)
     : initializer_toggle;
-  
+
   //assign read_data = controller_read_data;
 
   always_comb begin

@@ -1,4 +1,6 @@
-module memory_initializer (
+module memory_initializer #(
+  parameter int unsigned StartupDelayCycles = config_pkg::GlobalClockFrequency / 1000 * 300
+)(
     input clk,
     reset,
     enable,
@@ -12,9 +14,10 @@ module memory_initializer (
     output logic [7:0] write
 );
 
-  localparam int NInitTransactions = 6;
+  localparam int NInitTransactions = 9;
   localparam int TransactionCount  = $clog2(NInitTransactions + 1);
-  typedef enum logic [1:0] {
+  typedef enum logic [2:0] {
+    POWER_UP_DELAY,
     READY,
     WAIT_BUSY,
     WAIT_DONE
@@ -32,12 +35,6 @@ module memory_initializer (
 
   localparam memory_meta_data_t InitTransactions[NInitTransactions] = '{
       '{
-          transaction: memory_pkg::DEEP_POWER_UP,
-          address: 32'b0,
-          length: 0,
-          write_data: '{default: 'h00}
-      },
-      '{
           transaction: memory_pkg::WRITE_ENABLE,
           address: 32'b0,
           length: 0,
@@ -48,40 +45,75 @@ module memory_initializer (
           transaction: memory_pkg::WRITE_ANY_REGISTER,
           address: 'h00000004,
           length: 2,
-          write_data: {
-            {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
-            {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          write_data: '{
+            0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
+            1: {memory_pkg::InitialLatency, memory_pkg::FixedLatency, memory_pkg::UseHybridBurst, memory_pkg::BurstLength},
+            default: 8'b0
           }
       },
       '{
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
+      },
+      '{
           transaction: memory_pkg::WRITE_ANY_REGISTER,
-          address: 'h00800004,
+          address: 'h00400004,
           length: 2,
-          write_data: {
-            {1'b1, memory_pkg::DriveStrength, 4'b1111},
-            {memory_pkg::InitialLatency, 1'b1, memory_pkg::BurstLength},
-            {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          write_data: '{
+            0: {1'b1, memory_pkg::DriveStrength, 4'b1111},
+            1: {memory_pkg::InitialLatency, memory_pkg::FixedLatency, memory_pkg::UseHybridBurst, memory_pkg::BurstLength},
+            default: 8'b0
           }
       },
       // Write to configuration registers 1
       '{
-          transaction: memory_pkg::WRITE_ANY_REGISTER,
-          address: 'h00000006,
-          length: 2,
-          write_data: {
-            8'hFF, 1'b1, 1'b0, 1'b0, 3'b000, 2'b00, {(memory_pkg::MaxMessageLength - 2) {8'b0}}
-          }
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
       },
       '{
           transaction: memory_pkg::WRITE_ANY_REGISTER,
-          address: 'h00800006,
+          address: 'h00000006,
           length: 2,
-          write_data: {
-            8'hFF, 1'b1, 1'b0, 1'b0, 3'b000, 2'b00, {(memory_pkg::MaxMessageLength - 2) {8'b0}}
+          write_data: '{
+            0: 8'hFF,
+            1: {1'b1, 1'b1, 1'b0, 3'b000, 2'b00},
+            default: 'h00
           }
+      },
+      '{
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
+      },
+      '{
+          transaction: memory_pkg::WRITE_ANY_REGISTER,
+          address: 'h00400006,
+          length: 2,
+          write_data: '{
+            0: 8'hFF,
+            1: {1'b1, 1'b1, 1'b0, 3'b000, 2'b00},
+            default: 'h00
+          }
+      },
+      '{
+          transaction: memory_pkg::WRITE_ENABLE,
+          address: 32'b0,
+          length: 0,
+          write_data: '{default: 'h00}
       }
   };
+
+  // Ensure 0 delay case is handled
+  localparam int unsigned StartupCountWidth = (StartupDelayCycles > 1)
+    ? $clog2(StartupDelayCycles)
+    : 1;
+  logic [StartupCountWidth-1:0] start_delay_cycles_count;
+
   logic [TransactionCount-1:0] i_current_transactions;
   // Indexes write_data, so it is sized to that array and wraps
   // inside it rather than being able to run off the end.
@@ -98,9 +130,16 @@ module memory_initializer (
       write <= 0;
       i_current_transactions <= 0;
       current_byte_written <= 0;
-      state <= READY;
+      start_delay_cycles_count <= 0;
+      state <= (StartupDelayCycles == 0 ? READY : POWER_UP_DELAY);
     end else if (enable) begin
       case (state)
+        POWER_UP_DELAY: begin
+          if(start_delay_cycles_count == StartupCountWidth'(StartupDelayCycles - 1))
+            state <= READY;
+          else
+            start_delay_cycles_count <= start_delay_cycles_count + 1'b1;
+        end
         READY: begin
           if (i_current_transactions == TransactionCount'(NInitTransactions)) begin
             finished <= 1;

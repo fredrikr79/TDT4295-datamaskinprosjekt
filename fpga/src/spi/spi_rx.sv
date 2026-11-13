@@ -11,8 +11,7 @@ module spi_rx #(
 
     input spi_pck::state_e state,
 
-    output wire acknack,
-    in_empty,
+    output wire in_empty,
     in_ready,
     in_full,
     output logic rx_r_en,
@@ -40,8 +39,14 @@ module spi_rx #(
     else rx_event_sync <= {rx_event_sync[1:0], rx_event};
   end
 
+  reg wr_window = 1'b0;
+  always @(posedge clk) begin
+    if(reset_s) wr_window <= 1'b0;
+    else wr_window <= (state == ST_READY || state == ST_RX);
+  end
+
   // Event driven RX Capture
-  wire rx_wr_gate = (~ck_ss) && ((state == ST_READY) | (state == ST_RX) | (state == ST_TX_IDLE));
+  wire rx_wr_gate = (~ck_ss) && wr_window;
   wire rx_event_trigger = rx_event_sync[2] ^ rx_event_sync[1];
 
   // MCU WRITE CONDITIONS
@@ -70,12 +75,11 @@ module spi_rx #(
     always_ff @(posedge clk) begin
         if (reset_s) begin
             rx_r_en <= 1'b0;
+            error_valid <= 1'b0;
+            error_code <= 8'h00;
         end else begin
             rx_r_en <= 1'b0;
-
-            if (state == ST_RX && ck_ss_s && !in_empty) begin
-                rx_r_en <= 1'b1;
-            end
+            error_valid <= 1'b0;
         end
     end
 
@@ -92,15 +96,5 @@ module spi_rx #(
       end
     end
   end
-
-  // ACK logic
-  reg [2:0] ack_sync = 3'b000;
-  always @(posedge clk) begin
-    if (reset) begin
-      ack_sync <= 3'b000;
-    end else ack_sync <= {ack_sync[1:0], in_wr_ack};
-  end
-
-  assign acknack = ack_sync[2];
 
 endmodule

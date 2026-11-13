@@ -22,8 +22,7 @@ module memory #(
     output logic [7:0] read_data,
 
     // Memory pins
-    output logic out_clk,
-    output logic out_clk_n,
+    output logic run_clock,
     output logic cs_n,
     output logic reset_n,
     inout wire [7:0] dq,
@@ -120,7 +119,21 @@ module memory #(
   assign controller_write_data = initializer_finished ? client_write_data[owner]
                                                       : initializer_write_data;
 
-  assign read_data = controller_read_data;
+  // Initializer may cause the initializer_toggle to be misaligned with controller_toggle.
+  // This may cause an unexpected extra transaction. Check for odd number of transactions.
+  // And compensate if necessary.
+  logic initializer_toggle, controller_toggle;
+  logic toggle_offset;
+  always_ff @(posedge clk) begin
+    if(reset) toggle_offset <= 1'b0;
+    else if (!initializer_finished) toggle_offset <= initializer_toggle ^ transaction_toggle;
+  end
+
+  assign controller_toggle = initializer_finished
+    ? (transaction_toggle ^ toggle_offset)
+    : initializer_toggle;
+  
+  //assign read_data = controller_read_data;
 
   always_comb begin
     for (int unsigned i = 0; i < NumClients; i++) begin
@@ -140,10 +153,9 @@ module memory #(
       .length(controller_length),
       .write_data(controller_write_data),
       .busy(controller_busy),
+      .run_clock(run_clock),
       .data_on_cable(controller_data_on_cable),
       .read_data(controller_read_data),
-      .out_clk,
-      .out_clk_n,
       .reset_n,
       .dq,
       .cs_n,
@@ -151,7 +163,7 @@ module memory #(
   );
 
 
-  memory_initializer initilizer (
+  memory_initializer initializer (
       .clk,
       .reset,
       .enable,

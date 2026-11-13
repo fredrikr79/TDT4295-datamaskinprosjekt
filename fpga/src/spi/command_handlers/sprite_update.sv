@@ -35,7 +35,6 @@ sprite_update_states_e state = START;
 
 logic param_active;
 hud_pkg::sprite_lut_id param_id;
-hud_pkg::sprite_mem_id param_mem_id;
 logic [15:0] param_x, param_y;
 
 always_ff @(posedge clk) begin
@@ -48,6 +47,7 @@ always_ff @(posedge clk) begin
         state <= START;
         sprite_update_done <= 1'b0;
     end else begin
+        error_valid <= 1'b0;
         if(send_sprite_update) begin
             case (state)
                 START: begin
@@ -55,27 +55,13 @@ always_ff @(posedge clk) begin
                     state <= GET_ID_TOP;
                 end
                 GET_ID_TOP: begin
-                    if($bits(hud_pkg::sprite_lut_id) > 8) begin
-                        sprite_update_r_en <= 1'b1;
-                        param_id[$bits(hud_pkg::sprite_lut_id)-1:8] <= in_fifo[$bits(hud_pkg::sprite_lut_id)-9:0];
-                    end
+                    sprite_update_r_en <= 1'b1;
+                    param_id[15:8] <= in_fifo;
                     state <= GET_ID_BOTTOM;
                 end
                 GET_ID_BOTTOM: begin
                     sprite_update_r_en <= 1'b1;
                     param_id[7:0] <= in_fifo;
-                    state <= GET_MEM_ID_TOP;
-                end
-                GET_MEM_ID_TOP: begin
-                    if($bits(hud_pkg::sprite_mem_id) > 8) begin
-                        sprite_update_r_en <= 1'b1;
-                        param_mem_id[$bits(hud_pkg::sprite_mem_id)-1:8] <= in_fifo[$bits(hud_pkg::sprite_mem_id)-9:0];
-                    end
-                    state <= GET_MEM_ID_BOTTOM;
-                end
-                GET_MEM_ID_BOTTOM: begin
-                    sprite_update_r_en <= 1'b1;
-                    param_mem_id[7:0] <= in_fifo;
                     state <= GET_ACTIVE;
                 end
                 GET_ACTIVE: begin
@@ -112,7 +98,6 @@ always_ff @(posedge clk) begin
                         error_code <= UNKNOWN_IDENTIFIER_ERROR;
                     end else begin
                         sprite_req_body.id <= param_id;
-                        sprite_req_body.mem_id <= param_mem_id;
                         sprite_req_body.active <= param_active;
                         sprite_req_body.x <= param_x;
                         sprite_req_body.y <= param_y;

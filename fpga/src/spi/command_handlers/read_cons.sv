@@ -26,12 +26,15 @@ module read_cons #(
   import mem_driver_pkg::*;
   import memory_pkg::*;
 
-  logic [7:0] read_bytes = 8'd0;
+  logic [15:0] read_bytes = 16'd0;
   logic [15:0] total_bytes = 16'b0;
   logic [15:0] rx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
   mem_driver_pkg::mem_states_e state = MEM_START;
+
+  logic data_valid = 1'b0;
+  always @(posedge clk) data_valid <= mem_data_on_wire;
 
   always_ff @(posedge clk) begin
 
@@ -44,6 +47,7 @@ module read_cons #(
       state <= MEM_START;
 
     end else begin
+      error_valid <= 1'b0;
       read_cons_w_en <= 1'b0;
       read_cons_r_en <= 1'b0;
       read_cons_done <= 1'b0;
@@ -82,7 +86,6 @@ module read_cons #(
               state <= MEM_GET_MSG_LENGTH_BOTTOM;
             end
           MEM_GET_MSG_LENGTH_BOTTOM: begin
-              read_cons_r_en <= 1'b1;
               total_bytes[7:0] <= in_fifo;
               state <= MEM_GET_MEM_ADDR;
               if(in_empty) begin
@@ -105,30 +108,24 @@ module read_cons #(
             end
           end
           MEM_DATA: begin
-            if (read_cons_w_en) begin
+            if (data_valid) begin
               // Capture data once write_cons is visible to fifo.
               read_cons_fifo <= mem_out;
-              read_bytes <= read_bytes + 8'd1;
+              read_cons_w_en <= 1'b1;
+              read_bytes <= read_bytes + 16'd1;
               rx_index <= rx_index + 16'd1;
 
               if (rx_index >= total_bytes - 1) begin
                 // Command end
-                read_cons_w_en <= 1'b0;
                 read_cons_done <= 1'b1;
                 rx_index <= 16'd0;
-                read_bytes <= 8'd0;
+                read_bytes <= 16'd0;
                 state <= MEM_DONE;
-              end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength - 1)) begin
+              end else if (read_bytes >= 16'(memory_pkg::MaxMessageLength - 1)) begin
                 // Transaction timeout, issue new where we finished.
-                read_cons_w_en <= 1'b0;
-                read_bytes <= 8'd0;
+                read_bytes <= 16'd0;
                 state <= MEM_GET_MEM_ADDR;
-              end else begin
-                read_cons_w_en <= mem_data_on_wire;
               end
-            end else if (!mem_busy && mem_data_on_wire) begin
-              // write byte next cycle.
-              read_cons_w_en <= 1'b1;
             end
           end
           MEM_DONE: begin

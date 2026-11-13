@@ -1,7 +1,8 @@
-module main (
-    input wire       clk,
-    input wire [3:2] sw,
-    input wire [3:0] btn,
+module main #(
+  parameter bit ON_BOARD_MEMORY = 1'b0
+)(
+    input wire clk_in,
+    input wire user_btn,
 
     output wire [color_pkg::RedBits-1:0] vga_r,
     output wire [color_pkg::GreenBits-1:0] vga_g,
@@ -17,27 +18,36 @@ module main (
     ck_rst,
 
     inout wire [7:0] octo_spi,
-    inout wire acknack,
-    output wire ready,
+//
+    output wire led_r_n,
+    led_g_n,
+    led_b_n,
+    ready,
+    acknack,
     sync,
 
-    // PSRAM pins (Infineon S70KL1283, octal xSPI)
-    output wire mem_out_clk,
-    mem_out_clk_n,
-    mem_cs_n,
-    mem_reset_n,
-
-    inout wire [7:0] mem_dq,
-
-    inout wire mem_rwds,
-
-    output wire [3:0] led,
-
-    output wire led0_r,
-    led0_g,
-    led0_b
+    // Memory signals
+    output logic mem_clk,
+    output logic mem_cs_n,
+    output logic mem_reset_n,
+    inout wire [7:0] mem_data_bus,
+    inout wire mem_rwds
 );
+
+
+  wire mem_run_clock;
+  wire clk;
+  // Main onboard clock
+  clk_wiz_0 clk_master (
+    .clk_in(clk_in),
+    .clk(clk)
+  );
+
+  logic ck_q = 1'b0;
+  always_ff @(posedge clk) ck_q <= mem_run_clock ? ~ck_q : 1'b0;
+  assign mem_clk = ck_q;
   logic active_area, pixel_pulse, v_blank, h_blank, frame_start, line_end, near_frame_end;
+  
   vga_sync_params::x_coordinate_t coord_x;
   vga_sync_params::y_coordinate_t coord_y;
   color_pkg::color_t color;
@@ -61,8 +71,13 @@ module main (
 
   layer_pkg::layer_px_t layers[NumLayers];
 
+  logic pulse_new_row, pulse_transaction_pair_done, pulse_row_done;
+  sim_pkg::row_buffer_t buffers[3];
+  sim_pkg::row_buffer_t res_buffers[2];
+
   // Critical error detection (unrecoverable errors arising outside the SPI module)
   wire error_critical;
+  assign error_critical = 1'b0;
 
   vga vga_controller (
       .clk(clk),
@@ -427,10 +442,9 @@ module main (
       .ck_rst(ck_rst),
       .octo_spi(octo_spi),
       .acknack(acknack),
-      .led(led),
-      .led0_r(led0_r),
-      .led0_g(led0_g),
-      .led0_b(led0_b),
+      .led_r_n(led_r_n),
+      .led_g_n(led_g_n),
+      .led_b_n(led_b_n),
       .ready(ready),
 
       .out_almost_empty(out_almost_empty),
@@ -465,7 +479,59 @@ module main (
 
       // Critical error line
       .error_critical(error_critical)
-  );
+    );
+
+
+  // simulator simulation_core (
+  //   .clk(clk),
+  //   .pulse_new_row(pulse_new_row),
+  //   .sim_running(sim_running),
+  //   .buffers(buffers),
+  //   .pulse_transaction_pair_done(pulse_transaction_pair_done),
+  //   .pulse_row_done(pulse_row_done),
+  //   .res_buffer(res_buffers)
+  // );
+
+  if(ON_BOARD_MEMORY) begin : g_mem_onboard
+    memory_onboard memory (
+      .clk(clk),
+      .reset(~ck_rst),
+      .enable(1'b1),
+      .transaction_toggle(mem_toggle),
+
+      .next_transaction(mem_transaction),
+      .address(mem_addr),
+      .length(mem_len),
+      .write_data(mem_in),
+
+      // Info to FPGA
+      .busy(mem_busy),
+      .data_on_cable(mem_data_on_wire),
+      .read_data(mem_out)
+    );
+  end else begin : g_mem
+
+    memory memory (
+      .clk(clk),
+      .reset(~ck_rst),
+      .enable(1'b1),
+      .transaction_toggle(mem_toggle),
+      .next_transaction(mem_transaction),
+      .address(mem_addr),
+      .length(mem_len),
+      .write_data(mem_in),
+      .busy(mem_busy),
+      .run_clock(mem_run_clock),
+      .data_on_cable(mem_data_on_wire),
+      .read_data(mem_out),
+
+      // Actual memory pins
+      .cs_n(mem_cs_n),
+      .reset_n(mem_reset_n),
+      .dq(mem_data_bus),
+      .rwds(mem_rwds)
+    );
+  end
 
 endmodule
 

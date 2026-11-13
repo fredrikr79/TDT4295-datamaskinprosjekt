@@ -21,16 +21,18 @@ package memory_pkg;
     SENDING_ADDRESS = 3,
     WAITING_ON_LATENCY = 4,
     READING = 5,
-    WRITING = 6
+    WRITING = 6,
+    READ_TAIL = 7
   } state_e;
 
   typedef struct {
     logic rwds;
     logic [7:0] dq;
     state_e next_state;
+    logic [7:0] read_data;
   } transaction_output_t;
 
-  localparam int unsigned MaxMessageLength = 64;
+  localparam int unsigned MaxMessageLength = 128;
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
       MaxMessageLength + 1
   ) : 1;
@@ -52,13 +54,14 @@ package memory_pkg;
   localparam int unsigned MemoryClockSlowDownFactor = 2;
   localparam int unsigned MemoryClockFrequency =
     config_pkg::GlobalClockFrequency / MemoryClockSlowDownFactor;
+  localparam int unsigned ReadDataDelay = 5 / 2 + 1;
 
   localparam int unsigned LatencyCount = MemoryClockFrequency < 85_000_000 ? 3
   : MemoryClockFrequency < 104_000_000 ? 4
   : MemoryClockFrequency < 133_000_000 ? 5
   : MemoryClockFrequency < 166_000_000 ? 6
   : 7;
-  localparam bit [4:0] InitialLatency =
+  localparam bit [3:0] InitialLatency =
       MemoryClockFrequency <  85_000_000 ? 'b1110
   : MemoryClockFrequency < 104_000_000 ? 'b1111
   : MemoryClockFrequency < 133_000_000 ? 'b0000
@@ -69,11 +72,9 @@ package memory_pkg;
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
     memory_pkg::message_length_t latency_count;
-    latency_count = message_length_t'(MemoryClockSlowDownFactor)
-                    * (double_latency ? message_length_t'(2 * LatencyCount)
-                                      : message_length_t'(LatencyCount));
+    latency_count = message_length_t'(2  * (double_latency ? 2 * LatencyCount : LatencyCount));
 
-    return amount_of_latency_ticks > latency_count;
+    return amount_of_latency_ticks >= latency_count - 1'b1;
   endfunction
   function automatic logic transaction_is_finished(input message_length_t amount_of_rws,
                                                    input transaction_e transaction,
@@ -81,8 +82,9 @@ package memory_pkg;
     return amount_of_rws == get_rw_length(transaction, optional_length) - 1;
   endfunction
 
-  localparam bit UseFixedLatency = 0;
-  localparam bit [1:0] BurstLength = 'b00; // burst length of 128 bits
+  localparam bit FixedLatency = 1'b1;
+  localparam bit UseHybridBurst = 1'b1;
+  localparam bit [1:0] BurstLength = 2'b11; // burst length of 32 bytes
 
 
   // Possible drive strengths

@@ -11,10 +11,9 @@ module spi #(
     inout wire [7:0] octo_spi,
     inout wire       acknack,
 
-    output wire [3:0] led,
-    output wire       led0_r,
-    output wire       led0_g,
-    output wire       led0_b,
+    output wire       led_r_n,
+    output wire       led_g_n,
+    output wire       led_b_n,
     output wire       ready,
 
     output wire out_almost_empty,
@@ -58,9 +57,6 @@ module spi #(
   spi_pck::opcode_e opcode;
   reg proc_done;
 
-  // READY
-  assign ready = (state == ST_READY) || (state == ST_TX_IDLE);
-
   // BOOT CONDITION
   wire in_ready;
   wire out_ready;
@@ -100,6 +96,14 @@ module spi #(
   wire reset = ~ck_rst || rst_en;
   wire reset_s = ~ck_rst_s || rst_en;
 
+ // READY
+  reg ready_r = 1'b0;
+  always @(posedge clk) begin
+    if(reset_s) ready_r <= 1'b0;
+    else ready_r <= (state == ST_READY) || (state == ST_TX_IDLE);
+  end
+  assign ready = ready_r;
+
   // Error detection
   logic error_valid,
     fsm_error_valid,
@@ -107,30 +111,49 @@ module spi #(
     tx_error_valid,
     processor_error_valid;
 
-  spi_pck::error_event_t error_event;
-  assign error_event.valid = error_critical  |
-                             fsm_error_valid |
-                             rx_error_valid  |
-                             tx_error_valid  |
-                             processor_error_valid;
+  logic nack = 1'b0;
+  always_ff @(posedge clk) begin
+    if(reset_s) begin
+      nack <= 1'b0;
+    end else if (state == ST_FAILED) begin
+      nack <= 1'b1;
+    end else if (state == ST_DECODE) begin
+      nack <= 1'b0;
+    end
+  end
 
+  assign error_valid = nack;
+  assign acknack = ~nack;
+
+
+  logic [7:0] error_code = 8'h00;
   logic [7:0] fsm_error_code,
     rx_error_code,
     tx_error_code,
     processor_error_code;
 
+
+  spi_pck::error_event_t error_event;
+  wire error_event_valid = error_critical |
+                          fsm_error_valid |
+                          rx_error_valid  |
+                          tx_error_valid  |
+                          processor_error_valid;
+
   always_ff @(posedge clk) begin
     if (error_critical)
-      error_event.code <= CRITICAL_ERROR;
-    if (fsm_error_valid)
-      error_event.code <= fsm_error_code;
+      error_code <= CRITICAL_ERROR;
+    else if (fsm_error_valid)
+      error_code <= fsm_error_code;
     else if (rx_error_valid)
-      error_event.code <= rx_error_code;
+      error_code <= rx_error_code;
     else if (tx_error_valid)
-      error_event.code <= rx_error_code;
+      error_code <= tx_error_code;
     else if (processor_error_valid)
-      error_event.code <= processor_error_code;
+      error_code <= processor_error_code;
   end
+
+  assign error_event = '{valid: error_event_valid, code: error_code};
 
   always_ff @(posedge clk) begin
     if (reset) begin
@@ -174,7 +197,6 @@ module spi #(
       .in_r_en(in_r_en),
       .rx_r_en(rx_r_en),
       .state(state),
-      .acknack(acknack),
       .in_empty(in_empty),
       .in_ready(in_ready),
       .in_full(in_full),
@@ -243,13 +265,8 @@ module spi #(
   );
 
   // DEBUG
-  assign led[0] = ready;
-  assign led[1] = ~in_empty;
-  assign led[2] = ~out_empty;
-  assign led[3] = (state == ST_FAILED);
-
-  assign led0_r = state[2];
-  assign led0_g = state[1];
-  assign led0_b = state[0];
+  assign led_r_n = state[2];
+  assign led_g_n = state[1];
+  assign led_b_n = state[0];
 
 endmodule

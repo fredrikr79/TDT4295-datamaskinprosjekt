@@ -12,7 +12,8 @@ module mem_txn_write (
 );
 
   always_comb begin
-    if (reset) out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE};
+    out = '{rwds: 'b0, dq: 'h00, next_state: current_state, read_data: 'h00};
+    if (reset) out.next_state = memory_pkg::IDLE;
     else if (enable) begin
       case (current_state)
         memory_pkg::IDLE: out.next_state = memory_pkg::STARTING_TRANSACTION;
@@ -24,7 +25,7 @@ module mem_txn_write (
           if (bytes_this_state == 1) begin
             out.next_state = memory_pkg::SENDING_ADDRESS;
             out.dq = address[31-:8];
-          end
+          end else out.dq = memory_pkg::WRITE;
         end
         memory_pkg::SENDING_ADDRESS: begin
           if (bytes_this_state < 3) out.dq = address[31-8*(bytes_this_state+1)-:8];
@@ -34,12 +35,12 @@ module mem_txn_write (
           if (memory_pkg::waiting_is_finished(bytes_this_state, double_latency)) begin
             out.next_state = memory_pkg::WRITING;
             out.dq = write_data;
-            out.rwds = 1;
+            out.rwds = 0;
           end
         end
         memory_pkg::WRITING: begin
           out.dq = write_data;
-          out.rwds = bytes_this_state[0];
+          out.rwds = 0;
           if (memory_pkg::transaction_is_finished(
                   bytes_this_state, memory_pkg::WRITE, write_length
               )) begin

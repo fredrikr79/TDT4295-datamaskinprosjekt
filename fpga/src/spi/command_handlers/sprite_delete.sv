@@ -33,24 +33,23 @@ always_ff @(posedge clk) begin
     sprite_delete_r_en <= 1'b0;
     sprite_delete_done <= 1'b0;
     sprite_req_valid   <= 1'b0;
+    error_valid        <= 1'b0;
 
     if (ck_rst) begin
         state <= START;
     end else if(send_sprite_delete) begin
+        error_valid <= 1'b0;
         case (state)
             START: begin
                 sprite_delete_r_en <= 1'b1;
                 state <= GET_ID_TOP;
             end
             GET_ID_TOP: begin
-                if($bits(hud_pkg::sprite_lut_id) > 8) begin
-                    sprite_delete_r_en <= 1'b1;
-                    param_id[$bits(hud_pkg::sprite_lut_id)-1:8] <= in_fifo[$bits(hud_pkg::sprite_lut_id)-9:0];
-                end
+                sprite_delete_r_en <= 1'b1;
+                param_id[15:8] <= in_fifo;
                 state <= GET_ID_BOTTOM;
             end
             GET_ID_BOTTOM: begin
-                sprite_delete_r_en <= 1'b1;
                 param_id[7:0] <= in_fifo;
                 state <= EXECUTE;
             end

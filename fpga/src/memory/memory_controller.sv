@@ -15,10 +15,9 @@ module memory_controller (
     output logic busy,
     data_on_cable,
     output logic [7:0] read_data,
+    output logic run_clock,
 
     // Memory pins
-    output logic out_clk,
-    output logic out_clk_n,
     output logic cs_n,
     output logic reset_n,
     inout wire [7:0] dq,
@@ -48,11 +47,21 @@ module memory_controller (
 
   memory_pkg::state_e current_state, previous_state;
   assign busy = current_state != memory_pkg::IDLE;
-  assign data_on_cable =
-    current_state == memory_pkg::READING ||
-    current_state == memory_pkg::WRITING;
 
-  logic run_memory_clock;
+  // Ensure samplig happens @ negedge
+  logic [7:0] delayed_dq;
+  always @(posedge clk) delayed_dq <= dq_in;
+  always @(negedge clk) read_data <= delayed_dq;
+
+  // Keep track of clk where reading occured
+  logic [7:0] read_alignment_buff = '0;
+  always @(negedge clk) read_alignment_buff <= {read_alignment_buff[6:0], current_state == memory_pkg::READING};
+
+  // Delay reads by ReadDataDelay cycles.
+  // This way data_on_cable is only issued when the data is actually present.
+  assign data_on_cable =
+    read_alignment_buff[memory_pkg::ReadDataDelay - 1] ||
+    current_state == memory_pkg::WRITING;
 
   always_comb begin
     case (current_state)
@@ -60,64 +69,59 @@ module memory_controller (
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 1;
-        run_memory_clock = 0;
+        run_clock = 0;
       end
       memory_pkg::STARTING_TRANSACTION: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 1;
-        run_memory_clock = 0;
+        run_clock = 0;
       end
       memory_pkg::SENDING_CMD: begin
         dq_oe = 1;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::SENDING_ADDRESS: begin
         dq_oe = 1;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::WAITING_ON_LATENCY: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::READING: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
       end
       memory_pkg::WRITING: begin
         dq_oe = 1;
-        rwds_oe = 1;
+        rwds_oe = current_transaction == memory_pkg::WRITE;
         cs_n = 0;
-        run_memory_clock = 1;
+        run_clock = 1;
+      end
+      memory_pkg::READ_TAIL: begin
+        // Ensure delayed read is closed before ending transaction
+        dq_oe = 0;
+        rwds_oe = 0;
+        cs_n = 0;
+        run_clock = 0;
       end
       default: begin
         dq_oe = 0;
         rwds_oe = 0;
         cs_n = 1;
-        run_memory_clock = 0;
+        run_clock = 0;
       end
     endcase
   end
-
-
-  divised_clock #(
-      .N(2)
-  ) memory_clock_generator (
-      .old_clock(clk),
-      .new_clock(out_clk),
-      .enable(enable),
-      .reset(~run_memory_clock | reset)
-  );
-
-  assign out_clk_n = ~out_clk;
 
   logic reset_byte_counter;
   assign reset_byte_counter = (current_state == previous_state) ? 0 : 1;
@@ -164,15 +168,19 @@ module memory_controller (
   always @(negedge clk) begin
     if (reset) begin
       update_outputs(find_transaction_output(memory_pkg::NONE));
-      double_latency <= 0;
     end else if (enable) begin
-      update_outputs(find_transaction_output(current_transaction));
+      update_outputs(txn_data_out);
       if (current_state == memory_pkg::SENDING_CMD || current_state == memory_pkg::SENDING_ADDRESS)
         double_latency <= rwds_in;
     end
   end
 
-  memory_pkg::transaction_output_t none_out = '{rwds: 'b0, dq: 'h00, next_state: memory_pkg::IDLE};
+  memory_pkg::transaction_output_t none_out = '{
+      rwds: 'b0,
+      dq: 'h00,
+      next_state: memory_pkg::IDLE,
+      read_data: 'h00
+  };
   memory_pkg::transaction_output_t reset_enable_out;
   mem_txn_reset_enable reset_enable_transaction (
       .reset(reset),
@@ -238,7 +246,6 @@ module memory_controller (
       .dq_in(dq_in),
       .address(current_address),
       .double_latency,
-      .read_data,
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
       .out(read_any_register_txn_out)
@@ -249,7 +256,6 @@ module memory_controller (
       .enable(enable),
       .dq_in(dq_in),
       .double_latency,
-      .read_data,
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
       .out(read_id_txn_out)
@@ -262,7 +268,6 @@ module memory_controller (
       .address(current_address),
       .read_length(current_length),
       .double_latency,
-      .read_data,
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
       .out(read_txn_out)
@@ -280,6 +285,25 @@ module memory_controller (
       .bytes_this_state(bytes_this_state),
       .out(write_txn_out)
   );
+
+  // Drive Read_tail state until done or transition into it if READING, heading into IDLE
+  memory_pkg::transaction_output_t txn_data_out;
+  always_comb begin
+    txn_data_out = find_transaction_output(current_transaction);
+    if (current_state == memory_pkg::READ_TAIL) begin
+      txn_data_out = none_out;
+      txn_data_out.next_state = (
+        bytes_this_state == memory_pkg::message_length_t'(memory_pkg::ReadDataDelay - 1)
+      )
+      ? memory_pkg::IDLE
+      : memory_pkg::READ_TAIL;
+    end else if(
+      current_state == memory_pkg::READING &&
+      txn_data_out.next_state == memory_pkg::IDLE
+    ) begin
+        txn_data_out.next_state = memory_pkg::READ_TAIL;
+    end
+  end
 
   function automatic memory_pkg::transaction_output_t find_transaction_output(
       input memory_pkg::transaction_e transaction);

@@ -42,10 +42,13 @@ module read_box #(
     DONE
   } r_box_states_e;
 
-  logic [7:0] read_bytes = 8'd0;
-  logic [15:0] row_index, col_index = 16'd0;
+  logic [15:0] read_bytes = 16'd0;
+  logic [15:0] row_index = 16'd0, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
+
+  logic data_valid = 1'b0;
+  always @(posedge clk) data_valid <= mem_data_on_wire;
 
   r_box_states_e state = START;
 
@@ -60,9 +63,9 @@ module read_box #(
       read_box_fifo <= 8'd0;
       mem_req       <= 1'b0;
       state <= START;
-      error_valid <= 1'b0;
 
     end else begin
+      error_valid <= 1'b0;
       read_box_w_en <= 1'b0;
       read_box_r_en <= 1'b0;
       read_box_done <= 1'b0;
@@ -110,7 +113,6 @@ module read_box #(
             state <= GET_HEIGHT_BOTTOM;
           end
           GET_HEIGHT_BOTTOM: begin
-            read_box_r_en <= 1'b1;
             rows[7:0] <= in_fifo;
             state <= GET_MEM_ADDR;
 
@@ -121,9 +123,10 @@ module read_box #(
             end
           end
           GET_MEM_ADDR: begin
-            mem_len <= cols > 16'(memory_pkg::MaxMessageLength)
+            mem_len <= (cols - col_index) > 16'(memory_pkg::MaxMessageLength)
               ? 16'(memory_pkg::MaxMessageLength)
               : cols - col_index;
+            read_bytes <= 16'd0;
             mem_addr <= GridPosToMemAddr(gridX + col_index, gridY + row_index);
             state   <= INIT_REQ;
           end
@@ -134,9 +137,10 @@ module read_box #(
             end
           end
           DATA: begin
-            if (!mem_busy && mem_data_on_wire) begin
+            if (data_valid) begin
               read_box_fifo <= mem_out;
               read_box_w_en <= 1'b1;
+              read_bytes <= read_bytes + 16'd1;
 
               if (col_index >= cols - 1) begin
                 col_index <= 16'b0;
@@ -149,13 +153,11 @@ module read_box #(
                   read_box_done <= 1'b1;
                   state <= DONE;
                 end
-              end else if (read_bytes >= 8'(memory_pkg::MaxMessageLength) - 1) begin
+              end else begin
                 col_index <= col_index + 16'd1;
-                read_bytes <= 8'b0;
-                state <= GET_MEM_ADDR;
-              end else if(mem_data_on_wire) begin
-                col_index <= col_index + 16'd1;
-                read_bytes <= read_bytes + 8'd1;
+                if (read_bytes >= mem_len - 16'd1) begin
+                  state <= GET_MEM_ADDR;
+                end
               end
             end
           end

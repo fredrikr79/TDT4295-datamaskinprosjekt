@@ -39,7 +39,7 @@ module write_box #(
     DONE
   } w_box_states_e;
 
-  logic [7:0] written_bytes = 8'b0;
+  logic [15:0] written_bytes = 16'b0;
   logic [15:0] row_index, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
@@ -59,6 +59,7 @@ module write_box #(
       write_box_r_en <= 1'b0;
       write_box_done <= 1'b0;
       mem_req        <= 1'b0;
+      error_valid    <= 1'b0;
 
       if (send_write_box) begin
         case (state)
@@ -125,13 +126,9 @@ module write_box #(
           end
           DATA: begin
 
-            // The memory may start a read transaction if the memory isnt busy.
-
             // If a transaction is started, the unit may read if there is data on the wire, we havent reached the maximum transaction size, and we're within limits of our transaction.
 
             // Once finished with a row, start a new row in a new transaction.
-            if (!mem_busy) begin
-              // use captured toggle to signal the new transaction on the same
               // cycle as data is pushed
 
               if (mem_data_on_wire) begin
@@ -153,17 +150,16 @@ module write_box #(
                     write_box_done <= 1'b1;
                     state <= DONE;
                   end
-                end else if (written_bytes >= 8'(memory_pkg::MaxMessageLength) - 1) begin
+                end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength) - 1) begin
                   // Memory needs to end transaction
                   col_index <= col_index + 16'd1;
-                  written_bytes <= 8'b0;
+                  written_bytes <= 16'b0;
                   state <= GET_MEM_ADDR;
                 end else begin
                   col_index <= col_index + 16'd1;
-                  written_bytes <= written_bytes + 8'd1;
+                  written_bytes <= written_bytes + 16'd1;
                   write_box_r_en <= mem_data_on_wire;
                 end
-              end
             end
           end
           DONE: begin

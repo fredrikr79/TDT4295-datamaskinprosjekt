@@ -27,11 +27,14 @@ module tb_memory #(
     clk = 0;
     reset = 1;
     enable = 1;
-    transaction_toggle = 0;
-    next_transaction = memory_pkg::NONE;
-    address = 0;
-    length = 0;
-    write_data = 0;
+    client_toggle = '0;
+    client_allow = '1;
+    for (int unsigned i = 0; i < memory_pkg::NumMemClients; i++) begin
+      client_transaction[i] = memory_pkg::NONE;
+      client_address[i] = '0;
+      client_length[i] = '0;
+      client_write_data[i] = '0;
+    end
 
     repeat (2) begin
       #1 clk = 1;
@@ -49,20 +52,37 @@ module tb_memory #(
 
   always @(negedge cs_n) if (!reset) command_count++;
 
+  logic reset, enable;
+  logic [7:0] read_data;
+
+  // `memory` now fronts a fixed-priority arbiter rather than a single client
+  // port. This testbench only exercises memory_initializer, which outranks the
+  // arbiter entirely, so every client slot stays idle -- an idle slot never
+  // inverts its toggle and is never granted.
+  logic [memory_pkg::NumMemClients-1:0] client_toggle;
+  memory_pkg::transaction_e client_transaction[memory_pkg::NumMemClients];
+  memory_pkg::address_t client_address[memory_pkg::NumMemClients];
+  memory_pkg::message_length_t client_length[memory_pkg::NumMemClients];
+  logic [7:0] client_write_data[memory_pkg::NumMemClients];
+  logic [memory_pkg::NumMemClients-1:0] client_allow;
+  logic [memory_pkg::NumMemClients-1:0] client_busy, client_data_on_cable, client_grant;
+
   memory memory_module (
       .clk,
       .reset,
       .enable,
-      .transaction_toggle,
 
-      .next_transaction,
-      .address,
-      .length,
-      .write_data,
+      .client_toggle,
+      .client_next_transaction(client_transaction),
+      .client_address,
+      .client_length,
+      .client_write_data,
+      .client_allow,
 
       // Info to fpga
-      .busy,
-      .data_on_cable,
+      .client_busy,
+      .client_data_on_cable,
+      .client_grant,
       .read_data,
 
       // Memory pins

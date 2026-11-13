@@ -22,11 +22,15 @@ module memory_initializer #(
     WAIT_BUSY,
     WAIT_DONE
   } init_state_t;
+
+  localparam int unsigned MaxInitBytes = 4;
+  localparam int unsigned InitByteIndexBits = $clog2(MaxInitBytes);  // 2
+
   typedef struct packed {
     memory_pkg::transaction_e transaction;
     memory_pkg::address_t address;
     memory_pkg::message_length_t length;
-    logic [memory_pkg::MaxMessageLength-1:0][7:0] write_data;
+    logic [MaxInitBytes-1:0][7:0] write_data;
   } memory_meta_data_t;
 
   localparam memory_meta_data_t InitTransactions[NInitTransactions] = '{
@@ -111,7 +115,9 @@ module memory_initializer #(
   logic [StartupCountWidth-1:0] start_delay_cycles_count;
 
   logic [TransactionCount-1:0] i_current_transactions;
-  memory_pkg::message_length_t current_byte_written;
+  // Indexes write_data, so it is sized to that array and wraps
+  // inside it rather than being able to run off the end.
+  logic [InitByteIndexBits-1:0] current_byte_written;
   init_state_t state;
 
   always_ff @(posedge clk) begin

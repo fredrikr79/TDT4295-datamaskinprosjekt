@@ -57,6 +57,7 @@ module tb_spi;
   logic [15:0] mem_len;
   logic mem_busy,
     mem_data_on_wire;
+  logic mem_allow = 1'b1;  // SPI always owns the bus in this testbench
   logic [31:0] mem_addr;
   memory_pkg::transaction_e mem_transaction;
 
@@ -100,6 +101,7 @@ module tb_spi;
       .mem_in(mem_in),
       .mem_len(mem_len),
       .mem_busy(mem_busy),
+      .mem_allow(mem_allow),
       .mem_data_on_wire(mem_data_on_wire),
       .mem_addr(mem_addr),
       .mem_transaction(mem_transaction),

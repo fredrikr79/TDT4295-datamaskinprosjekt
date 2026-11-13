@@ -135,12 +135,12 @@ void sample_pixel() {
 
   if (coord_x < ActiveWidth && coord_y < ActiveHeight) {
     uint16_t packed_color = top_module->color;
-    uint8_t red = (packed_color >> 8) & 0xF;
-    uint8_t green = (packed_color >> 4) & 0xF;
-    uint8_t blue = packed_color & 0xF;
-    graphics_buffer[coord_x][coord_y][0] = float(red) / 15.0f;
-    graphics_buffer[coord_x][coord_y][1] = float(green) / 15.0f;
-    graphics_buffer[coord_x][coord_y][2] = float(blue) / 15.0f;
+    uint8_t red = (packed_color >> 11) & 0x1F;
+    uint8_t green = (packed_color >> 5) & 0x3F;
+    uint8_t blue = packed_color & 0x1F;
+    graphics_buffer[coord_x][coord_y][0] = float(red) / 31.0f;
+    graphics_buffer[coord_x][coord_y][1] = float(green) / 63.0f;
+    graphics_buffer[coord_x][coord_y][2] = float(blue) / 31.0f;
   }
 
   pre_h_sync = top_module->h_sync;

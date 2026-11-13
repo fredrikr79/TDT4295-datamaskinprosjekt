@@ -5,7 +5,7 @@ package hud_pkg;
 
     localparam int SpriteLutDepth = 1024; // Number of sprites we can keep track of in the system.
     typedef bit [15:0] sprite_lut_id;
-
+    localparam int unsigned LutBits = $clog2(hud_pkg::SpriteLutDepth);  // 10
 
     typedef struct packed {
         logic        active;   // Should sprite be rendered

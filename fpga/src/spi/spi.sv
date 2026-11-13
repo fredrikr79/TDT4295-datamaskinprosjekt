@@ -29,6 +29,7 @@ module spi #(
     output logic [15:0] mem_len,
     input logic mem_busy,
     mem_data_on_wire,
+    mem_allow,  // from mem_access_policy
     output logic [31:0] mem_addr,
     output memory_pkg::transaction_e mem_transaction,
 
@@ -39,6 +40,7 @@ module spi #(
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_op_e sprite_req_op,
     output hud_pkg::sprite_mem_id write_sprite_mem_id,
+    output logic [31:0] write_sprite_base_addr,
     output logic write_sprite_valid,
     mem_toggle,
     sprite_req_valid
@@ -76,6 +78,8 @@ module spi #(
 
   assign in_r_en  = proc_r_en | rx_r_en | tx_r_en;
   assign out_w_en = proc_w_en;
+
+  wire mem_busy_gated = mem_busy | ~mem_allow;
 
   // CDC synchronizations CK_SCK -> CLK
   reg [2:0] ck_ss_sync = 3'b000;
@@ -241,7 +245,7 @@ module spi #(
       .mem_len(mem_len),
       .mem_addr(mem_addr),
       .mem_transaction(mem_transaction),
-      .mem_busy(mem_busy),
+      .mem_busy(mem_busy_gated),
       .mem_data_on_wire(mem_data_on_wire),
       .mem_toggle(mem_toggle),
       .sprite_available_id(sprite_available_id),
@@ -252,6 +256,7 @@ module spi #(
       .sprite_id_bitmap(sprite_id_bitmap),
       .write_sprite_valid(write_sprite_valid),
       .write_sprite_mem_id(write_sprite_mem_id),
+      .write_sprite_base_addr(write_sprite_base_addr),
       .sim_running(sim_running),
       .error_event(error_event),
       .error_valid(processor_error_valid),

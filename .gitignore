@@ -3,6 +3,7 @@ documentation/slides/pdf
 /build
 fpga/build
 fpga/vga-build
+fpga/vcd-build
 fpga/verible.filelist
 fpga/dump-data
 fpga/src/config_pkg.sv

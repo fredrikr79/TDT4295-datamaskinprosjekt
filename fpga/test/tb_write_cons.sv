@@ -2,7 +2,13 @@
 /* verilator lint_off MULTITOP */
 
 module tb_write_cons #(
-  parameter int PAYLOAD_LEN = 25
+  // Derived from the burst length so this testbench keeps exercising the
+  // CHUNKING path. It was a flat 25, which straddled MaxMessageLength = 20 and
+  // produced 2 chunks; once the burst length rose to 64 the same 25 bytes fit
+  // in a single transaction and the multi-chunk logic this testbench exists to
+  // cover stopped being reached at all -- silently, with the test still green.
+  // 2x + 5 gives three chunks with a short tail at any burst length.
+  parameter int PAYLOAD_LEN = 2 * memory_pkg::MaxMessageLength + 5
 );
   import config_pkg::*;
   import mem_driver_pkg::*;

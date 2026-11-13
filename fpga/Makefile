@@ -66,7 +66,7 @@ $(VGA_SIM_BINARY): $(SOURCES) test/vga-simulation/simulator.cpp test/config.hpp 
 		$(SOURCES) test/vga-simulation/simulator.cpp \
 		--cc --exe --build --timing --trace --Wall --Wno-fatal \
 		--top-module $(TOP_MODULE) \
-		--Mdir $< \
+		--Mdir $(VGA_SIM_DIR) \
 		-LDFLAGS "-lglut -lGLU -lGL"
 $(VGA_SIM_DIR):
 	@mkdir -p $@

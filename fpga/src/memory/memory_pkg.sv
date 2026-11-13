@@ -32,10 +32,9 @@ package memory_pkg;
     logic [7:0] read_data;
   } transaction_output_t;
 
-  localparam int unsigned MaxMessageLength = 1022;
-
+  localparam int unsigned MaxMessageLength = 128;
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
-      MaxMessageLength
+      MaxMessageLength + 1
   ) : 1;
 
   typedef logic [MessageLengthRegisterWidth-1:0] message_length_t;
@@ -102,5 +101,13 @@ package memory_pkg;
   // 1 - single ended clock
   // 0 - differential clock
   localparam bit MemoryClockType = 0;
+
+  // Fixed priority, lowest index first.
+  localparam int unsigned NumMemClients = 5;
+  localparam int unsigned MemClientScanoutID = 0;  // highest priority
+  localparam int unsigned MemClientHudID = 1;
+  localparam int unsigned MemClientSpiID = 2;
+  localparam int unsigned MemClientCompositorID = 3;
+  localparam int unsigned MemClientSimID = 4;  // lowest priority, elastic
 
 endpackage

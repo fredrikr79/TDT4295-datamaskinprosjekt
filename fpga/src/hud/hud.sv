@@ -9,7 +9,9 @@ module hud #(
     output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth],
     output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output logic [15:0] sprite_available_id,
-    output logic sprite_id_found
+    output logic sprite_id_found,
+    input hud_pkg::sprite_mem_id lookup_mem_id,
+    output logic [31:0] lookup_mem_addr
 );
 
 import hud_pkg::*;
@@ -37,6 +39,8 @@ always_ff @(posedge clk) begin
         sprite_mem_lut[sprite_mem_id] <= sprite_w_mem_addr;
     end
 end
+
+assign lookup_mem_addr = sprite_mem_lut[lookup_mem_id];
 
 always_ff @(posedge clk) begin
     if(req_valid) begin

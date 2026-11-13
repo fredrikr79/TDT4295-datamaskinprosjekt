@@ -2,7 +2,8 @@
 /* verilator lint_off MULTITOP */
 
 module tb_main #(
-    parameter string DUMPFILEPATH = ""  // this parameter is overwritten when compiling with make
+    parameter string DUMPDIR = "",
+    parameter string DUMPFILENAME = ""  // these parameter are overwritten when compiling with make
 ) (
     input logic clk,
     input logic reset,

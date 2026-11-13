@@ -7,12 +7,10 @@
 
 #include "fpga.h"
 
-#define ROOM_X 40
-#define ROOM_Y 60
+#define ROOM_X 640
+#define ROOM_Y 360
 #define MAX_PORTALS 8
-#define MAX_PORTAL_EXITS 8
-#define PORTAL_THICKNESS 2
-#define DATA_MAX_SIZE (ROOM_X*ROOM_Y*2 + 8*MAX_PORTALS)
+#define DATA_MAX_SIZE (1 + 14*MAX_PORTALS + ROOM_X*ROOM_Y*2)
 
 /* false: no card / file / write failed (logged). read_room() then gives
  * an empty room (all tile 0), so the game goes on. */
@@ -61,29 +59,24 @@ room_status_t room_poll(void);
  * not done. Call it after fpga_abort_all(). false: nothing to resume. */
 bool room_resume(void);
 
+// Portals
 typedef struct
 {
     bool active;
 
-    uint16_t x;
-    uint16_t y;
-    uint8_t dx;
-    uint8_t dy;
+    uint16_t x1;
+    uint16_t y1;
+    uint16_t x2;
+    uint16_t y2;
 
-    int dest_x;
-    int dest_y;
-    uint8_t dest_exit;
+    int dest_room_x;
+    int dest_room_y;
+    uint16_t dest_pos_x;
+    uint16_t dest_pos_y;
 } portal_t;
-struct portal_exit
-{
-    bool active;
+void portals_init();
+portal_t *area_in_portal(float x1, float x2, float y1, float y2);
 
-    uint16_t x;
-    uint16_t y;
-    uint8_t dx;
-    uint8_t dy;
-};
-void init_empty_portals(portal_t *portals, uint8_t n_portals);
-int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals);
+/* Materials: material_t, SIM_CELL(), SIM_MAT() and sim_is() in fpga.h. */
 
 #endif

@@ -146,10 +146,10 @@ module main (
     .clk(clk),
     .pulse_new_row(pulse_new_row),
     .sim_running(sim_running),
-    .buffers(sim_window),
+    .input_buffers(sim_window),
     .pulse_transaction_pair_done(pulse_transaction_pair_done),
     .pulse_row_done(pulse_row_done),
-    .res_buffer(sim_res_buffer)
+    .output_buffers(sim_res_buffer)
   );
 
   logic fb_sel;

@@ -35,6 +35,7 @@
 #include "fpga.h"
 #include "storage.h"
 #include "log.h"
+#include "platform.h"
 
 /* Sprite file: "SP", W, H, frames (16 bits, MSB first), then the frames'
  * pixels one after the other, RGB565 MSB first (tools/png2spr.py). */
@@ -101,6 +102,8 @@ static sprite_img_t *uploading;     /* image whose chunks are being submitted  *
 static unsigned      memids_known;  /* in use after the chunks resolved so far */
 static unsigned      memids_pending;/* claimed by chunks not resolved yet      */
 static bool          failed;
+static unsigned      uploads_done;  /* images on the FPGA since the last summary */
+static uint32_t      uploads_from;  /* when the first of those started          */
 
 /* ---- pixels -------------------------------------------------------------- */
 /* Write one RGB565 pixel at p, high byte first -- the byte order the FPGA
@@ -620,17 +623,25 @@ static void image_done(const fpga_cmd_t *cmd, fpga_err_t err)
     /* the budget, for every chunk -- also those of an attempt already failed */
     if (memids_pending) memids_pending--;
     if (err == FPGA_ERR_NONE)
-        memids_known = fpga_answer_id(cmd);     /* exact */
+        memids_known = fpga_answer_id(cmd) + 1u - FPGA_MEMID_FIRST;   /* exact */
     else if (err != FPGA_ERR_CANCELLED && err != FPGA_ERR_STATUS)
         memids_known++;                         /* may have happened */
     /* (CANCELLED never ran; a NACK means the FPGA refused it) */
 
     if (img->state != IMG_SENDING) return;      /* an attempt that already failed */
+    if (err != FPGA_ERR_NONE && err != FPGA_ERR_CANCELLED)
+        LOG_WARN("'%s': chunk %u/%u (%u B) failed: %s", img_name(img), img->acked + 1u,
+                 img->chunks, cmd->hdr.len, fpga_err_str(err));
 
     if (err == FPGA_ERR_NONE) {
         uint16_t id = fpga_answer_id(cmd);
+        LOG_DBG("  %s: chunk %u/%u -> memID %u", img_name(img), img->acked + 1u, img->chunks, id);
         if (img->acked++ == 0) img->mem_id = id;            /* first chunk names it */
-        if (img->acked == img->chunks) img->state = IMG_UPLOADED;
+        if (img->acked == img->chunks) {
+            img->state = IMG_UPLOADED;
+            uploads_done++;
+            LOG_INFO("  '%s': on the FPGA, memID %u", img_name(img), img->mem_id);
+        }
         return;
     }
 
@@ -760,6 +771,10 @@ static sprite_img_t *next_upload(void)
             img->make_err    = false;
             img->state       = IMG_SENDING;
             memids_pending  += chunks;
+            if (uploads_done == 0) uploads_from = plat_millis();
+            LOG_INFO("uploading '%s': %ux%u, %lu B in %lu chunk%s of up to %u B", img_name(img),
+                     img->w, img->h, (unsigned long)img_bytes(img), (unsigned long)chunks,
+                     chunks == 1 ? "" : "s", max);
             return img;
         }
     }
@@ -788,7 +803,17 @@ bool sprite_poll(void)
     /* Images, one at a time: an image's chunks must follow each other
      * with no other upload in between. */
     for (;;) {
-        if (!uploading && !(uploading = next_upload())) break;
+        if (!uploading && !(uploading = next_upload())) {
+            bool busy = false;              /* any image still on its way? */
+            for (unsigned i = 0; i < SPRITE_IMG_MAX && !busy; i++)
+                busy = imgs[i].state == IMG_SENDING;
+            if (uploads_done && !busy) {
+                LOG_INFO("images: %u uploaded in %lu ms, %u memIDs in use", uploads_done,
+                         (unsigned long)(plat_millis() - uploads_from), sprite_memids_used());
+                uploads_done = 0;
+            }
+            break;
+        }
         sprite_img_t *img = uploading;
         uint32_t total = img_bytes(img);
         while (img->sent < img->chunks) {

@@ -32,14 +32,20 @@ any payload. Multi-byte fields go MSB first. The full spec is
 | SPRITE_DELETE | A0 | spriteID | — | — | `fpga_cmd_sprite_delete(id)` |
 | START_SIM / STOP_SIM | B0 / C0 | — | — | — | `fpga_cmd_sim_run(bool)` |
 
-- **CONS and BOX** work on the grid (the SIM layer), which holds a **4-bit
-  material ID per cell** (`SIM_AIR`, `SIM_SAND`, `SIM_WATER`, `SIM_WALL`,
-  `SIM_LIFE`; up to 16). The FPGA turns IDs into colours with its own lookup
-  table.
+- **CONS and BOX** work on the grid (the SIM layer), which holds **a byte per
+  cell with the material ID in its high 4 bits**. The low 4 bits are the
+  FPGA's own (simulation state): write them as 0 and ignore them when reading
+  back. The FPGA turns materials into colours with its own lookup table.
+  - The materials (`material_t` in fpga.h, the FPGA's `materials_e`):
+    `MAT_AIR` 0, `MAT_STONE` 1, `MAT_SAND` 2, `MAT_WATER` 3, `MAT_LAVA` 4,
+    `MAT_ACID` 5, `MAT_LIFE` 6 (game of life), `MAT_EXPLOSIVE` 7.
+  - `SIM_CELL(MAT_SAND)` is the byte for a cell (0x20); `SIM_MAT(byte)` the
+    material in one. `sim_put(buf, k, mat)` / `sim_get(buf, k)` fill and read
+    cell k of a buffer, whichever packing is in use.
   - CONS is contiguous: N bytes from cell (X, Y) on, row after row.
   - A box's cells are one stream, row by row: X,Y is the top-left cell, W the
     cells per row and H the number of rows.
-  - Whether a byte carries one ID or two isn't agreed yet:
+  - Whether a byte carries one cell or two materials isn't agreed yet:
     `FPGA_SIM_IDS_PER_BYTE` (1 or 2) switches it, and `fpga_sim_bytes(cells)`
     gives the byte count.
 - **Only the HUD layer (sprites) is RGB565 pixels.**
@@ -153,6 +159,9 @@ PROBE ──► INFO ──► same session? ──yes──► go back to what 
 
 - **PROBE** sends a 100-byte ECHO with a new pattern each try, every 200 ms,
   until one comes back right. That proves the link works both ways.
+  While it keeps failing, the console shows one line that updates in place in
+  front of the prompt (`probing FPGA: x7 (no FPGA ready irq (timeout)) > `,
+  `cli_status()`), and the log gets one line when it finally answers.
 - **INFO** then gives the session ID. If it's the same as before, the FPGA's
   memory survived and the game picks up where it was. If not, everything is sent
   again.
@@ -188,3 +197,29 @@ command, its step and how long it has been in that step. `fpga_ready_used()`
 counts READY edges taken by commands. `fpga_set_link_info()` lets the console or
 tests set W/H/N by hand. The console (`cli.c`) can send any command by hand,
 including the `sprite` and `sim` commands.
+
+## Demos (demo.c)
+
+`demo <test>` on the console runs a test against the FPGA without the SD
+card; `demo` alone lists them. Each is a list of steps, one command in flight
+at a time, with every answer checked against what was sent:
+
+| Test | What it does |
+|---|---|
+| `echo` | ECHO of 1, 2, 16, 100, 512 and N−1 bytes, different bit patterns; a mismatch says which IO lines were wrong |
+| `info` | INFO, and the payload limits that follow from N |
+| `cons` | STOP_SIM; a row written and read back; a write over a row's end (read back whole and the wrapped part alone); one byte; START_SIM |
+| `box` | STOP_SIM; boxes from 1×1 to the biggest N allows, written and read back, plus one row of a box read with READ_CONS; START_SIM |
+| `sprite` | a 16×16 smiley uploaded, placed, moved, hidden, shown, deleted, then an UPDATE of the deleted one, which must be NACKed |
+| `scene` | a little world with every material, sent row by row, then START_SIM |
+| `clear` | the whole grid air |
+| `all` | echo, info, cons, box, sprite |
+
+- Every test but `echo` starts with an INFO, after the queue has emptied.
+- **While a demo runs it has the FPGA to itself:** `game_poll()` calls
+  `demo_poll()` instead of the game. The game carries on afterwards.
+- Patterns depend on the cell's position and change every run, so a write
+  that did nothing can't pass by reading back an earlier run's cells.
+- Results go to the log, tag `demo`: `PASS` / `FAILED` per test. A failed
+  command stops the test; a wrong answer is counted and the test goes on.
+- `sprite` uses up a memID each run (they're never freed).

@@ -147,6 +147,7 @@ void usb_port_dump(void)
 #if USB_USE_UCPD
 static void cc_init(void)
 {
+    __HAL_RCC_HSI_ENABLE(); while (!__HAL_RCC_GET_FLAG(RCC_FLAG_HSIRDY)) {}
     GPIO_InitTypeDef g = { 0 };
 
     __HAL_RCC_GPIOA_CLK_ENABLE();

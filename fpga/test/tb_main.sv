@@ -111,11 +111,10 @@ module tb_main #(
   endtask
 
   initial begin
-    if (DUMPFILEPATH != "") begin
-      $dumpfile(DUMPFILEPATH);
-      $dumpvars(0, tb_main);
+    if (DUMPFILENAME != "") begin
+      $dumpfile({DUMPDIR, "/", DUMPFILENAME});
+      $dumpvars(0, tb);
     end
-
     // Time 0, before reset is released: psram_model never clears its backing
     // store, and memory_initializer only writes the device's config registers.
     seed_world();

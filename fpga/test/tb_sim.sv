@@ -95,7 +95,6 @@ endfunction
       pulse_new_row = 1'b1;
       @(negedge clk);
       pulse_new_row = 1'b0;
-      $display("Start local row %0d at time %0t", row_y, $time);
     end
   endtask
 
@@ -110,7 +109,6 @@ endfunction
       if (pulse_row_done !== 1'b1)
         $fatal(1, "Timeout waiting for pulse_row_done at row %0d after %0d cycles",
                row_y, cycles);
-      $display("Local row %0d done after %0d cycles", row_y, cycles);
     end
   endtask
 
@@ -128,8 +126,6 @@ endfunction
         $fatal(1,
           "Timeout waiting for transaction pair rows %0d/%0d after %0d cycles",
           first_row_y, second_row_y, cycles);
-      $display("Transaction pair %0d/%0d done after %0d cycles",
-               first_row_y, second_row_y, cycles);
     end
   endtask
 
@@ -160,8 +156,6 @@ endtask
       for (px = 0; px < W; px = px + 1)
         next_grid[row_y][px] =
           res_buffer[slot][px*BitsPerPixel +: BitsPerPixel];
-      $display("Captured unpaired boundary row %0d from res_buffer[%0d]",
-               row_y, slot);
     end
   endtask
 

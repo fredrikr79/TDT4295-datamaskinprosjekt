@@ -112,6 +112,7 @@ module simulator #(
 
       automatic sim_pkg::gravity_movement_t gravity_movement = sim_pkg::DownNone;
       automatic sim_pkg::fluid_movement_t fluid_movement = 'b0000;
+      automatic logic [7:0] stone_generator_update = 'hFF;
       if (!is_sending_row && !is_unmatched_boundry_row) begin
         gravity_movement = sim_rules::gravity_rules(output_buffers, neighbourhood, lfsr[0],
                                                     current_pixel_bit_column, simulation_counter);
@@ -123,6 +124,9 @@ module simulator #(
           simulation_counter,
           is_sending_row
         );
+
+        stone_generator_update =
+            sim_rules::stone_generator_rules(neighbourhood, simulation_counter);
       end
 
       // Update Rules
@@ -133,6 +137,9 @@ module simulator #(
       else if (gol_update != 8'hFF)
         output_buffers[is_sending_row][current_pixel_bit_column+:sim_pkg::BitsPerPixel]
             <= gol_update;
+      else if (stone_generator_update != 8'hFF)
+        output_buffers[is_sending_row][current_pixel_bit_column +: sim_pkg::BitsPerPixel]
+            <= stone_generator_update;
       else if (gravity_movement != sim_pkg::DownNone)
         apply_gravity_movement(gravity_movement, neighbourhood, current_pixel_column);
       else if (!sim_pkg::no_movement(fluid_movement))

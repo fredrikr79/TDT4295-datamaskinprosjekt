@@ -11,7 +11,7 @@ DUMP_DIR := dump-data
 VCD_DUMP := $(TOP_MODULE).vcd
 DUMP_MOVIE_NAME := movie.mp4
 DUMP_MOVIE_FPS := 10
-DUMP_MOVIE_MAX_FRAME ?= 99
+DUMP_MOVIE_MAX_FRAME ?= 199
 DUMP_FRAMES := $(foreach n,$(shell seq -f '%04g' 0 $(DUMP_MOVIE_MAX_FRAME)),$(DUMP_DIR)/frame_$(n).ppm)
 
 DUMP_FLAGS :=
@@ -23,7 +23,7 @@ ifneq ($(filter $(TOP_MODULE),tb_main),)
 DUMP_OUTPUTS := $(DUMP_DIR)/$(VCD_DUMP)
 endif
 ifneq ($(filter $(TOP_MODULE),tb_sim),)
-GRID_FILE ?= resources/test_grid_1.bmp
+GRID_FILE ?= resources/test_grid_2.bmp
 DUMP_FLAGS += -GNUM_GENERATIONS=$(DUMP_MOVIE_MAX_FRAME)
 DUMP_FLAGS += -GGRID_FILE=\"$(GRID_FILE)\"
 DUMP_OUTPUTS := $(DUMP_FRAMES)

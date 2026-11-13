@@ -127,8 +127,7 @@ module memory #(
   assign controller_length = initializer_finished ? req_length[owner] : initializer_length;
   assign controller_write_data = initializer_finished ? client_write_data[owner]
                                                       : initializer_write_data;
-
-  //assign read_data = controller_read_data;
+  assign read_data = controller_read_data;
 
   always_comb begin
     for (int unsigned i = 0; i < NumClients; i++) begin

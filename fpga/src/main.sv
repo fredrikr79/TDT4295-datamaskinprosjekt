@@ -59,7 +59,7 @@ module main #(
   assign sync = frame_start;
 
   // Sim running
-  logic sim_running = 1'b1; // Temporarily 1
+  logic sim_running = 1'b0; // Temporarily 1
 
   sim_pkg::row_buffer_t sim_window [3];
   sim_pkg::row_buffer_t sim_res_buffer [2];
@@ -81,6 +81,7 @@ module main #(
   memory_pkg::message_length_t spi_mem_len;
   logic [7:0] spi_mem_in, mem_out;
   memory_pkg::transaction_e spi_mem_transaction;
+  logic mem_busy, mem_data_on_wire;
 
   localparam int unsigned NumLayers  = 2;
   localparam int unsigned LayerCells = 0;
@@ -154,7 +155,7 @@ module main #(
 
   sim_buffers sim_line_memory_reader(
     .clk(clk),
-    .reset(ck_rst),
+    .reset(~ck_rst),
     .sim_running(sim_running),
 
     .pulse_new_row(pulse_new_row),
@@ -199,7 +200,7 @@ module main #(
   assign v_blank_rising = v_blank && !v_blank_d1;
 
   always_ff @(posedge clk) begin
-    if (ck_rst) begin
+    if (~ck_rst) begin
       fb_sel <= 1'b0;
       fb_swap_pending <= 1'b0;
       v_blank_d1 <= 1'b0;
@@ -218,7 +219,7 @@ module main #(
 
   fb_scanout fb_display (
       .clk(clk),
-      .reset(ck_rst),
+      .reset(~ck_rst),
       .active_area(active_area),
       .coord_x(coord_x),
       .coord_y(coord_y),
@@ -293,7 +294,7 @@ module main #(
 
   fb_compositor fb_writer (
       .clk(clk),
-      .reset(ck_rst),
+      .reset(~ck_rst),
 
       .pulse_row_commit(sim_pulse_row_commit),
       .commit_y(sim_commit_y),
@@ -480,8 +481,8 @@ module main #(
       .write_data(mem_in),
 
       // Info to FPGA
-      .busy(mem_busy),
-      .data_on_cable(mem_data_on_wire),
+      .busy(mem_client_busy),
+      .data_on_cable(mem_client_data_on_cable),
       .read_data(mem_out)
     );
   end else begin : g_mem
@@ -496,8 +497,8 @@ module main #(
       .client_length(mem_client_length_burst),
       .client_write_data(mem_client_write_data),
       .client_allow(mem_allow),
-      .client_busy(mem_busy),
-      .client_data_on_cable(mem_data_on_wire),
+      .client_busy(mem_client_busy),
+      .client_data_on_cable(mem_client_data_on_cable),
       .client_grant(mem_client_grant),
       .read_data(mem_out),
       // Actual memory pins

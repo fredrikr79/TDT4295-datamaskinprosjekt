@@ -7,7 +7,7 @@ module hud_line_buffer #(
     input logic clk,
     input logic reset,
 
-    input hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth],
+    input hud_pkg::sprite_inst_entry_t sprite_entry,
     output hud_pkg::sprite_mem_id lookup_mem_id,
     input logic [31:0] lookup_mem_addr,
 
@@ -20,6 +20,7 @@ module hud_line_buffer #(
     output logic px_opaque,
     output color_pkg::hud_color_t px_color,
 
+    output hud_pkg::sprite_lut_id sprite_read_id,
     output logic mem_toggle,
     output memory_pkg::transaction_e mem_transaction,
     output memory_pkg::address_t mem_address,
@@ -29,6 +30,16 @@ module hud_line_buffer #(
     input logic [7:0] mem_read_data,
     output logic shortlist_overflow // if more than 64 sprites are active on screen, we lose some.
 );
+
+  typedef enum logic [2:0] {
+    SCAN,      // Cycle all sprites in the LUT and check if active. Add to shortlist if so.
+    IDLE,      // Wait for row_commit from simulator.
+    ROW_CLEAR, // Blank all bits in px_opaque_store
+    ROW_PICK,  // Choose next row to check for HUD elements.
+    ROW_FETCH  // Burst pixels from chosen sprite and write to px_opaque_store and px_color_store.
+  } state_e;
+
+  state_e state;
 
   localparam int unsigned PageBytes = mem_map_pkg::PageBytes;  // 1024
   localparam int unsigned XBits = $clog2(LineBytes);  // 10
@@ -58,7 +69,9 @@ module hud_line_buffer #(
   logic [ListBits-1:0] shortlist_i;
 
   hud_pkg::sprite_inst_entry_t current_sprite;
-  assign current_sprite = spriteLUT[shortlist[IdxBits'(shortlist_i)]];
+  assign sprite_read_id = state == SCAN ? scan_i : shortlist[IdxBits'(shortlist_i)];
+  assign current_sprite = sprite_entry;
+  assign sprite_entry_valid = sprite_read_id == current_sprite.id;
   assign lookup_mem_id = current_sprite.mem_id;
 
   logic rows_overlap, visible_on_row;
@@ -97,15 +110,7 @@ module hud_line_buffer #(
 
   assign mem_transaction = memory_pkg::READ;
 
-  typedef enum logic [2:0] {
-    SCAN,      // Cycle all sprites in the LUT and check if active. Add to shortlist if so.
-    IDLE,      // Wait for row_commit from simulator.
-    ROW_CLEAR, // Blank all bits in px_opaque_store
-    ROW_PICK,  // Choose next row to check for HUD elements.
-    ROW_FETCH  // Burst pixels from chosen sprite and write to px_opaque_store and px_color_store.
-  } state_e;
 
-  state_e state;
   logic commit_pending;  // a commit arrived while we were not IDLE
 
   always_ff @(posedge clk) begin
@@ -144,7 +149,7 @@ module hud_line_buffer #(
         case (state)
           SCAN: begin
             // Find active sprites and add them to the shortlist
-            if (spriteLUT[scan_i].active) begin
+            if (current_sprite.active && sprite_entry_valid) begin
               if (32'(shortlist_len) < MaxActiveSprites) begin
                 shortlist[IdxBits'(shortlist_len)] <= scan_i;
                 shortlist_len <= shortlist_len + 1'b1;
@@ -180,7 +185,7 @@ module hud_line_buffer #(
               // Row done
               row_ready <= 1'b1;
               state <= IDLE;
-            end else if (visible_on_row) begin
+            end else if (visible_on_row && sprite_entry_valid) begin
               // Sprite shows up on this row
               sprite_row_addr <= lookup_mem_addr + 32'((row_in_sprite * 32'(current_sprite.w)) * 2);
               span_bytes <= ByteCountBits'((span_x1 - span_x0) * 2);
@@ -189,7 +194,7 @@ module hud_line_buffer #(
               dest_x <= XBits'(span_x0);
               high_byte_seen <= 1'b0;
               state <= ROW_FETCH;
-            end else begin
+            end else if(sprite_entry_valid) begin
               // Not on this row, go to next sprite
               shortlist_i <= shortlist_i + 1'b1;
             end

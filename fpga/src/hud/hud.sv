@@ -6,8 +6,13 @@ module hud #(
     input [31:0] sprite_w_mem_addr,
     input hud_pkg::sprite_op_e sprite_req_op,
     input hud_pkg::sprite_inst_entry_t sprite_req_body,
-    output hud_pkg::sprite_inst_entry_t spriteLUT [hud_pkg::SpriteLutDepth],
-    output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+
+    // Sprite instance memory entry lookup for BRAM implementation
+    // Write signal resides in req body.
+    input hud_pkg::sprite_lut_id sprite_lut_read_id,
+
+    output hud_pkg::sprite_inst_entry_t sprite_read_entry,
+    output logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap = '0,
     output logic [15:0] sprite_available_id,
     output logic sprite_id_found,
     input hud_pkg::sprite_mem_id lookup_mem_id,
@@ -42,23 +47,62 @@ end
 
 assign lookup_mem_addr = sprite_mem_lut[lookup_mem_id];
 
-always_ff @(posedge clk) begin
-    if(req_valid) begin
-        case(sprite_req_op)
-            LUT_WRITE: begin
-                addSprite(spriteLUT, sprite_id_bitmap, sprite_req_body);
-            end
-            LUT_UPDATE: begin
-                updateSprite(spriteLUT, sprite_req_body);
-            end
-            LUT_DELETE: begin
-                deleteSprite(spriteLUT, sprite_id_bitmap, sprite_req_body.id);
-            end
-            default:;
-        endcase
-    end
+hud_pkg::sprite_op_e op;
+assign op = req_valid ? sprite_req_op : hud_pkg::NONE;
+
+hud_pkg::static_sprite_data_t static_w_data;
+hud_pkg::dynamic_sprite_data_t dynamic_w_data;
+hud_pkg::static_sprite_data_t static_r_data;
+hud_pkg::dynamic_sprite_data_t dynamic_r_data;
+
+(* ram_style = "block" *) hud_pkg::static_sprite_data_t static_data_mem [hud_pkg::SpriteLutDepth];
+(* ram_style = "block" *) hud_pkg::dynamic_sprite_data_t dynamic_data_mem [hud_pkg::SpriteLutDepth];
+
+
+assign dynamic_w_data = '{
+        active: sprite_req_body.active,
+        x: sprite_req_body.x,
+        y: sprite_req_body.y
+    };
+
+assign static_w_data = '{
+        mem_id: sprite_req_body.mem_id,
+        w:      sprite_req_body.w,
+        h:      sprite_req_body.h
+    };
+
+hud_pkg::sprite_lut_id read_req_id;
+
+always_comb begin
+    sprite_read_entry = '0;
+    sprite_read_entry.active = dynamic_r_data.active;
+    sprite_read_entry.id = read_req_id;
+    sprite_read_entry.mem_id = static_r_data.mem_id;
+    sprite_read_entry.x = dynamic_r_data.x;
+    sprite_read_entry.y = dynamic_r_data.y;
+    sprite_read_entry.w = static_r_data.w;
+    sprite_read_entry.h = static_r_data.h;
 end
 
+always_ff @(posedge clk) begin
+    // Write data
+    read_req_id <= sprite_lut_read_id;
+    if(op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE}) begin
+        dynamic_data_mem[sprite_req_body.id] <= dynamic_w_data;
+        if(op == hud_pkg::LUT_WRITE) begin
+            sprite_id_bitmap[sprite_req_body.id] <= 1'b1;
+            static_data_mem[sprite_req_body.id] <= static_w_data;
+        end
+    end else if (op == hud_pkg::LUT_DELETE) begin
+        sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
+        dynamic_data_mem[sprite_req_body.id] <= '0;
+    end
+
+    // Read data
+    static_r_data <= static_data_mem[sprite_lut_read_id];
+    dynamic_r_data <= dynamic_data_mem[sprite_lut_read_id];
+
+end
 
 endmodule
 

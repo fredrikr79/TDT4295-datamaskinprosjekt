@@ -5,7 +5,7 @@ module tb_main #(
     parameter string DUMPDIR = "",
     parameter string DUMPFILENAME = ""  // these parameter are overwritten when compiling with make
 ) (
-    input logic clk,
+    input logic clk_in,
     input logic reset,
     input logic enable,
     input logic up,
@@ -27,7 +27,7 @@ module tb_main #(
   wire mem_rwds;
 
   main dut (
-      .clk_in(clk),
+      .clk_in(clk_in),
       .user_btn(1'b0),
       .vga_r(color.red),
       .vga_g(color.green),

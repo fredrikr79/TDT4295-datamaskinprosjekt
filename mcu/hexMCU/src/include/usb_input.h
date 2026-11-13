@@ -141,4 +141,10 @@ static inline bool pad_held(const input_t *in, unsigned p, uint32_t b)     { ret
 static inline bool pad_pressed(const input_t *in, unsigned p, uint32_t b)  { return p < INPUT_PADS && (in->pad[p].pressed & b); }
 static inline bool pad_released(const input_t *in, unsigned p, uint32_t b) { return p < INPUT_PADS && (in->pad[p].released & b); }
 
+/* down at some point since the last take: held now, or tapped in between */
+static inline bool key_down(const input_t *in, uint8_t key)
+{
+    return key_held(in, key) || key_pressed(in, key);
+}
+
 #endif

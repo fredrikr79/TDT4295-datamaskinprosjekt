@@ -67,12 +67,12 @@
 #define CUBE_COLOUR     RGB565(255, 200, 0)
 #define STATS_FRAMES    150u        /* report on-time/behind this often  */
 
-/* A pixel's material, by brightness. */
+/* A pixel's cell byte (material in the high 4 bits), by brightness. */
 static uint8_t px_to_id(uint16_t v)
 {
     uint32_t r = (v >> 11) & 31u, g = (v >> 5) & 63u, b = v & 31u;
     uint32_t luma = (r * 8u * 299u + g * 4u * 587u + b * 8u * 114u) / 1000u;   /* 0..255 */
-    return luma < 48u ? SIM_AIR : luma < 110u ? SIM_WATER : luma < 170u ? SIM_WALL : SIM_SAND;
+    return SIM_CELL(luma < 48u ? MAT_AIR : luma < 110u ? MAT_WATER : luma < 170u ? MAT_STONE : MAT_SAND);
 }
 
 static uint16_t min16(uint32_t a, uint32_t b) { return (uint16_t)(a < b ? a : b); }

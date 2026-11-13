@@ -2,10 +2,10 @@ documentation/slides/pdf
 .Xil
 /build
 fpga/build
-fpga/vcd-build
 fpga/vga-build
-fpga/vcd
+fpga/vcd-build
 fpga/verible.filelist
+fpga/dump-data
 fpga/src/config_pkg.sv
 fpga/test/config.hpp
 *.jou
@@ -16,3 +16,13 @@ fpga/test/config.hpp
 .vscode/settings.json
 .vscode/c_cpp_properties.json
 /vtech
+
+# mcu
+build
+mx.scratch
+!.settings
+card.img
+Drivers/
+Middlewares/
+
+**/sd/save/

@@ -14,6 +14,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifndef _MSC_VER
+#include <dirent.h>          /* MinGW has it too; MSVC doesn't: no "sd ls" there */
+#endif
+#ifndef _WIN32
+#include <sys/statvfs.h>
+#endif
 
 #ifdef _WIN32
 #include <direct.h>
@@ -33,6 +39,7 @@
 #define PATH_MAX_LEN 512
 
 static bool     mounted;
+static char     note[160] = "not tried yet";    /* storage_info(): the last thing that happened */
 static bool     tried;
 static uint32_t last_try;
 
@@ -52,9 +59,11 @@ static storage_status_t mount(void)
     struct stat st;
     if (stat(root_dir(), &st) != 0 || !S_ISDIR(st.st_mode)) {
         LOG_WARN("no card: folder '%s' not found", root_dir());
+        snprintf(note, sizeof note, "no card: folder '%s' not found", root_dir());
         return STORAGE_NO_CARD;
     }
     LOG_INFO("card: folder '%s'", root_dir());
+    snprintf(note, sizeof note, "mounted: folder '%s'", root_dir());
     mounted = true;
     return STORAGE_OK;
 }
@@ -178,6 +187,54 @@ storage_status_t storage_rename(const char *from, const char *to)
     remove(tp);                                     /* rename() won't replace there */
 #endif
     return rename(fp, tp) == 0 ? STORAGE_OK : from_errno(errno);
+}
+
+storage_status_t storage_info(storage_info_t *info)
+{
+    memset(info, 0, sizeof *info);
+    tried = false;                  /* asked for: try now, not after the retry wait */
+    info->where = root_dir();
+    storage_status_t s = mount();
+    info->mounted = mounted;
+    info->note    = note;
+    if (s != STORAGE_OK) return s;
+#ifndef _WIN32
+    struct statvfs v;
+    if (statvfs(root_dir(), &v) == 0) {
+        info->total = (uint64_t)v.f_blocks * v.f_frsize;
+        info->free  = (uint64_t)v.f_bavail * v.f_frsize;
+    }
+#endif
+    return STORAGE_OK;
+}
+
+storage_status_t storage_list(const char *dir, storage_list_fn fn, void *ctx)
+{
+    char fp[PATH_MAX_LEN], ep[PATH_MAX_LEN];
+    storage_status_t s = mount();
+    if (s != STORAGE_OK) return s;
+    if (!dir) dir = "";
+    while (*dir == '/') dir++;                      /* "/" = "" = the root */
+    if (*dir) { if (!full_path(dir, fp)) return STORAGE_ERROR; }
+    else snprintf(fp, sizeof fp, "%s", root_dir());
+
+#ifdef _MSC_VER
+    (void)fn; (void)ctx;
+    return STORAGE_ERROR;
+#else
+    DIR *d = opendir(fp);
+    if (!d) return from_errno(errno);
+    struct dirent *e;
+    while ((e = readdir(d)) != NULL) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+        struct stat st;
+        int n = snprintf(ep, sizeof ep, "%s/%s", fp, e->d_name);
+        bool ok = n > 0 && (size_t)n < sizeof ep && stat(ep, &st) == 0;
+        fn(ctx, e->d_name, ok ? (uint32_t)st.st_size : 0u, ok && S_ISDIR(st.st_mode));
+    }
+    closedir(d);
+    return STORAGE_OK;
+#endif
 }
 
 const char *storage_status_str(storage_status_t st)

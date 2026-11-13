@@ -66,7 +66,7 @@ module main (
 
   vga vga_controller (
       .clk(clk),
-      .reset(sw[3]),
+      .reset(ck_rst),
       .enable(sw[2]),
       .h_sync(vga_hsync),
       .v_sync(vga_vsync),
@@ -115,7 +115,7 @@ module main (
 
   sim_buffers sim_line_memory_reader(
     .clk(clk),
-    .reset(sw[3]),
+    .reset(ck_rst),
     .sim_running(sim_running),
 
     .pulse_new_row(pulse_new_row),
@@ -147,10 +147,10 @@ module main (
     .clk(clk),
     .pulse_new_row(pulse_new_row),
     .sim_running(sim_running),
-    .buffers(sim_window),
+    .input_buffers(sim_window),
     .pulse_transaction_pair_done(pulse_transaction_pair_done),
     .pulse_row_done(pulse_row_done),
-    .res_buffer(sim_res_buffer)
+    .output_buffers(sim_res_buffer)
   );
 
   logic fb_sel;
@@ -166,7 +166,7 @@ module main (
   assign v_blank_rising = v_blank && !v_blank_d1;
 
   always_ff @(posedge clk) begin
-    if (sw[3]) begin
+    if (ck_rst) begin
       fb_sel <= 1'b0;
       fb_swap_pending <= 1'b0;
       v_blank_d1 <= 1'b0;
@@ -192,7 +192,7 @@ module main (
 
   fb_scanout fb_display (
       .clk(clk),
-      .reset(sw[3]),
+      .reset(ck_rst),
       .active_area(active_area),
       .coord_x(coord_x),
       .coord_y(coord_y),
@@ -267,7 +267,7 @@ module main (
 
   fb_compositor fb_writer (
       .clk(clk),
-      .reset(sw[3]),
+      .reset(ck_rst),
 
       .pulse_row_commit(sim_pulse_row_commit),
       .commit_y(sim_commit_y),
@@ -355,7 +355,7 @@ module main (
     for (int unsigned i = 0; i < memory_pkg::NumMemClients; i++) begin
       mem_client_transaction[i] = memory_pkg::NONE;
       mem_client_address[i]     = '0;
-      mem_client_length_burst[i]      = '0;
+      mem_client_length_burst[i]= '0;
       mem_client_write_data[i]  = '0;
     end
 
@@ -397,7 +397,7 @@ module main (
 
   memory memory_subsystem (
       .clk(clk),
-      .reset(sw[3]),
+      .reset(ck_rst),
       .enable(sw[2]),
 
       .client_toggle(mem_client_toggle),
@@ -438,7 +438,7 @@ module main (
       .in_almost_full(in_almost_full),
       .in_full(in_full),
 
-//       // Sim running
+      // Sim running
       .sim_running(sim_running),
 
       // Memory module fall-through signals

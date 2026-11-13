@@ -2,11 +2,13 @@
  * Portable: the files go through storage.h (SD card on the MCU, a local
  * folder on the PC). */
 
+#include "player.h"
 #define LOG_TAG "rooms"
 
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "rooms.h"
 #include "storage.h"
@@ -17,9 +19,13 @@
  * default 1 KB), so they live here. Not re-entrant -- one at a time. */
 static uint8_t file_data[DATA_MAX_SIZE];
 
+static portal_t portals[MAX_PORTALS] = {0};
+
 /* The room we're in, as tile IDs (row after row: cell x, y is
  * room_tiles[y * ROOM_X + x]). Loaded from the card, then sent to the FPGA;
- * read back from the FPGA, then saved. */
+ * read back from the FPGA, then saved. A tile is the FPGA's cell byte as
+ * it is on the wire (material in the high 4 bits, SIM_CELL() in fpga.h),
+ * passed through unchanged, so room files hold those bytes too. 0 = air. */
 static uint8_t room_tiles[ROOM_X*ROOM_Y];
 
 #define NAME_LEN 32     /* "save/-1000,-1000.dat" fits */
@@ -27,10 +33,50 @@ static uint8_t room_tiles[ROOM_X*ROOM_Y];
 void decode_room(uint8_t *data, uint32_t data_length, uint8_t *tileIDs)
 {
   uint32_t data_progress = 0;
-  uint32_t tile_progress = 0;
-  uint8_t current_id = 0;
+
+  // Find number of portals
+  uint8_t num_portals = data[data_progress];
+  if (MAX_PORTALS < num_portals) num_portals = MAX_PORTALS;
+  data_progress++;
+
+  // Create portals
+  for (uint8_t i = 0; i < num_portals; i++)
+  {
+    uint16_t from_x = (data[data_progress + 0] << 8) + data[data_progress + 1];
+    uint16_t from_y = (data[data_progress + 2] << 8) + data[data_progress + 3];
+    uint16_t to_x = (data[data_progress + 4] << 8) + data[data_progress + 5];
+    uint16_t to_y = (data[data_progress + 6] << 8) + data[data_progress + 7];
+    int room_x = data[data_progress + 8];
+    int room_y = data[data_progress + 9];
+    uint16_t pos_x = (data[data_progress + 10] << 8) + data[data_progress + 11];
+    uint16_t pos_y = (data[data_progress + 12] << 8) + data[data_progress + 13];
+
+    // Post process room's signs
+    if (room_x & 128) room_x = -(room_x & 127);
+    if (room_y & 128) room_y = -(room_y & 127);
+
+    // Create portal
+    portal_t portal = {
+      .active=true,
+      .x1=from_x, .y1=from_y,
+      .x2=to_x, .y2=to_y,
+      .dest_room_x=room_x, .dest_room_y=room_y,
+      .dest_pos_x=pos_x, .dest_pos_y=pos_y
+    };
+    portals[i] = portal;
+
+    data_progress += 14;
+  }
+
+  // Deactivate the rest of the portals
+  for (uint8_t i = num_portals; i < MAX_PORTALS; i++)
+  {
+    portals[i].active = false;
+  }
 
   // Iterate through sections
+  uint32_t tile_progress = 0;
+  uint8_t current_id = 0;
   while (data_progress < data_length)
   {
     // Find number of bytes in variable length number
@@ -47,7 +93,7 @@ void decode_room(uint8_t *data, uint32_t data_length, uint8_t *tileIDs)
 
     // Remove header from variable length number
     uint8_t header_mask = 128;
-    for (int i = 1; i < varible_number_bytes; i++)
+    for (uint8_t i = 1; i < varible_number_bytes; i++)
     {
       header_mask |= (header_mask >> 1);
     }
@@ -56,14 +102,14 @@ void decode_room(uint8_t *data, uint32_t data_length, uint8_t *tileIDs)
 
     // Construct number of consecutive IDs
     uint32_t consecutive_IDs = 0;
-    for (int i = 0; i < varible_number_bytes && i < 4; i++)
+    for (uint32_t i = 0; i < varible_number_bytes && i < 4; i++)
     {
       consecutive_IDs |= ((uint32_t) data[data_progress + varible_number_bytes - 1 - i]) << 8*i;
     }
 
     // Fill in IDs in array
     current_id = data[data_progress + varible_number_bytes];
-    for (int i = 0; i < consecutive_IDs && tile_progress + i < ROOM_X*ROOM_Y; i++)
+    for (uint32_t i = 0; i < consecutive_IDs && tile_progress + i < ROOM_X*ROOM_Y; i++)
     {
       tileIDs[tile_progress + i] = current_id;
     }
@@ -168,10 +214,51 @@ void add_data(
 
 void encode_room(uint8_t *tileIDs, uint8_t *data, unsigned long *data_size)
 {
-  uint8_t prev_id = tileIDs[0];
-  uint32_t consecutive = 1;
+  // Find number of portals
+  uint8_t num_portals = 0;
+  for (uint8_t i = 0; i < MAX_PORTALS; i++)
+  {
+    if (!portals[i].active) break;
+    num_portals++;
+  }
+  data[0] = num_portals;
+  *data_size = 1;
+
+  // Encode portals
+  for (uint8_t i = 0; i < num_portals; i++)
+  {
+    uint16_t lower_mask = 0b0000000011111111;
+
+    // Encode from
+    data[*data_size + 0] = portals[i].x1 >> 8;
+    data[*data_size + 1] = portals[i].x1 & lower_mask;
+    data[*data_size + 2] = portals[i].y1 >> 8;
+    data[*data_size + 3] = portals[i].y1 & lower_mask;
+
+    // Encode to
+    data[*data_size + 4] = portals[i].x2 >> 8;
+    data[*data_size + 5] = portals[i].x2 & lower_mask;
+    data[*data_size + 6] = portals[i].y2 >> 8;
+    data[*data_size + 7] = portals[i].y2 & lower_mask;
+
+    // Encode room
+    data[*data_size + 8] = (portals[i].dest_room_x < 0) << 7;
+    data[*data_size + 8] += abs(portals[i].dest_room_x) & 7;
+    data[*data_size + 9] = (portals[i].dest_room_y < 0) << 7;
+    data[*data_size + 9] += abs(portals[i].dest_room_y) & 7;
+  
+    // Encode pos
+    data[*data_size + 10] = portals[i].dest_pos_x >> 8;
+    data[*data_size + 11] = portals[i].dest_pos_x & lower_mask;
+    data[*data_size + 12] = portals[i].dest_pos_y >> 8;
+    data[*data_size + 13] = portals[i].dest_pos_y & lower_mask;
+
+    *data_size += 14;
+  }
 
   // Iterate through all the tiles
+  uint8_t prev_id = tileIDs[0];
+  uint32_t consecutive = 1;
   for (uint32_t i = 1; i < ROOM_X*ROOM_Y; i++)
   {
     // Add data if new ID met, or consecutive reaches 5 bytes in length
@@ -308,6 +395,8 @@ static struct
   bool sim_stopped;         // STOP_SIM came back OK
   bool sim_started;         // START_SIM came back OK (load)
   bool sim_in_flight;       // a STOP_SIM / START_SIM is on its way
+  bool rows_logged;         // "all rows" is in the log
+  bool rows_announced;      // "sending rows" is in the log (since start / resume)
 } job;
 
 static void sim_done(const fpga_cmd_t *cmd, fpga_err_t err)
@@ -315,13 +404,18 @@ static void sim_done(const fpga_cmd_t *cmd, fpga_err_t err)
   job.sim_in_flight = false;
   if (err != FPGA_ERR_NONE)
   {
-    LOG_WARN("room: %s: %s", cmd->hdr.opcode == STOP_SIM_OPCODE ? "STOP_SIM" : "START_SIM",
-             fpga_err_str(err));
+    // CANCELLED: never sent, because a command queued before it failed;
+    // that one is what the resync line names. Only log real failures.
+    if (err != FPGA_ERR_CANCELLED)
+      LOG_WARN("room %d, %d: %s failed: %s", job.x, job.y,
+               cmd->hdr.opcode == STOP_SIM_OPCODE ? "STOP_SIM" : "START_SIM", fpga_err_str(err));
     job.status = ROOM_FAILED;
     return;
   }
   if (cmd->hdr.opcode == STOP_SIM_OPCODE) job.sim_stopped = true;
   else job.sim_started = true;
+  LOG_INFO("room %d, %d: simulation %s", job.x, job.y,
+           cmd->hdr.opcode == STOP_SIM_OPCODE ? "stopped" : "started");
 }
 
 // Send STOP_SIM (run = false) or START_SIM; the queue being full just
@@ -332,7 +426,11 @@ static void send_sim(bool run)
   fpga_cmd_t cmd = fpga_cmd_sim_run(run);
   cmd.done = sim_done;
   fpga_status_t st = fpga_submit(&cmd);
-  if (st == FPGA_OK) job.sim_in_flight = true;
+  if (st == FPGA_OK)
+  {
+    job.sim_in_flight = true;
+    LOG_DBG("room %d, %d: %s sent", job.x, job.y, run ? "START_SIM" : "STOP_SIM");
+  }
   else if (st != FPGA_EFULL)
   {
     LOG_ERR("room: %s refused: %s", run ? "START_SIM" : "STOP_SIM", fpga_status_str(st));
@@ -345,7 +443,7 @@ static void row_done(const fpga_cmd_t *cmd, fpga_err_t err)
   job.in_flight--;
   if (err != FPGA_ERR_NONE)
   {
-    if (job.status != ROOM_FAILED)
+    if (job.status != ROOM_FAILED && err != FPGA_ERR_CANCELLED)   // see sim_done()
       LOG_WARN("room %s, row %u: %s", job.kind == JOB_LOAD ? "load" : "save",
                cmd->hdr.y, fpga_err_str(err));
     job.status = ROOM_FAILED;  // the game resyncs, then room_resume()
@@ -368,6 +466,8 @@ static void job_start(uint8_t kind, int x, int y)
   job.sim_stopped = false;
   job.sim_started = false;
   job.sim_in_flight = false;
+  job.rows_logged = false;
+  job.rows_announced = false;
 }
 
 void room_load_start(int x, int y)
@@ -394,6 +494,7 @@ bool room_resume(void)
   job.next_row = job.rows_done;
   job.in_flight = 0;
   job.sim_in_flight = false;
+  job.rows_announced = false;
   LOG_INFO("room %d, %d: %s resumed at row %u", job.x, job.y,
            job.kind == JOB_LOAD ? "load" : "save", job.rows_done);
   return true;
@@ -413,6 +514,12 @@ room_status_t room_poll(void)
   // 3. Every row is in (only now -- not when the last row is sent).
   if (job.rows_done == ROOM_Y)
   {
+    if (!job.rows_logged)
+    {
+      job.rows_logged = true;
+      LOG_INFO("room %d, %d: all %u rows %s", job.x, job.y, (unsigned)ROOM_Y,
+               job.kind == JOB_LOAD ? "sent" : "read back");
+    }
     if (job.kind == JOB_LOAD && !job.sim_started)
     {
       send_sim(true);                  // the new room runs from here
@@ -425,6 +532,13 @@ room_status_t room_poll(void)
   }
 
   // 2. The rows.
+  if (!job.rows_announced)
+  {
+    job.rows_announced = true;
+    LOG_INFO("room %d, %d: %s rows %u..%u (%u cells each)", job.x, job.y,
+             job.kind == JOB_LOAD ? "sending" : "reading", job.rows_done,
+             (unsigned)ROOM_Y - 1u, (unsigned)ROOM_X);
+  }
   // Send the next rows, as many as may be in flight.
   while (job.next_row < ROOM_Y && job.in_flight < ROOM_ROWS_IN_FLIGHT)
   {
@@ -448,47 +562,61 @@ room_status_t room_poll(void)
   return job.status;
 }
 
-void init_empty_portals(portal_t *portals, uint8_t n_portals)
+void portals_init()
 {
-  for (uint8_t i = 0; i < n_portals; i++)
+  for (uint8_t i = 0; i < MAX_PORTALS; i++)
   {
-    portal_t prt = {
-      false,
-      0, 0,
-      0, 0,
-      false, false,
-      0
+    portal_t portal = {
+      .active=false,
+      .x1=0, .y1=0,
+      .x2=0, .y2=0,
+      .dest_room_x=0, .dest_room_y=0,
+      .dest_pos_x=0, .dest_pos_y=0
     };
-    portals[i] = prt;
+    portals[i] = portal;
   }
 }
 
 /*
 @brief This function checks if a position overlaps with a portal.
 
-@param x: The x-coordinate of the position to check
-@param y: The y-coordinate of the position to check
-@param *portals: The array of portals to check against
+@param x1: The x-coordinate of one side of the area to check
+@param x2: The x-coordinate of one side of the area to check
+@param y1: The y-coordinate of one side of the area to check
+@param y2: The y-coordinate of one side of the area to check
 
 @return Returns -1 if position doesn't overlap with a portal.
         Otherwise, the index of the portal will be returned.
 */
-int pos_in_portal(uint8_t x, uint8_t y, portal_t *portals)
+portal_t *area_in_portal(float x1, float x2, float y1, float y2)
 {
+  // Check every active portal until hit
   for (uint8_t i = 0; i < MAX_PORTALS; i++)
   {
     if (!portals[i].active) break;
 
-    if (
-      portals[i].x < x
-      && x < portals[i].x + portals[i].dx
-      && portals[i].y < y
-      && y < portals[i].y + portals[i].dy
-    )
+    // Portal edges
+    uint16_t px1 = portals[i].x1;
+    uint16_t py1 = portals[i].y1;
+    uint16_t px2 = portals[i].x2;
+    uint16_t py2 = portals[i].y2;
+
+    bool x_overlap = false;
+    if (px1 <= x1 && x1 <= px2) x_overlap = true;
+    if (px1 <= x2 && x2 <= px2) x_overlap = true;
+    if (x1 <= px1 && px1 <= x2) x_overlap = true;
+    if (x1 <= px2 && px2 <= x2) x_overlap = true;
+    bool y_overlap = false;
+    if (py1 <= y1 && y1 <= py2) y_overlap = true;
+    if (py1 <= y2 && y2 <= py2) y_overlap = true;
+    if (y1 <= py1 && py1 <= y2) y_overlap = true;
+    if (y1 <= py2 && py2 <= y2) y_overlap = true;
+
+    if (x_overlap && y_overlap)
     {
-      return i;
+      return portals+i;
     }
   }
 
-  return -1;
+  return NULL;
 }

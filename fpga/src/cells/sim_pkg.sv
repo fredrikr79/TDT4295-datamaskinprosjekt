@@ -16,7 +16,7 @@ package sim_pkg;
   localparam int unsigned AddrBits = $clog2(TotalWords);
 
   typedef logic [MaterialBits-1:0] material_t;
-  typedef material_t [CellsPerWord-1:0] cell_word_t; // same as logic [7:0][3:0]
+  typedef material_t [CellsPerWord-1:0] cell_word_t;  // same as logic [7:0][3:0]
 
   localparam int unsigned CellIndexBits = $clog2(CellsPerWord);  // 3: which cell inside a word
   localparam int unsigned WordXBits = $clog2(WordsPerRow);  // 7: which word inside a row
@@ -48,14 +48,14 @@ package sim_pkg;
 
   // Material IDs
   typedef enum material_t {
-    MatAir    = 4'd0,
-    MatStone  = 4'd1,
-    MatSand   = 4'd2,
-    MatWater  = 4'd3,
-    MatLava   = 4'd4,
-    MatAcid   = 4'd5,
-    MatGOL    = 4'd6,
-    MatExplo  = 4'd7
+    MatAir   = 4'd0,
+    MatStone = 4'd1,
+    MatSand  = 4'd2,
+    MatWater = 4'd3,
+    MatLava  = 4'd4,
+    MatAcid  = 4'd5,
+    MatGOL   = 4'd6,
+    MatExplo = 4'd7
   } materials_e;
 
   // density: heavier materials sink in lighter ones
@@ -64,93 +64,92 @@ package sim_pkg;
   // Solid: to be recognized as a physical object or a momentary energy / force.
   // A material that neither falls nor spreads is static
   typedef struct packed {
-    logic [3:0]        density;
+    int                density;
     logic              falls;
     logic              spreads;
     logic              solid;
     logic              displaceable;
-    logic [3:0]        delay;
+    int                delay;
     logic [3:0]        blast_resistance;
   } material_props_t;
 
-
-  localparam int GolRefreshDelay = 'd10000;
+  localparam int GolRefreshDelay = 'd100;
 
   // Lookup table for materials
   function automatic material_props_t props(material_t m);
     material_props_t p;
     case (m)
       MatSand: begin
-        p.density          = 4'd8;
+        p.density          = 'd8;
         p.falls            = 1'b1;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd2;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd2;
       end
       MatWater: begin
-        p.density          = 4'd4;
+        p.density          = 'd4;
         p.falls            = 1'b1;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd2;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd2;
       end
       MatStone: begin
-        p.density          = 4'd15;
+        p.density          = 'd15;
         p.falls            = 1'b0;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b0;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd3;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd3;
       end
       MatGOL: begin
-        p.density          = 4'd15;
+        p.density          = 15;
         p.falls            = 1'b0;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b0;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd3;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd3;
       end
       MatExplo: begin
-        p.density          = 4'd15;
+        p.density          = 'd15;
         p.falls            = 1'b0;
         p.spreads          = 1'b0;
         p.solid            = 1'b0;
         p.displaceable     = 1'b0;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd0;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd0;
       end
       MatLava: begin
-        p.density          = 4'd10;
+        p.density          = 'd10;
         p.falls            = 1'b1;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd3;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd3;
       end
       MatAcid: begin
-        p.density          = 4'd8;
+        p.density          = 'd8;
         p.falls            = 1'b1;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd2;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd2;
       end
       default: begin  // MatAir, and every unassigned id
-        p.density          = 4'd0;
+        p.density          = 'd0;
         p.falls            = 1'b0;
         p.spreads          = 1'b0;
         p.solid            = 1'b0;
         p.displaceable     = 1'b1;
-        p.delay            = 4'd1;
-        p.blast_resistance = 4'd0;
+        p.delay            = 'd1;
+        p.blast_resistance = 'd0;
       end
     endcase
     return p;
@@ -189,4 +188,20 @@ package sim_pkg;
     logic [BitsPerPixel-1:0] bottomRight;
   } neighbourhood_t;
 
+  typedef enum {
+    DownNone,
+    Down,
+    DownLeft,
+    DownRight
+  } gravity_movement_t;
+
+  typedef struct packed {
+    logic topRight;
+    logic topLeft;
+    logic centerRight;
+    logic centerLeft;
+  } fluid_movement_t;
+  function automatic logic no_movement(fluid_movement_t movement);
+    return !movement.topRight && !movement.topLeft && !movement.centerRight && !movement.centerLeft;
+  endfunction
 endpackage

@@ -3,17 +3,23 @@ package color_pkg;
   `define USE_RGB_565_NOT_444
 
   `ifdef USE_RGB_565_NOT_444
+    localparam int unsigned RedBits = 5;
+    localparam int unsigned GreenBits = 6;
+    localparam int unsigned BlueBits = 5;
     typedef struct packed {
-      logic [4:0] red;
-      logic [5:0] green;
-      logic [4:0] blue;
+      logic [RedBits-1:0]   red;
+      logic [GreenBits-1:0] green;
+      logic [BlueBits-1:0]  blue;
     } color_t;
     localparam color_t Black = color_t'(16'h0000);
     `else
+    localparam int unsigned RedBits = 4;
+    localparam int unsigned GreenBits = 4;
+    localparam int unsigned BlueBits = 4;
     typedef struct packed {
-      logic [3:0] red;
-      logic [3:0] green;
-      logic [3:0] blue;
+      logic [RedBits-1:0]   red;
+      logic [GreenBits-1:0] green;
+      logic [BlueBits-1:0]  blue;
     } color_t;
     localparam color_t Black = color_t'(12'h000);
   `endif

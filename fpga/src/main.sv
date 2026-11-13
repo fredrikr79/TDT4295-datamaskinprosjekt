@@ -3,9 +3,9 @@ module main (
     input wire [3:2] sw,
     input wire [3:0] btn,
 
-    output wire [3:0] vga_r,
-    vga_g,
-    vga_b,
+    output wire [color_pkg::RedBits-1:0] vga_r,
+    output wire [color_pkg::GreenBits-1:0] vga_g,
+    output wire [color_pkg::BlueBits-1:0] vga_b,
 
     output wire vga_hsync,
     vga_vsync,
@@ -161,13 +161,19 @@ module main (
 
   // Swaps between fb0 and fb1, only when the compositor together with simulator has finished a frame.
   // If it has not, the scanout just renders the same fb again.
+  logic v_blank_d1;
+  logic v_blank_rising;
+  assign v_blank_rising = v_blank && !v_blank_d1;
+
   always_ff @(posedge clk) begin
     if (sw[3]) begin
       fb_sel <= 1'b0;
       fb_swap_pending <= 1'b0;
+      v_blank_d1 <= 1'b0;
     end else begin
+      v_blank_d1 <= v_blank;
       if (fb_frame_done) fb_swap_pending <= 1'b1;
-      if (frame_start && fb_swap_pending) begin
+      if (v_blank_rising && fb_swap_pending) begin
         fb_sel <= ~fb_sel;
         fb_swap_pending <= 1'b0;
       end

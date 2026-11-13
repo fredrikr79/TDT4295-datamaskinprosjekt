@@ -140,7 +140,6 @@ module hud_line_buffer #(
         scan_i <= '0;
         shortlist_len <= '0;
         shortlist_overflow <= 1'b0;
-        row_ready <= 1'b0;
       end else begin
         case (state)
           SCAN: begin

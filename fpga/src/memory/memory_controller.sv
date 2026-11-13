@@ -121,14 +121,20 @@ module memory_controller (
 
   logic reset_byte_counter;
   assign reset_byte_counter = (current_state == previous_state) ? 0 : 1;
+  localparam int unsigned ByteCounterWidth = (memory_pkg::MaxMessageLength > 1)
+      ? $clog2(memory_pkg::MaxMessageLength) : 1;
+
+  logic [ByteCounterWidth-1:0] bytes_this_state_raw;
   memory_pkg::message_length_t bytes_this_state;
+  assign bytes_this_state = memory_pkg::message_length_t'(bytes_this_state_raw);
+
   mod_n_counter #(
       .N(memory_pkg::MaxMessageLength)
   ) byte_counter (
       .clk(clk),
       .enable(enable),
       .reset(reset_byte_counter | reset),
-      .count(bytes_this_state)
+      .count(bytes_this_state_raw)
   );
 
   memory_pkg::transaction_e current_transaction;

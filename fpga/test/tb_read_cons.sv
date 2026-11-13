@@ -2,7 +2,10 @@
 /* verilator lint_off MULTITOP */
 
 module tb_read_cons #(
-  parameter int READ_LEN = 25
+  // Derived from the burst length so the CHUNKING path stays covered -- a flat
+  // 25 was 2 chunks at MaxMessageLength = 20 but a single transaction at 64.
+  // See the note in tb_write_cons.
+  parameter int READ_LEN = 2 * memory_pkg::MaxMessageLength + 5
 );
   import config_pkg::*;
   import mem_driver_pkg::*;

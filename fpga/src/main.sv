@@ -3,9 +3,9 @@ module main (
     input wire [3:2] sw,
     input wire [3:0] btn,
 
-    output wire [3:0] vga_r,
-    vga_g,
-    vga_b,
+    output wire [color_pkg::RedBits-1:0] vga_r,
+    output wire [color_pkg::GreenBits-1:0] vga_g,
+    output wire [color_pkg::BlueBits-1:0] vga_b,
 
     output wire vga_hsync,
     vga_vsync,
@@ -125,6 +125,7 @@ module main (
     .res_buffer(sim_res_buffer),
 
     .fb_ready(fb_ready_for_frame),
+    .fb_row_ready(fb_row_idle),
 
     .pulse_row_commit(sim_pulse_row_commit),
     .commit_y(sim_commit_y),
@@ -156,16 +157,23 @@ module main (
   logic fb_swap_pending;
   logic fb_frame_done;
   logic fb_frame_idle;
+  logic fb_row_idle;
 
   // Swaps between fb0 and fb1, only when the compositor together with simulator has finished a frame.
   // If it has not, the scanout just renders the same fb again.
+  logic v_blank_d1;
+  logic v_blank_rising;
+  assign v_blank_rising = v_blank && !v_blank_d1;
+
   always_ff @(posedge clk) begin
     if (ck_rst) begin
       fb_sel <= 1'b0;
       fb_swap_pending <= 1'b0;
+      v_blank_d1 <= 1'b0;
     end else begin
+      v_blank_d1 <= v_blank;
       if (fb_frame_done) fb_swap_pending <= 1'b1;
-      if (frame_start && fb_swap_pending) begin
+      if (v_blank_rising && fb_swap_pending) begin
         fb_sel <= ~fb_sel;
         fb_swap_pending <= 1'b0;
       end
@@ -203,25 +211,53 @@ module main (
       .pixel(layers[LayerCells]),
       .underrun(fb_underrun)
   );
-
-  // TODO: Implement HUD layer. Temporarily always transparent.
-  // Take in:
-  // .hud_x(fb_hud_x),
-  // .hud_y(fb_hud_y),
-
-  // and output on these wires based on the hud-element at the coords above:
-  // .hud_opaque(fb_hud_opaque),
-  // .hud_index(fb_hud_index),
+  // HUD
   assign layers[LayerHud] = layer_pkg::TransparentPixel;
 
   mem_map_pkg::fb_x_t fb_hud_x;
   mem_map_pkg::fb_y_t fb_hud_y;
   logic fb_hud_opaque;
-  palette_pkg::palette_index_t fb_hud_index;
+  color_pkg::hud_color_t fb_hud_color;
+  logic fb_hud_row_ready, fb_hud_overflow;
   logic fb_compositor_overrun;
 
-  assign fb_hud_opaque = 1'b0;
-  assign fb_hud_index  = '0;
+  hud_pkg::sprite_mem_id hud_lookup_mem_id;
+  logic [31:0] hud_lookup_mem_addr;
+
+  logic hud_mem_toggle;
+  memory_pkg::transaction_e hud_mem_transaction;
+  memory_pkg::address_t hud_mem_address;
+  memory_pkg::message_length_t hud_mem_length;
+
+  // Rasterizes one row of sprite pixels ahead of the compositor writing it.
+  hud_line_buffer hud_painter (
+      .clk(clk),
+      .reset(sw[3]),
+
+      .spriteLUT(spriteLUT),
+      .lookup_mem_id(hud_lookup_mem_id),
+      .lookup_mem_addr(hud_lookup_mem_addr),
+
+      .pulse_frame_restart(sim_pulse_frame_restart),
+      .pulse_row_commit(sim_pulse_row_commit),
+      .commit_y(sim_commit_y),
+      .row_ready(fb_hud_row_ready),
+
+      .px_x(fb_hud_x),
+      .px_opaque(fb_hud_opaque),
+      .px_color(fb_hud_color),
+
+      .mem_toggle(hud_mem_toggle),
+      .mem_transaction(hud_mem_transaction),
+      .mem_address(hud_mem_address),
+      .mem_length(hud_mem_length),
+      .mem_busy(mem_client_busy[memory_pkg::MemClientHudID]),
+      .mem_data_on_cable(mem_client_data_on_cable[memory_pkg::MemClientHudID]),
+      .mem_read_data(mem_out),
+
+      // Currently not wired up against anything, but is a signal that is true on len(shortlist) > MaxActiveSprites
+      .shortlist_overflow(fb_hud_overflow)
+  );
 
   logic fb_wr_mem_toggle;
   memory_pkg::transaction_e fb_wr_mem_transaction;
@@ -242,11 +278,13 @@ module main (
       .hud_x(fb_hud_x),
       .hud_y(fb_hud_y),
       .hud_opaque(fb_hud_opaque),
-      .hud_index(fb_hud_index),
+      .hud_color(fb_hud_color),
+      .hud_row_ready(fb_hud_row_ready),
 
       .fb_sel(fb_sel),
       .frame_written(fb_frame_done),
       .frame_idle(fb_frame_idle),
+      .row_idle(fb_row_idle),
 
       .mem_toggle(fb_wr_mem_toggle),
       .mem_transaction(fb_wr_mem_transaction),
@@ -272,6 +310,7 @@ module main (
 
   hud_pkg::sprite_op_e sprite_req_op;
   wire sprite_req_valid, sprite_id_found, write_sprite_valid;
+  wire [31:0] spi_write_sprite_base_addr;
   hud_pkg::sprite_mem_id sprite_mem_id;
   hud_pkg::sprite_inst_entry_t sprite_req_body;
   wire [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap;
@@ -281,14 +320,16 @@ module main (
       .clk(clk),
       .req_valid(sprite_req_valid),
       .sprite_mem_id(sprite_mem_id),
-      .sprite_w_mem_addr(spi_mem_addr),
+      .sprite_w_mem_addr(spi_write_sprite_base_addr),
       .sprite_req_op(sprite_req_op),
       .sprite_req_body(sprite_req_body),
       .spriteLUT(spriteLUT),
       .sprite_id_bitmap(sprite_id_bitmap),
       .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),
-      .write_sprite_valid(write_sprite_valid)
+      .write_sprite_valid(write_sprite_valid),
+      .lookup_mem_id(hud_lookup_mem_id),
+      .lookup_mem_addr(hud_lookup_mem_addr)
   );
 
   // Controls who is allowed the external memory bus
@@ -337,6 +378,12 @@ module main (
     mem_client_address[memory_pkg::MemClientSimID]     = sim_mem_addr;
     mem_client_length_burst[memory_pkg::MemClientSimID]= sim_mem_len;
     mem_client_write_data[memory_pkg::MemClientSimID]  = sim_mem_in;
+
+    // HUD rasterizer
+    mem_client_toggle[memory_pkg::MemClientHudID]      = hud_mem_toggle;
+    mem_client_transaction[memory_pkg::MemClientHudID] = hud_mem_transaction;
+    mem_client_address[memory_pkg::MemClientHudID]     = hud_mem_address;
+    mem_client_length_burst[memory_pkg::MemClientHudID]= hud_mem_length;
 
     // Framebuffer compositor
     mem_client_toggle[memory_pkg::MemClientCompositorID]      = fb_wr_mem_toggle;
@@ -414,6 +461,7 @@ module main (
       .sprite_req_op(sprite_req_op),
       .write_sprite_valid(write_sprite_valid),
       .write_sprite_mem_id(sprite_mem_id),
+      .write_sprite_base_addr(spi_write_sprite_base_addr),
 
       // Critical error line
       .error_critical(error_critical)

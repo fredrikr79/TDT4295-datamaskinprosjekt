@@ -20,9 +20,12 @@
 //      bytes come from res_buffer at pulse_transaction_pair_done using tb_sim's
 //      own slot convention -- NOT from the new commit handshake -- so a wrong
 //      commit_y or commit_res_buffer fails rather than cancelling out.
-//   2. An opaque HUD rectangle replaces the simulation pixels under it and
-//      nothing else. The first frame runs with the HUD off and the rest with it
-//      on, so a seam optimised away fails and so does one that leaks.
+//   2. The HUD lands on top, from REAL sprite pixels read out of the psram
+//      model by hud_line_buffer: four sprites covering see-through holes (the
+//      simulation must show through), overlap (a later ID wins where it paints
+//      but does not erase an earlier one through its holes), right-edge
+//      clipping, and an inactive sprite that must not appear. A seam optimised
+//      away fails, and so does one that leaks.
 //   3. The buffer being DISPLAYED still holds the previous frame, byte for
 //      byte. This is the tearing check: writing the wrong buffer, or starting a
 //      generation before the swap landed, corrupts it.
@@ -48,14 +51,51 @@ module tb_fb_compositor #(
 
   // A sentinel page past the framebuffer region turns a burst that runs off the
   // end of a buffer into a failure here rather than a corrupt picture later.
+  // Fb1 is immediately followed by the sprite region, so the sentinel page sits
+  // at the very start of it and the sprites are placed a page further on. A
+  // compositor burst that runs past the end of Fb1 lands in the sentinel.
   localparam logic [7:0] Sentinel = 8'hA5;
   localparam int unsigned GuardBytes = 1024;
   localparam int unsigned GuardBase = mem_map_pkg::Fb1MemPointer + mem_map_pkg::FbBytes;
+  // Stride must exceed the largest sprite: 64 x 40 x 2 = 5120 bytes.
+  localparam int unsigned SpriteStride = 8192;
+  localparam int unsigned SpriteBase = mem_map_pkg::SpritesMemPointer + GuardBytes;
 
-  // The HUD rectangle, enabled from the second kept frame onwards.
-  localparam int unsigned HudX0 = 200, HudX1 = 264;
-  localparam int unsigned HudY0 = 100, HudY1 = 140;
-  localparam logic [7:0] HudIdx = 8'hC3;
+  // --- sprites --------------------------------------------------------------
+  // Four sprites, each exercising something different:
+  //   0  plainly on screen, with see-through holes
+  //   1  overlaps sprite 0 -- must win where it paints, and must NOT erase
+  //      sprite 0 where it is see-through
+  //   2  runs off the right edge, so the row has to be clipped
+  //   3  inactive, and must therefore not appear at all
+  localparam int unsigned NumSprites = 4;
+  localparam int unsigned SprX[NumSprites] = '{200, 232, 620, 100};
+  localparam int unsigned SprY[NumSprites] = '{100, 108, 200, 300};
+  localparam int unsigned SprW[NumSprites] = '{64, 48, 40, 32};
+  localparam int unsigned SprH[NumSprites] = '{40, 24, 16, 16};
+  localparam logic SprActive[NumSprites] = '{1'b1, 1'b1, 1'b1, 1'b0};
+
+  localparam logic [15:0] SeeThroughColour = 16'hF81F;
+
+  // Sprite pixel content. Distinct per sprite and per position so a swapped row,
+  // a swapped sprite or an off-by-one in the source address all show up. Every
+  // fourth pixel on the diagonal is the see-through colour.
+  function automatic logic [15:0] spr_pixel(input int unsigned s, input int unsigned sx,
+                                            input int unsigned sy);
+    logic [15:0] c;
+    if (((sx + sy) % 4) == 0) return SeeThroughColour;
+    c = 16'((s << 13) | ((sy & 7) << 9) | ((sx & 31) << 3) | 3'h5);
+    // Must not collide with the see-through colour by accident.
+    if (c == SeeThroughColour) c = 16'h0001;
+    return c;
+  endfunction
+
+  // Modelled, not called from color_pkg, so a change to the HUD code layout has
+  // to be made in both places deliberately: bit 7 marks a HUD code, the rest is
+  // a 3-2-2 RGB cube taken from the top bits of each RGB565 channel.
+  function automatic logic [7:0] rgb565_to_hud_color(input logic [15:0] c);
+    return {1'b1, c[15:13], c[10:9], c[4:3]};
+  endfunction
 
   logic clk = 0;
   always #1 clk = ~clk;
@@ -86,6 +126,7 @@ module tb_fb_compositor #(
   localparam int unsigned N = memory_pkg::NumMemClients;
   localparam int unsigned Sim = memory_pkg::MemClientSimID;
   localparam int unsigned Fb = memory_pkg::MemClientCompositorID;
+  localparam int unsigned Hud = memory_pkg::MemClientHudID;
 
   logic [N-1:0] client_toggle;
   memory_pkg::transaction_e client_transaction[N];
@@ -127,7 +168,7 @@ module tb_fb_compositor #(
 
   sim_buffers sim_memory (
       .clk(clk), .reset(reset), .sim_running(sim_running),
-      .fb_ready(fb_ready_for_frame),
+      .fb_ready(fb_ready_for_frame), .fb_row_ready(fb_row_idle),
       .pulse_new_row(pulse_new_row),
       .buffers(window),
       .pulse_transaction_pair_done(pulse_pair_done),
@@ -149,22 +190,44 @@ module tb_fb_compositor #(
       .res_buffer(res)
   );
 
-  // --- device under test ----------------------------------------------------
+  // --- HUD layer ------------------------------------------------------------
+  // The real rasterizer, reading real sprite pixels out of the psram model. The
+  // sprite LUT is driven straight from the testbench rather than through hud.sv
+  // so the subject stays the rasterizer, not the SPI path that populates it.
   mem_map_pkg::fb_x_t hud_x;
   mem_map_pkg::fb_y_t hud_y;
-  logic hud_opaque;
-  palette_pkg::palette_index_t hud_index;
+  logic hud_opaque, hud_row_ready, hud_overflow;
+  color_pkg::hud_color_t hud_color;
 
-  // hud_enable only ever changes at a kept-frame boundary, so a frame is never
-  // half composited with the HUD and half without.
-  logic hud_enable = 0, hud_request = 0;
+  hud_pkg::sprite_inst_entry_t spriteLUT[hud_pkg::SpriteLutDepth];
+  hud_pkg::sprite_mem_id hud_lookup_mem_id;
+  logic [31:0] hud_lookup_mem_addr;
+  logic [31:0] sprite_base_model[NumSprites];
 
-  assign hud_opaque = hud_enable
-      && (32'(hud_x) >= HudX0) && (32'(hud_x) < HudX1)
-      && (32'(hud_y) >= HudY0) && (32'(hud_y) < HudY1);
-  assign hud_index = HudIdx;
+  assign hud_lookup_mem_addr = (32'(hud_lookup_mem_id) < NumSprites)
+      ? sprite_base_model[hud_lookup_mem_id] : 32'd0;
 
-  logic fb_sel, fb_swap_pending, fb_frame_done, fb_frame_idle, fb_overrun;
+  logic hud_mem_toggle;
+  memory_pkg::transaction_e hud_mem_transaction;
+  memory_pkg::address_t hud_mem_address;
+  memory_pkg::message_length_t hud_mem_length;
+
+  hud_line_buffer hud_painter (
+      .clk(clk), .reset(reset),
+      .spriteLUT(spriteLUT),
+      .lookup_mem_id(hud_lookup_mem_id), .lookup_mem_addr(hud_lookup_mem_addr),
+      .pulse_frame_restart(frame_restart),
+      .pulse_row_commit(commit_valid), .commit_y(commit_y),
+      .row_ready(hud_row_ready),
+      .px_x(hud_x), .px_opaque(hud_opaque), .px_color(hud_color),
+      .mem_toggle(hud_mem_toggle), .mem_transaction(hud_mem_transaction),
+      .mem_address(hud_mem_address), .mem_length(hud_mem_length),
+      .mem_busy(client_busy[Hud]), .mem_data_on_cable(client_data_on_cable[Hud]),
+      .mem_read_data(mem_read_data),
+      .shortlist_overflow(hud_overflow)
+  );
+
+  logic fb_sel, fb_swap_pending, fb_frame_done, fb_frame_idle, fb_row_idle, fb_overrun;
 
   // Mirrors main.sv: the simulation may only start a generation when the
   // renderer is between frames and the previous frame is already on screen.
@@ -182,8 +245,9 @@ module tb_fb_compositor #(
       .pulse_row_commit(commit_valid), .commit_y(commit_y), .commit_res_buffer(sim_commit_res_buffer),
       .pulse_frame_restart(frame_restart),
       .res_buffer(res),
-      .hud_x(hud_x), .hud_y(hud_y), .hud_opaque(hud_opaque), .hud_index(hud_index),
-      .fb_sel(fb_sel), .frame_written(fb_frame_done), .frame_idle(fb_frame_idle),
+      .hud_x(hud_x), .hud_y(hud_y), .hud_opaque(hud_opaque), .hud_color(hud_color),
+      .hud_row_ready(hud_row_ready),
+      .fb_sel(fb_sel), .frame_written(fb_frame_done), .frame_idle(fb_frame_idle), .row_idle(fb_row_idle),
       .mem_toggle(fb_mem_toggle), .mem_transaction(fb_mem_transaction),
       .mem_address(fb_mem_address), .mem_length(fb_mem_length),
       .mem_write_data(fb_mem_write_data),
@@ -220,6 +284,11 @@ module tb_fb_compositor #(
     client_length[Sim]      = sim_mem_length;
     client_write_data[Sim]  = sim_mem_write_data;
 
+    client_toggle[Hud]      = hud_mem_toggle;
+    client_transaction[Hud] = hud_mem_transaction;
+    client_address[Hud]     = hud_mem_address;
+    client_length[Hud]      = hud_mem_length;
+
     client_toggle[Fb]      = fb_mem_toggle;
     client_transaction[Fb] = fb_mem_transaction;
     client_address[Fb]     = fb_mem_address;
@@ -245,8 +314,8 @@ module tb_fb_compositor #(
   logic checking = 0, done = 0;
 
   // Mirrors of the compositor's own choices, derived from its inputs only.
-  logic wr_buf = 1, hud_this_frame = 0;
-  logic prev_buf = 0, prev_hud = 0, have_prev = 0;
+  logic wr_buf = 1;
+  logic prev_buf = 0, have_prev = 0;
 
   // tb_sim's convention: which res_buffer slot a row's own result ends up in.
   function automatic int unsigned row_output_slot(input int unsigned y, input int unsigned p);
@@ -257,9 +326,25 @@ module tb_fb_compositor #(
     return (p != 0) && ((y == 0) || (y == H - 1));
   endfunction
 
-  function automatic logic in_hud(input int unsigned x, input int unsigned y);
-    return (x >= HudX0) && (x < HudX1) && (y >= HudY0) && (y < HudY1);
-  endfunction
+  // What the HUD layer should contribute at (x,y): sprites in ascending ID
+  // order, a later one winning only where it actually paints. A see-through
+  // pixel does not erase what an earlier sprite put there.
+  task automatic hud_model(input int unsigned x, input int unsigned y, output logic v,
+                           output logic [7:0] idx);
+    logic [15:0] c;
+    v = 1'b0;
+    idx = 8'h00;
+    for (int unsigned s = 0; s < NumSprites; s++) begin
+      if (SprActive[s] && x >= SprX[s] && x < SprX[s] + SprW[s]
+          && y >= SprY[s] && y < SprY[s] + SprH[s] && x < W) begin
+        c = spr_pixel(s, x - SprX[s], y - SprY[s]);
+        if (c != SeeThroughColour) begin
+          v   = 1'b1;
+          idx = rgb565_to_hud_color(c);
+        end
+      end
+    end
+  endtask
 
   task automatic record_result(input int unsigned y);
     int unsigned slot;
@@ -280,16 +365,18 @@ module tb_fb_compositor #(
   endtask
 
   // The composite the framebuffer must hold: the simulation byte, replaced by
-  // the HUD index wherever the HUD was opaque.
-  task automatic verify_frame(input logic buf_sel, input logic hud_on);
+  // the HUD code wherever the HUD was opaque.
+  task automatic verify_frame(input logic buf_sel);
     int unsigned addr;
-    logic [7:0] got, want;
+    logic [7:0] got, want, hud_idx;
+    logic hud_v;
     for (int unsigned y = 0; y < H; y++) begin
       for (int unsigned x = 0; x < W; x++) begin
         addr = 32'(mem_map_pkg::fb_byte_addr(buf_sel, mem_map_pkg::fb_x_t'(x),
                                              mem_map_pkg::fb_y_t'(y)));
         got  = psram.mem[addr];
-        want = (hud_on && in_hud(x, y)) ? HudIdx : expect_frame[y][x];
+        hud_model(x, y, hud_v, hud_idx);
+        want = hud_v ? hud_idx : expect_frame[y][x];
         if (got !== want) begin
           if (errors < 8)
             $display("FAIL frame %0d fb%0d px (%0d,%0d) at 0x%08h: got 0x%02h want 0x%02h",
@@ -301,15 +388,17 @@ module tb_fb_compositor #(
   endtask
 
   // The buffer on screen must still hold the frame it was swapped in with.
-  task automatic verify_displayed_intact(input logic buf_sel, input logic hud_on);
+  task automatic verify_displayed_intact(input logic buf_sel);
     int unsigned addr;
-    logic [7:0] got, want;
+    logic [7:0] got, want, hud_idx;
+    logic hud_v;
     for (int unsigned y = 0; y < H; y++) begin
       for (int unsigned x = 0; x < W; x++) begin
         addr = 32'(mem_map_pkg::fb_byte_addr(buf_sel, mem_map_pkg::fb_x_t'(x),
                                              mem_map_pkg::fb_y_t'(y)));
         got  = psram.mem[addr];
-        want = (hud_on && in_hud(x, y)) ? HudIdx : prev_frame[y][x];
+        hud_model(x, y, hud_v, hud_idx);
+        want = hud_v ? hud_idx : prev_frame[y][x];
         if (got !== want) begin
           $display("FAIL frame %0d: displayed fb%0d corrupted at (%0d,%0d) 0x%08h: %02h/%02h",
                    kept, buf_sel, x, y, addr, got, want);
@@ -336,11 +425,11 @@ module tb_fb_compositor #(
   // the tearing check: writing the wrong buffer, or starting before the swap
   // landed, shows up here.
   task automatic verify_finished_frame();
-    verify_frame(wr_buf, hud_this_frame);
+    verify_frame(wr_buf);
     verify_guard();
 
     if (have_prev) begin
-      verify_displayed_intact(prev_buf, prev_hud);
+      verify_displayed_intact(prev_buf);
       // Exactly one swap since the previous kept frame -- the previous frame's.
       // This frame's own swap has not happened yet; swap_pending was raised a
       // few cycles ago and lands at the next frame_start.
@@ -363,16 +452,13 @@ module tb_fb_compositor #(
       errors = errors + 1;
     end
 
-    $display("tb_fb_compositor: frame %0d verified into fb%0d (hud %s)",
-             kept, wr_buf, hud_this_frame ? "on" : "off");
+    $display("tb_fb_compositor: frame %0d verified into fb%0d", kept, wr_buf);
 
     prev_frame    = expect_frame;
     prev_buf      = wr_buf;
-    prev_hud      = hud_this_frame;
     swaps_at_prev = swaps;
     have_prev     = 1;
     kept          = kept + 1;
-    hud_request = 1;  // the first kept frame runs without the HUD, the rest with it
     if (kept == KeptFrames) done = 1;
   endtask
 
@@ -394,6 +480,10 @@ module tb_fb_compositor #(
         $display("FAIL frame %0d: compositor lost a committed row mid-frame", kept);
         errors = errors + 1;
       end
+      if (hud_overflow) begin
+        $display("FAIL frame %0d: hud rasterizer ran out of shortlist room", kept);
+        errors = errors + 1;
+      end
 
       if (fb_frame_done) begin
         frames_done = frames_done + 1;
@@ -412,9 +502,7 @@ module tb_fb_compositor #(
             $display("FAIL frame %0d: generation started while a swap was pending", kept);
             errors = errors + 1;
           end
-          hud_enable = hud_request;  // only ever changes at a frame boundary
           wr_buf = ~fb_sel;
-          hud_this_frame = hud_enable;
         end
 
         // Freeze the reference image on the frame's last commit: the generation
@@ -464,6 +552,36 @@ module tb_fb_compositor #(
       psram.mem[mem_map_pkg::Fb1MemPointer+i] = Sentinel;
     end
     for (int unsigned i = 0; i < GuardBytes; i++) psram.mem[GuardBase+i] = Sentinel;
+
+    // Sprite pixels, laid out exactly as the MCU uploads them: RGB565, two
+    // bytes per pixel, MSB first, rows back to back. Each sprite gets its own
+    // page-aligned base so a wrong base address is obvious rather than subtle.
+    for (int unsigned sp = 0; sp < NumSprites; sp++) begin
+      logic [15:0] c;
+      sprite_base_model[sp] = 32'(SpriteBase + sp * SpriteStride);
+      for (int unsigned sy = 0; sy < SprH[sp]; sy++) begin
+        for (int unsigned sx = 0; sx < SprW[sp]; sx++) begin
+          c = spr_pixel(sp, sx, sy);
+          psram.mem[sprite_base_model[sp]+(sy*SprW[sp]+sx)*2]   = c[15:8];
+          psram.mem[sprite_base_model[sp]+(sy*SprW[sp]+sx)*2+1] = c[7:0];
+        end
+      end
+    end
+
+    // The sprite LUT the rasterizer reads. Driven straight from here rather
+    // than through hud.sv so this stays a test of the rasterizer.
+    for (int unsigned i = 0; i < hud_pkg::SpriteLutDepth; i++) begin
+      spriteLUT[i] = '0;
+    end
+    for (int unsigned sp = 0; sp < NumSprites; sp++) begin
+      spriteLUT[sp].active = SprActive[sp];
+      spriteLUT[sp].id     = hud_pkg::sprite_lut_id'(sp);
+      spriteLUT[sp].mem_id = hud_pkg::sprite_mem_id'(sp);
+      spriteLUT[sp].x      = 16'(SprX[sp]);
+      spriteLUT[sp].y      = 16'(SprY[sp]);
+      spriteLUT[sp].w      = 16'(SprW[sp]);
+      spriteLUT[sp].h      = 16'(SprH[sp]);
+    end
 
     repeat (4) @(posedge clk);
     reset  = 0;

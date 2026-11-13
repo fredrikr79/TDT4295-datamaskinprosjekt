@@ -91,7 +91,7 @@ module tb_sim_memory #(
       .clk(clk), .reset(reset), .sim_running(sim_running),
       // No renderer here, so the generation gate is always open. Pacing against
       // the display is tb_fb_compositor's subject, not this one's.
-      .fb_ready(1'b1),
+      .fb_ready(1'b1), .fb_row_ready(1'b1),
       .pulse_new_row(pulse_new_row),
       .buffers(window),
       .pulse_transaction_pair_done(pulse_pair_done),

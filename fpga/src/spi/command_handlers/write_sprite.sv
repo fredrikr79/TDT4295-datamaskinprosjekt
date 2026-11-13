@@ -18,7 +18,8 @@ module write_sprite #(
     output logic [7:0] write_sprite_fifo,
     mem_in,
     error_code,
-    output logic [31:0] mem_addr = 32'd0,
+    output logic [31:0] mem_addr = 32'(mem_map_pkg::SpritesMemPointer),
+    output logic [31:0] sprite_base_addr = 32'(mem_map_pkg::SpritesMemPointer),
     output hud_pkg::sprite_mem_id write_sprite_mem_id
 );
 
@@ -70,6 +71,8 @@ module write_sprite #(
           end
           MEM_GET_MSG_LENGTH_BOTTOM: begin
             total_bytes[7:0] <= in_fifo;
+            // Latched before the first burst
+            sprite_base_addr <= mem_addr;
             state <= MEM_INIT_REQ;
             if(in_empty) begin
               error_valid <= 1'b1;

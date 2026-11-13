@@ -37,6 +37,7 @@ module tb_write_sprite_upload #(
   logic [31:0] request_addresses [0:CHUNK_COUNT-1];
   logic [15:0] request_lengths [0:CHUNK_COUNT-1];
   integer fifo_ptr = 0;
+  logic [31:0] sprite_base_addr;
   integer payload_count = 0;
   integer req_count = 0;
   integer write_count = 0;
@@ -59,8 +60,19 @@ module tb_write_sprite_upload #(
     .write_sprite_done(write_sprite_done), .write_sprite_r_en(write_sprite_r_en),
     .write_sprite_w_en(write_sprite_w_en), .mem_req(mem_req),
     .write_sprite_valid(write_sprite_valid), .write_sprite_mem_id(write_sprite_mem_id),
-    .mem_addr(mem_addr)
+    .mem_addr(mem_addr), .sprite_base_addr(sprite_base_addr)
   );
+
+  // sprite_base_addr is what hud.sv records in the sprite LUT, so it must be the
+  // sprite's FIRST byte. mem_addr has already walked past the bursts by the time
+  // write_sprite_valid fires, which is what it used to (wrongly) latch.
+  always @(posedge clk) begin
+    if (write_sprite_valid) begin
+      if (sprite_base_addr !== 32'(mem_map_pkg::SpritesMemPointer))
+        $fatal(1, "WRITE_SPRITE base address %08h expected %08h",
+               sprite_base_addr, 32'(mem_map_pkg::SpritesMemPointer));
+    end
+  end
 
   always @(posedge clk) begin
     logic sampled_read_enable;
@@ -151,9 +163,11 @@ module tb_write_sprite_upload #(
       expected_chunk_len = (PAYLOAD_LEN - chunk_offset > memory_pkg::MaxMessageLength)
                          ? memory_pkg::MaxMessageLength
                          : PAYLOAD_LEN - chunk_offset;
-      if (request_addresses[chunk] !== 32'(chunk_offset))
-        $fatal(1, "WRITE_SPRITE chunk %0d address %08h expected %08h",
-               chunk, request_addresses[chunk], 32'(chunk_offset));
+      // Uploads land in the sprite region, not at address 0 -- address 0 is the
+      // cell grid, which earlier versions of write_sprite overwrote.
+      if (request_addresses[chunk] !== 32'(mem_map_pkg::SpritesMemPointer + chunk_offset))
+        $fatal(1, "WRITE_SPRITE chunk %0d address %08h expected %08h", chunk,
+               request_addresses[chunk], 32'(mem_map_pkg::SpritesMemPointer + chunk_offset));
       if (request_lengths[chunk] !== 16'(expected_chunk_len))
         $fatal(1, "WRITE_SPRITE chunk %0d length %0d expected %0d",
                chunk, request_lengths[chunk], expected_chunk_len);

@@ -17,7 +17,8 @@ module fb_compositor #(
     output mem_map_pkg::fb_x_t hud_x,
     output mem_map_pkg::fb_y_t hud_y,
     input logic hud_opaque,
-    input palette_pkg::palette_index_t hud_index,
+    input color_pkg::hud_color_t hud_color,
+    input logic hud_row_ready,
 
     // Fb wires
     input logic fb_sel,
@@ -25,6 +26,7 @@ module fb_compositor #(
 
     // High only at a frame boundary
     output logic frame_idle,
+    output logic row_idle,
 
     // Memory client ports
     output logic mem_toggle,
@@ -65,13 +67,14 @@ module fb_compositor #(
   assign mem_transaction = memory_pkg::WRITE;
   assign hud_x = mem_map_pkg::fb_x_t'(bytes_moved);
   assign hud_y = row_y;
-  assign mem_write_data = hud_opaque ? hud_index : row_shift[7:0]; // Data to write each cycle
+  assign mem_write_data = hud_opaque ? hud_color : row_shift[7:0]; // Data to write each cycle
 
   logic can_accept_commit;
   assign can_accept_commit = !row_writing_active; // Accept new row from sim if idle
 
   logic first_row_of_frame;
   assign first_row_of_frame = (rows_written == '0);
+  assign row_idle   = !row_writing_active;
   assign frame_idle = !row_writing_active && first_row_of_frame;
 
   // A row finished being written out.
@@ -121,7 +124,8 @@ module fb_compositor #(
         end
 
         // Initiate next burst
-        if (!mem_busy && bytes_moved == bytes_requested && 32'(bytes_requested) < LineBytes) begin
+        if (hud_row_ready && !mem_busy && bytes_moved == bytes_requested
+            && 32'(bytes_requested) < LineBytes) begin
           mem_address <= mem_map_pkg::fb_line_addr(wr_buffer, row_y)
               + memory_pkg::address_t'(bytes_requested);
           mem_length <= burst_length;

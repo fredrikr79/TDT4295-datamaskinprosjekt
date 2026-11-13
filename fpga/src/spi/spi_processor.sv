@@ -30,6 +30,7 @@ module spi_processor #(
     output memory_pkg::transaction_e mem_transaction,
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_mem_id write_sprite_mem_id,
+    output logic [31:0] write_sprite_base_addr,
     output hud_pkg::sprite_op_e sprite_req_op
 );
 
@@ -540,6 +541,7 @@ module spi_processor #(
       .write_sprite_w_en(write_sprite_w_en),
       .mem_req(write_sprite_mem_req),
       .mem_addr(write_sprite_mem_addr),
+      .sprite_base_addr(write_sprite_base_addr),
       .write_sprite_valid(write_sprite_valid),
       .write_sprite_mem_id(write_sprite_mem_id),
       .error_valid(write_sprite_error_valid),

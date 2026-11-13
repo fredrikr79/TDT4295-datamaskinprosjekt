@@ -57,7 +57,7 @@ module fb_scanout #(
   logic [AddrBits-1:0] read_x;
   assign read_x = AddrBits'(coord_x);
 
-  logic [7:0] palette_index;
+  logic [7:0] fb_line_pixel_data;
 
   fb_line_buffer #(
       .LineBytes(LineBytes)
@@ -69,16 +69,12 @@ module fb_scanout #(
       .swap_buffer(line_end),
       .read_x(read_x),
       .read_en(beam_in_line),
-      .read_data(palette_index),
+      .read_data(fb_line_pixel_data),
       .underrun(underrun)
   );
 
   color_pkg::color_t pixel_color;
-
-  palette colour_table (
-      .index(palette_pkg::palette_index_t'(palette_index)),
-      .color(pixel_color)
-  );
+  assign pixel_color = color_pkg::color_lookup(fb_line_pixel_data);
 
   logic beam_in_line_d1;
   always_ff @(posedge clk) begin

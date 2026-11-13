@@ -169,7 +169,10 @@ module tb_fb_scanout #(
   end
 
   color_pkg::color_t expect_color;
-  always_comb expect_color = dut.colour_table.entries[pattern(32'(x_q), 32'(y_q))];
+  // The colour table used to be a ROM inside the dut; it is now a function in
+  // color_pkg. What this still pins down is the byte -- that the pixel reaching
+  // the beam is the one the pattern put at that coordinate.
+  always_comb expect_color = color_pkg::color_lookup(pattern(32'(x_q), 32'(y_q)));
 
   always @(posedge clk) begin
     if (checking && active_q && (32'(y_q) < Height)) begin

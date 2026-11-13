@@ -5,6 +5,7 @@ module sim_buffers #(
     input logic reset,
     input logic sim_running,
     input logic fb_ready,
+    input logic fb_row_ready,
 
     output logic pulse_new_row,
     output sim_pkg::row_buffer_t buffers[3],
@@ -43,6 +44,7 @@ module sim_buffers #(
     PRIME_SECOND,  // row 1 into buffers[1]
     START_ROW,     // signal simulator to start processing the buffers
     RUN_ROW,       // wait on pulse_row_done, and shift buffers when this happens, if pulse_transaction_pair_done, write to memory as well.
+    COMMIT_FIRST,  // hold the first (or only) row until the compositor can take it
     WRITE_BACK,    // write one or two res_buffer rows to memory
     PREFETCH       // start fetching of row_index + 1 or start over from beginning of a frame
   } state_e;
@@ -52,6 +54,10 @@ module sim_buffers #(
 
   logic single_row_edgecase;
   logic write_lower;  // if the lower row of a transaction pair is queued for write to memory
+
+  // What COMMIT_FIRST will hand over once the compositor is free.
+  row_idx_t pending_row;
+  logic pending_buffer, pending_write_lower;
 
   // Controls if transfers to/from memory should be initiated
   logic start_xfer, start_is_write, start_buffer, xfer_active, xfer_write, xfer_idle;
@@ -189,33 +195,28 @@ module sim_buffers #(
             buffers[1] <= buffers[2];
             buffers[2] <= '0;
 
-            // Start a write transaction to mem if pair is done
+            // Hand the first row over once the compositor can take it. Usually an upper row
             if (pulse_transaction_pair_done) begin
-              start_xfer <= 1'b1;
-              start_is_write <= 1'b1;
-              pulse_row_commit <= 1'b1;
-
               if (!single_row_edgecase) begin
-                start_row <= row_index - row_idx_t'(1);
-                start_buffer <= 1'b1;
-                write_lower <= 1'b1;
-                commit_y <= mem_map_pkg::fb_y_t'(row_index - row_idx_t'(1));
-                commit_res_buffer <= 1'b1;
+                pending_row <= row_index - row_idx_t'(1);
+                pending_buffer <= 1'b1;
+                pending_write_lower <= 1'b1;
               end else begin
                 // When odd_major_evaluation, row 0 and 359 don't get the pair treatment.
                 // Therefore we just write back the single row
-                start_row <= row_index;
-                start_buffer <= row_index[0];
-                write_lower <= 1'b0;
-                commit_y <= mem_map_pkg::fb_y_t'(row_index);
-                commit_res_buffer <= row_index[0];
+                pending_row <= row_index;
+                pending_buffer <= row_index[0];
+                pending_write_lower <= 1'b0;
               end
 
               single_row_edgecase <= 1'b1;
-              state <= WRITE_BACK;
+              state <= COMMIT_FIRST;
             end else begin
               // The row that activated pulse_row_done is an upper row of a transaction pair
               single_row_edgecase <= 1'b0;
+              pending_row <= '0;
+              pending_buffer <= 1'b0;
+              pending_write_lower <= 1'b0;
               if (32'(row_index) + 2 < GridHeight) begin
                 start_xfer <= 1'b1;
                 start_is_write <= 1'b0;
@@ -226,9 +227,23 @@ module sim_buffers #(
           end
         end
 
+        COMMIT_FIRST: begin
+          if (fb_row_ready) begin
+            start_xfer <= 1'b1;
+            start_is_write <= 1'b1;
+            start_row <= pending_row;
+            start_buffer <= pending_buffer;
+            write_lower <= pending_write_lower;
+            pulse_row_commit <= 1'b1;
+            commit_y <= mem_map_pkg::fb_y_t'(pending_row);
+            commit_res_buffer <= pending_buffer;
+            state <= WRITE_BACK;
+          end
+        end
+
         WRITE_BACK: begin
           if (xfer_idle) begin
-            if (write_lower) begin
+            if (write_lower && fb_row_ready) begin
               write_lower <= 1'b0;
               start_xfer <= 1'b1;
               start_is_write <= 1'b1;
@@ -237,7 +252,7 @@ module sim_buffers #(
               pulse_row_commit <= 1'b1;
               commit_y <= mem_map_pkg::fb_y_t'(xfer_row + row_idx_t'(1));
               commit_res_buffer <= 1'b0;
-            end else begin
+            end else if (!write_lower) begin
               if (32'(row_index) + 2 < GridHeight) begin
                 start_xfer <= 1'b1;
                 start_is_write <= 1'b0;

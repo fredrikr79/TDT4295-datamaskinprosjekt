@@ -142,6 +142,11 @@ module hud_line_buffer #(
       if (pulse_frame_restart) begin
         // Reset state machine
         state <= SCAN;
+        row_ready <= 1'b0;
+        commit_pending <= 1'b1;
+        shortlist_i <= '0;
+        bytes_req <= '0;
+        bytes_recv <= '0;
         scan_i <= '0;
         shortlist_len <= '0;
         shortlist_overflow <= 1'b0;

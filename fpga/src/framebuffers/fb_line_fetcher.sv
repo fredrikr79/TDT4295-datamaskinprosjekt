@@ -68,7 +68,7 @@ module fb_line_fetcher #(
       end else if (line_in_progress) begin
         if (mem_data_on_cable) bytes_received <= bytes_received + 1'b1;
 
-        if (fetch_needed && !mem_busy && (bytes_received == bytes_requested)
+        if (fetch_needed && !mem_busy && (bytes_received >= bytes_requested)
             && 32'(bytes_requested) < LineBytes) begin
           mem_address <= mem_map_pkg::fb_line_addr(fb_sel, next_line)
                        + memory_pkg::address_t'(bytes_requested);

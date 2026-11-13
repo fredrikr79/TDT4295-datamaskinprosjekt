@@ -247,6 +247,7 @@ module main #(
   logic fb_compositor_overrun;
 
   hud_pkg::sprite_mem_id hud_lookup_mem_id;
+  hud_pkg::sprite_mem_id sprite_read_id;
   logic [31:0] hud_lookup_mem_addr;
 
   logic hud_mem_toggle;
@@ -259,6 +260,7 @@ module main #(
       .clk(clk),
       .reset(~ck_rst),
 
+      .sprite_read_id(sprite_read_id),
       .sprite_entry(sprite_entry),
       .lookup_mem_id(hud_lookup_mem_id),
       .lookup_mem_addr(hud_lookup_mem_addr),
@@ -338,6 +340,7 @@ module main #(
       .sprite_req_op(sprite_req_op),
       .sprite_req_body(sprite_req_body),
       .sprite_read_entry(sprite_entry),
+      .sprite_lut_read_id(sprite_read_id),
       .sprite_id_bitmap(sprite_id_bitmap),
       .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),

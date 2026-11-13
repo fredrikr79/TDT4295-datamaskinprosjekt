@@ -55,7 +55,7 @@ if {[llength $ip_files] > 0} {
 }
 
 # Add constraints
-set xdc_file [file join $constraints_dir arty_a7_35T.xdc]
+set xdc_file [file join $constraints_dir artix-xca750t.xdc]
 
 if {[file exists $xdc_file]} {
     add_files -fileset constrs_1 $xdc_file

@@ -4,7 +4,7 @@ module sprite_update #(
     input wire clk, ck_rst, send_sprite_update,
     input logic in_empty,
     input logic [7:0] in_fifo,
-    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+    // input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output logic sprite_update_done,
     sprite_update_r_en,
     sprite_req_valid,
@@ -93,10 +93,10 @@ always_ff @(posedge clk) begin
                     end
                 end
                 EXECUTE: begin
-                    if(!sprite_id_bitmap[param_id]) begin
-                        error_valid <= 1'b1;
-                        error_code <= UNKNOWN_IDENTIFIER_ERROR;
-                    end else begin
+                    // if(!unknown_id) begin
+                    //     error_valid <= 1'b1;
+                    //     error_code <= UNKNOWN_IDENTIFIER_ERROR;
+                    // end else begin
                         sprite_req_body.id <= param_id;
                         sprite_req_body.active <= param_active;
                         sprite_req_body.x <= param_x;
@@ -104,7 +104,7 @@ always_ff @(posedge clk) begin
                         sprite_req_valid <= 1'b1;
                         sprite_update_done <= 1'b1;
                         state <= DONE;
-                    end
+                    // end
                 end
                 DONE: begin
                     // Simply wait one cycle for done signal to be processed.

@@ -11,7 +11,7 @@ module spi_processor #(
     mem_data_on_wire,
     sprite_id_found,
     input hud_pkg::sprite_lut_id sprite_available_id,
-    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+    // input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     input spi_pck::error_event_t error_event, // Incoming global error decision
     output logic proc_w_en,
     proc_r_en,
@@ -611,7 +611,7 @@ module spi_processor #(
       .in_fifo(in_fifo),
       .sprite_req_valid(sprite_u_valid),
       .sprite_req_body(sprite_u_body),
-      .sprite_id_bitmap(sprite_id_bitmap),
+      // .sprite_id_bitmap(sprite_id_bitmap),
       .error_valid(sprite_update_error_valid),
       .error_code(sprite_update_error_code)
   );
@@ -626,7 +626,7 @@ module spi_processor #(
       .in_fifo(in_fifo),
       .sprite_req_valid(sprite_d_valid),
       .sprite_req_body(sprite_d_body),
-      .sprite_id_bitmap(sprite_id_bitmap),
+      // .sprite_id_bitmap(sprite_id_bitmap),
       .error_valid(sprite_delete_error_valid),
       .error_code(sprite_delete_error_code)
   );

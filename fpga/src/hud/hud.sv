@@ -59,7 +59,9 @@ hud_pkg::dynamic_sprite_data_t dynamic_r_data;
 (* ram_style = "block" *) hud_pkg::dynamic_sprite_data_t dynamic_data_mem [hud_pkg::SpriteLutDepth];
 
 
-assign dynamic_w_data = '{
+assign dynamic_w_data = op == hud_pkg::LUT_DELETE
+    ? '0
+    : '{
         active: sprite_req_body.active,
         x: sprite_req_body.x,
         y: sprite_req_body.y
@@ -95,7 +97,6 @@ always_ff @(posedge clk) begin
         end
     end else if (op == hud_pkg::LUT_DELETE) begin
         sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
-        dynamic_data_mem[sprite_req_body.id] <= '0;
     end
 
     // Read data

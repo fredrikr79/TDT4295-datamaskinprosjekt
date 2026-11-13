@@ -36,7 +36,7 @@ module spi #(
     // Sprite LUT
     input logic sprite_id_found,
     input hud_pkg::sprite_lut_id sprite_available_id,
-    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+    // input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_op_e sprite_req_op,
     output hud_pkg::sprite_mem_id write_sprite_mem_id,
@@ -253,7 +253,7 @@ module spi #(
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
-      .sprite_id_bitmap(sprite_id_bitmap),
+      // .sprite_id_bitmap(sprite_id_bitmap),
       .write_sprite_valid(write_sprite_valid),
       .write_sprite_mem_id(write_sprite_mem_id),
       .write_sprite_base_addr(write_sprite_base_addr),

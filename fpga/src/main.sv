@@ -446,7 +446,7 @@ module main #(
       // Sprite LUT transaction signals
       .sprite_available_id(sprite_available_id),
       .sprite_id_found(sprite_id_found),
-      .sprite_id_bitmap(sprite_id_bitmap),
+      // .sprite_id_bitmap(sprite_id_bitmap),
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),

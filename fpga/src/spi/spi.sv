@@ -265,8 +265,8 @@ module spi #(
   );
 
   // DEBUG
-  assign led_r_n = state[2];
-  assign led_g_n = state[1];
-  assign led_b_n = state[0];
+  assign led_r_n = ~state[2];
+  assign led_g_n = ~state[1];
+  assign led_b_n = ~state[0];
 
 endmodule

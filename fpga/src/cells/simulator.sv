@@ -32,7 +32,11 @@ module simulator #(
   assign is_unmatched_boundry_row = is_odd_major_evaluation &&
     (current_row_index == 0 || current_row_index == sim_pkg::CellGridHeight - 1);
 
+
   always @(posedge clk) begin
+
+    // Drive signals (output buffers must be owned by this block)
+
     pulse_transaction_pair_done <= 1'b0;
     pulse_row_done <= 1'b0;
 
@@ -48,37 +52,6 @@ module simulator #(
       is_row_running <= 1'b1;
     end
 
-    // advancement logic
-    if (is_row_running) begin
-      if (simulation_base == simulation_stride - 1) begin
-        simulation_base <= 0;
-        is_row_running  <= 1'b0;
-        pulse_row_done  <= 1'b1;
-
-        if (!is_sending_row || is_unmatched_boundry_row) begin
-          pulse_transaction_pair_done <= 1'b1;
-          lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        end
-
-        if (current_row_index == sim_pkg::CellGridHeight - 1) begin
-          current_row_index <= 0;
-          simulation_counter <= simulation_counter + 1'b1;
-
-          gol_refresh_counter <= gol_refresh_counter + 1'b1;
-          lfsr_gol <= {lfsr_gol[30:0], lfsr_gol[31] ^ lfsr_gol[21] ^ lfsr_gol[1] ^ lfsr_gol[0]};
-
-          is_odd_major_evaluation <= ~is_odd_major_evaluation;
-        end else begin
-          current_row_index <= current_row_index + 1'b1;
-        end
-      end else begin
-        // Update base index
-        simulation_base <= simulation_base + 32'd1;
-      end
-    end
-  end
-
-  always @(posedge clk) begin
     for (
         simulation_core_index = 0;
         simulation_core_index < sim_pkg::SimulationCoreCount;
@@ -95,6 +68,9 @@ module simulator #(
       automatic int left_pixel_bit_column = (current_pixel_column - 1) * sim_pkg::BitsPerPixel;
       automatic int right_pixel_bit_column = (current_pixel_column + 1) * sim_pkg::BitsPerPixel;
 
+      automatic logic[31:0] noise = sim_pkg::lowbias32(
+              lfsr_gol ^ current_pixel_bit_column);
+
       automatic
       logic [7:0]
       explosion_update = sim_rules::explosion_rules(
@@ -106,8 +82,7 @@ module simulator #(
           neighbourhood,
           simulation_counter,
           gol_refresh_counter % sim_pkg::GolRefreshDelay == 0,
-          sim_pkg::lowbias32(
-              lfsr_gol ^ current_pixel_bit_column) [0]
+          noise[0]
       );
 
       automatic sim_pkg::gravity_movement_t gravity_movement = sim_pkg::DownNone;
@@ -137,6 +112,35 @@ module simulator #(
         apply_gravity_movement(gravity_movement, neighbourhood, current_pixel_column);
       else if (!sim_pkg::no_movement(fluid_movement))
         apply_fluid_movement(fluid_movement, neighbourhood, current_pixel_column);
+    end
+
+     // advancement logic
+    if (is_row_running) begin
+      if (simulation_base == simulation_stride - 1) begin
+        simulation_base <= 0;
+        is_row_running  <= 1'b0;
+        pulse_row_done  <= 1'b1;
+
+        if (!is_sending_row || is_unmatched_boundry_row) begin
+          pulse_transaction_pair_done <= 1'b1;
+          lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
+        end
+
+        if (current_row_index == sim_pkg::CellGridHeight - 1) begin
+          current_row_index <= 0;
+          simulation_counter <= simulation_counter + 1'b1;
+
+          gol_refresh_counter <= gol_refresh_counter + 1'b1;
+          lfsr_gol <= {lfsr_gol[30:0], lfsr_gol[31] ^ lfsr_gol[21] ^ lfsr_gol[1] ^ lfsr_gol[0]};
+
+          is_odd_major_evaluation <= ~is_odd_major_evaluation;
+        end else begin
+          current_row_index <= current_row_index + 1'b1;
+        end
+      end else begin
+        // Update base index
+        simulation_base <= simulation_base + 32'd1;
+      end
     end
 
   end

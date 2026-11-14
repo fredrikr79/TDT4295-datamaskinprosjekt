@@ -23,7 +23,7 @@ module read_cons #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   logic [15:0] read_bytes = 16'd0;
@@ -31,7 +31,7 @@ module read_cons #(
   logic [15:0] rx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
-  mem_driver_pkg::mem_states_e state = MEM_START;
+  mem_map_pkg::mem_states_e state = MEM_START;
 
   always_ff @(posedge clk) begin
 

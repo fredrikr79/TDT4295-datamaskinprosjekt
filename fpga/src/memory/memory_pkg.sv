@@ -32,7 +32,7 @@ package memory_pkg;
     logic [7:0] read_data;
   } transaction_output_t;
 
-  localparam int unsigned MaxMessageLength = 64;
+  localparam int unsigned MaxMessageLength = 32;
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
       MaxMessageLength + 1
   ) : 1;
@@ -84,7 +84,7 @@ package memory_pkg;
 
   localparam bit FixedLatency = 1'b1;
   localparam bit UseHybridBurst = 1'b1;
-  localparam bit [1:0] BurstLength = 2'b11; // burst length of 32 bytes
+  localparam bit [1:0] BurstLength = 2'b00; // burst length of 32 bytes
 
 
   // Possible drive strengths

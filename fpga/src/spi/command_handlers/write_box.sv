@@ -20,7 +20,7 @@ module write_box #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   typedef enum bit [4:0] {

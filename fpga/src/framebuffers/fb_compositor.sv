@@ -45,6 +45,10 @@ module fb_compositor #(
   localparam int unsigned CountBits = $clog2(ScreenBits + 1);  // 11
   localparam int unsigned RowCountBits = $clog2(GridHeight + 1);  // 9
 
+  // How many times should a row_shift pixel be written before the next one is evaluated.
+  logic [1:0] colStride = 2'b0;
+  logic [1:0] rowStride = 2'b0;
+
   // The row being written out to a fb, and to which fb.
   logic [RowBits-1:0] row_shift;
   logic [RowBits-1:0] res_copy;
@@ -84,10 +88,6 @@ module fb_compositor #(
   assign advance_row = row_writing_active
     && (32'(bytes_moved) >= mem_map_pkg::ScreenWidth)
     && !mem_busy && rowStride == 2'd3 ;
-
-  // How many times should a row_shift pixel be written before the next one is evaluated.
-  logic [1:0] colStride = 2'b0;
-  logic [1:0] rowStride = 2'b0;
 
   always_ff @(posedge clk) begin
     frame_written <= 1'b0;

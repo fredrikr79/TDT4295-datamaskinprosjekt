@@ -1,6 +1,6 @@
 module hud_line_buffer #(
     parameter int unsigned BurstBytes = memory_pkg::MaxMessageLength,
-    parameter int unsigned LineBytes  = mem_map_pkg::GridWidth,
+    parameter int unsigned LineBytes  = mem_map_pkg::ScreenWidth,
     // Must be a power of 2
     parameter int unsigned MaxActiveSprites = 64 // to avoid overworking
 ) (

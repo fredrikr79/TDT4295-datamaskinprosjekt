@@ -26,14 +26,14 @@ module write_sprite #(
   import hud_pkg::*;
   import spi_pck::*;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   logic [15:0] total_bytes = 16'd0;
   logic [15:0] written_bytes = 16'd0;
   logic [15:0] tx_index = 16'd0;
 
-  mem_driver_pkg::mem_states_e state = MEM_START;
+  mem_map_pkg::mem_states_e state = MEM_START;
   hud_pkg::sprite_mem_id next_id = 0;
 
   logic do_r_en;

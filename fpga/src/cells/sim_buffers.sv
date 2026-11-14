@@ -78,7 +78,7 @@ module sim_buffers #(
   end
 
   function automatic memory_pkg::address_t row_addr(input row_idx_t y);
-    return mem_map_pkg::cell_word_addr(sim_pkg::grid_x_t'(0), sim_pkg::grid_y_t'(y));
+    return mem_map_pkg::GridPosToMemAddr(16'(0), 16'(y));
   endfunction
 
   always_ff @(posedge clk) begin

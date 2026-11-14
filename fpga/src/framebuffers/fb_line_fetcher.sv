@@ -1,6 +1,6 @@
 module fb_line_fetcher #(
     parameter int unsigned BurstBytes = memory_pkg::MaxMessageLength,
-    parameter int unsigned LineBytes  = mem_map_pkg::GridWidth
+    parameter int unsigned LineBytes  = mem_map_pkg::ScreenWidth
 ) (
     input logic clk,
     input logic reset,

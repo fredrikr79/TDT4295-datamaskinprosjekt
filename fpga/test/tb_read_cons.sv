@@ -8,7 +8,7 @@ module tb_read_cons #(
   parameter int READ_LEN = 2 * memory_pkg::MaxMessageLength + 5
 );
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   localparam int HEADER_LEN = 6;

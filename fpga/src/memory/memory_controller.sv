@@ -96,7 +96,7 @@ module memory_controller (
       memory_pkg::WAITING_ON_LATENCY: begin
         dq_oe = 0;
         rwds_oe = (current_transaction == memory_pkg::WRITE) &&
-            bytes_this_state >= 2 * memory_pkg::LatencyCount - 2'd1;
+            bytes_this_state >= 2 * memory_pkg::LatencyCount - 2'd2;
         cs_n = 0;
         run_clock = 1;
       end

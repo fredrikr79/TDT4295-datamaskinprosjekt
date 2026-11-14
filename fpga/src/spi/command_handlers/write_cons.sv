@@ -21,7 +21,7 @@ module write_cons #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   logic [15:0] total_bytes = 16'b0;
@@ -29,7 +29,7 @@ module write_cons #(
   logic [15:0] tx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
-  mem_driver_pkg::mem_states_e state = MEM_START;
+  mem_map_pkg::mem_states_e state = MEM_START;
   logic do_r_en;
   logic data_pop;
 

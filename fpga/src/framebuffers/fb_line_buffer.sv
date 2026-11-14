@@ -1,5 +1,5 @@
 module fb_line_buffer #(
-    parameter int unsigned LineBytes = mem_map_pkg::GridWidth  // 640
+    parameter int unsigned LineBytes = mem_map_pkg::ScreenWidth  // 640
 ) (
     input logic clk,
     input logic reset,

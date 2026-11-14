@@ -7,6 +7,10 @@
  *     display_host.c (display_layer()), which shows the HUD over the SIM
  *     layer with DISPLAY_HUD_CLEAR pixels see-through. Pixels travel MSB
  *     first, 2 bytes each.
+ *   - The grid is coarser than the screen: GRID_W x GRID_H cells (160x90),
+ *     each shown as an FPGA_SIM_SCALE x FPGA_SIM_SCALE block (4x4) of the
+ *     640x360 SIM layer, like the FPGA's upscaler. Every X,Y,W,H in CONS
+ *     and BOX counts cells; sprites stay in screen pixels.
  *   - The grid holds a byte per cell: the material (MAT_AIR, MAT_SAND...,
  *     fpga.h) in the high 4 bits, shown through a colour lookup table
  *     (sim_lut) like the real FPGA's. The low 4 bits are kept as written
@@ -57,8 +61,13 @@
 #include <time.h>
 
 /* ---- configuration ---------------------------------------------------- */
-#define FAKE_W        DISPLAY_W     /* FPGA screen = the window, via INFO  */
+#define FAKE_W        DISPLAY_W     /* FPGA screen = the window, pixels    */
 #define FAKE_H        DISPLAY_H
+#define GRID_W        (FAKE_W / FPGA_SIM_SCALE)   /* the grid, cells: 160  */
+#define GRID_H        (FAKE_H / FPGA_SIM_SCALE)   /*                   90  */
+
+_Static_assert(FAKE_W % FPGA_SIM_SCALE == 0 && FAKE_H % FPGA_SIM_SCALE == 0,
+               "the screen must be whole cells");
 #define MAX_CMD       1024u         /* input FIFO = N, reported by INFO    */
 #define OUT_FIFO      1024u         /* answer FIFO                         */
 #define PIXEL_BYTES   2u            /* RGB565, MSB first                   */
@@ -144,7 +153,7 @@ static const uint16_t sim_lut[MAT_ID_MAX + 1] = {
     [MAT_COUNT ... MAT_ID_MAX] = LUT565(255, 0, 200),   /* not in use: shows up loud */
 };
 
-static uint8_t cells[FAKE_W * FAKE_H];      /* one cell byte each, row after row */
+static uint8_t cells[GRID_W * GRID_H];      /* one cell byte each, row after row */
 
 /* ---- pixel access -----------------------------------------------------
  * A region is w pixels wide starting at (x, y); pixel i lands at
@@ -158,12 +167,18 @@ static uint16_t *pixel(display_layer_t L, uint32_t x, uint32_t y)
 static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 
 /* Cell i (counted from the top-left, row after row) gets cell byte v, and
- * the SIM picture the colour of its material (high 4 bits). */
+ * its FPGA_SIM_SCALE x FPGA_SIM_SCALE block of the SIM picture the colour
+ * of its material (high 4 bits), the way the FPGA scales the grid up. */
 static void cell_set(uint32_t i, uint8_t v)
 {
     cells[i] = v;
-    uint16_t *p = pixel(DISPLAY_SIM, i % FAKE_W, i / FAKE_W);
-    if (p) *p = sim_lut[SIM_MAT(v)];
+    uint16_t c  = sim_lut[SIM_MAT(v)];
+    uint32_t px = (i % GRID_W) * FPGA_SIM_SCALE, py = (i / GRID_W) * FPGA_SIM_SCALE;
+    for (uint32_t dy = 0; dy < FPGA_SIM_SCALE; dy++) {
+        uint16_t *p = pixel(DISPLAY_SIM, px, py + dy);
+        if (!p) continue;
+        for (uint32_t dx = 0; dx < FPGA_SIM_SCALE; dx++) p[dx] = c;
+    }
 }
 
 /* The k-th cell byte in packed data (two per byte: the material only). */
@@ -183,16 +198,16 @@ static void pack_cell(uint8_t *out, uint32_t k, uint8_t v)
 /* WRITE_CONS: IDs from (x, y) on, contiguous. */
 static void cons_write(uint16_t x, uint16_t y, const uint8_t *data, uint16_t nbytes)
 {
-    uint32_t start = (uint32_t)y * FAKE_W + x, n = (uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE;
+    uint32_t start = (uint32_t)y * GRID_W + x, n = (uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE;
     uint32_t oob = 0, unused = 0;
     for (uint32_t k = 0; k < n; k++) {
         uint8_t v = packed_cell(data, k);
         unused += SIM_MAT(v) >= MAT_COUNT;
-        if (x >= FAKE_W || start + k >= (uint32_t)FAKE_W * FAKE_H) { oob++; continue; }
+        if (x >= GRID_W || start + k >= (uint32_t)GRID_W * GRID_H) { oob++; continue; }
         cell_set(start + k, v);
     }
-    if (oob) LOG_WARN("write_cons at (%u,%u): %lu of %lu cells out of bounds (%ux%u)",
-                      x, y, (unsigned long)oob, (unsigned long)n, FAKE_W, FAKE_H);
+    if (oob) LOG_WARN("write_cons at cell (%u,%u): %lu of %lu cells out of bounds (%ux%u cells)",
+                      x, y, (unsigned long)oob, (unsigned long)n, GRID_W, GRID_H);
     if (unused) LOG_WARN("write_cons at (%u,%u): %lu cell(s) with a material >= %u "
                          "(the material is the HIGH 4 bits: SIM_CELL())",
                          x, y, (unsigned long)unused, (unsigned)MAT_COUNT);
@@ -203,8 +218,8 @@ static void cons_write(uint16_t x, uint16_t y, const uint8_t *data, uint16_t nby
 static int32_t box_cell(uint16_t x, uint16_t y, uint16_t w, uint32_t k)
 {
     uint32_t cx = x + k % w, cy = y + k / w;
-    if (cx >= FAKE_W || cy >= FAKE_H) return -1;
-    return (int32_t)(cy * FAKE_W + cx);
+    if (cx >= GRID_W || cy >= GRID_H) return -1;
+    return (int32_t)(cy * GRID_W + cx);
 }
 
 /* WRITE_BOX: w x h IDs, row by row. */
@@ -222,8 +237,8 @@ static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
         if (c < 0) { oob++; continue; }
         cell_set((uint32_t)c, packed_cell(data, k));
     }
-    if (oob) LOG_WARN("write_box at (%u,%u): %lu of %lu cells out of bounds (%ux%u)",
-                      x, y, (unsigned long)oob, (unsigned long)n, FAKE_W, FAKE_H);
+    if (oob) LOG_WARN("write_box at cell (%u,%u): %lu of %lu cells out of bounds (%ux%u cells)",
+                      x, y, (unsigned long)oob, (unsigned long)n, GRID_W, GRID_H);
 }
 
 /* READ_BOX: w x h IDs, row by row. Off the grid reads as air. */
@@ -251,10 +266,10 @@ static void cons_read(uint16_t x, uint16_t y, uint32_t nbytes)
                  (unsigned long)nbytes, OUT_FIFO);
         nbytes = OUT_FIFO;
     }
-    uint32_t start = (uint32_t)y * FAKE_W + x, total = (uint32_t)FAKE_W * FAKE_H;
+    uint32_t start = (uint32_t)y * GRID_W + x, total = (uint32_t)GRID_W * GRID_H;
     memset(ff.out, 0, nbytes);
     for (uint32_t k = 0; k < nbytes * FPGA_SIM_IDS_PER_BYTE; k++)
-        pack_cell(ff.out, k, (x < FAKE_W && start + k < total) ? cells[start + k]
+        pack_cell(ff.out, k, (x < GRID_W && start + k < total) ? cells[start + k]
                                                               : SIM_CELL(MAT_AIR));
     ff.out_len = (uint16_t)nbytes;
 }
@@ -458,10 +473,12 @@ int32_t fake_fpga_write(const transport_hdr_t *h, const uint8_t *data,
     }
 
     case INFO_OPCODE: {
-        /* [W][H][N] 16 bits each, [SID] 32 bits, MSB first */
+        /* [W][H][N] 16 bits each, [SID] 32 bits, MSB first. W, H: the
+         * screen in pixels, like the real FPGA (not the grid). */
+        const uint16_t iw = FAKE_W, ih = FAKE_H;
         const uint8_t info[FPGA_INFO_BYTES] = {
-            (uint8_t)(FAKE_W  >> 8), (uint8_t)FAKE_W,
-            (uint8_t)(FAKE_H  >> 8), (uint8_t)FAKE_H,
+            (uint8_t)(iw >> 8), (uint8_t)iw,
+            (uint8_t)(ih >> 8), (uint8_t)ih,
             (uint8_t)(MAX_CMD >> 8), (uint8_t)MAX_CMD,
             (uint8_t)(ff.session >> 24), (uint8_t)(ff.session >> 16),
             (uint8_t)(ff.session >> 8),  (uint8_t)ff.session
@@ -517,15 +534,16 @@ void fake_fpga_reset(void)
 {
     /* The layers are not cleared here: display_init() already did. */
     memset(&ff, 0, sizeof ff);
-    for (uint32_t i = 0; i < (uint32_t)FAKE_W * FAKE_H; i++) cell_set(i, SIM_CELL(MAT_AIR));
+    for (uint32_t i = 0; i < (uint32_t)GRID_W * GRID_H; i++) cell_set(i, SIM_CELL(MAT_AIR));
 
     /* A fresh id per "power-up", like an FPGA that just got configured. */
     srand((unsigned)time(NULL));
     ff.session = (uint32_t)(rand() & 0xFFFF);
     ff.session = ff.session | (uint32_t)(rand() & 0xFFFF) << 16;
 
-    LOG_INFO("fake fpga: %ux%u, N=%u, session 0x%08lX, %u KB sprite memory, "
-             "%u images, %u sprites, ready %d us, sync %u Hz", FAKE_W, FAKE_H,
+    LOG_INFO("fake fpga: screen %ux%u, grid %ux%u cells of %ux%u px, N=%u, "
+             "session 0x%08lX, %u KB sprite memory, %u images, %u sprites, ready %d us, "
+             "sync %u Hz", FAKE_W, FAKE_H, GRID_W, GRID_H, FPGA_SIM_SCALE, FPGA_SIM_SCALE,
              MAX_CMD, (unsigned long)ff.session, SPRITE_MEM / 1024u,
              MAX_IMAGES - 1u, MAX_SPRITES, READY_US, FRAME_HZ);
 }

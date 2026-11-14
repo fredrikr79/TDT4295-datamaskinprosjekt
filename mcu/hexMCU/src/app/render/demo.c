@@ -7,7 +7,7 @@
  * against what was sent. Results go to the log with the tag "demo".
  *
  *   echo    ECHO of 1 byte up to the largest the FPGA takes (N - 1)
- *   info    INFO: screen size, N, session
+ *   info    INFO: screen size (and the grid it gives), N, session
  *   cons    STOP_SIM, WRITE_CONS a row and read it back with READ_CONS,
  *           a write that runs over the end of a row, one single byte (read
  *           back alone and in a 4-byte read: tells a write fault from a
@@ -31,10 +31,12 @@
  * known), after the FPGA queue has emptied. While one runs, game_poll() leaves the
  * FPGA to it (demo_busy()).
  *
- * Sizes and positions come from the screen size INFO reports, so the
- * tests work on any screen (tried from 32x24 to 640x360): boxes shrink to
- * fit, the sprite's path and the scene scale, and game of life patterns
- * that don't fit are left out.
+ * Sizes and positions come from the size INFO reports, so the tests work
+ * on any size: boxes shrink to fit, the sprite's path and the scene scale,
+ * and game of life patterns that don't fit are left out. Two sizes:
+ *   the grid, in cells (160x90)    everything CONS / BOX: grid_w(), grid_h()
+ *   the screen, in pixels (640x360) the sprite test only: scr()->width/height
+ * The FPGA shows each cell as FPGA_SIM_SCALE x FPGA_SIM_SCALE pixels.
  *
  * Patterns depend on where a cell is (x, y) and on a number that changes
  * every run, so a write that silently did nothing can't pass by reading
@@ -115,6 +117,11 @@ static struct {
 static uint32_t now(void) { return plat_millis(); }
 
 static const fpga_info_t *scr(void) { return fpga_link_info(); }
+
+/* The grid, in cells: where CONS and BOX coordinates live. The screen
+ * (scr()->width / height, pixels) is only for sprites. */
+static uint32_t grid_w(void) { return scr()->sim_w; }
+static uint32_t grid_h(void) { return scr()->sim_h; }
 
 /* Most payload bytes / cells one command of this opcode can carry. */
 static uint32_t max_bytes(uint8_t opcode)
@@ -354,13 +361,13 @@ static const char *mat_name(uint8_t m)
 }
 
 /* Where cell k of a command lands. CONS (box_w 0): k cells on from
- * (x0, y0), on to the next row at the screen's right edge. BOX: a
+ * (x0, y0), on to the next row at the grid's right edge. BOX: a
  * box_w-wide box with its top-left at (x0, y0). */
 static void cell_xy(uint32_t k, uint16_t x0, uint16_t y0, uint16_t box_w,
                     uint32_t *x, uint32_t *y)
 {
     if (box_w) { *x = x0 + k % box_w; *y = y0 + k / box_w; return; }
-    uint32_t w = scr()->width, p = x0 + k;
+    uint32_t w = grid_w(), p = x0 + k;
     *x = p % w;
     *y = y0 + p / w;
 }
@@ -477,8 +484,9 @@ static step_t info_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
     (void)c; (void)ms;
     if (i == 0) {
         const fpga_info_t *in = scr();
-        LOG_INFO("  screen %ux%u, N = %u bytes, session 0x%08lX", in->width, in->height,
-                 in->max_cmd, (unsigned long)in->session);
+        LOG_INFO("  screen %ux%u px, grid %ux%u cells (%ux%u px each), N = %u bytes, "
+                 "session 0x%08lX", in->width, in->height, in->sim_w, in->sim_h,
+                 FPGA_SIM_SCALE, FPGA_SIM_SCALE, in->max_cmd, (unsigned long)in->session);
         LOG_INFO("  most payload: CONS %lu B, BOX %lu B, sprite/echo %lu B",
                  (unsigned long)fpga_max_payload(WRITE_CONS_OPCODE),
                  (unsigned long)fpga_max_payload(WRITE_BOX_OPCODE),
@@ -498,7 +506,7 @@ static uint8_t pat_cons(uint32_t x, uint32_t y)
 /* What step i of cons moves: n cells from (x, y). */
 static void cons_geo(unsigned i, uint16_t *x, uint16_t *y, uint32_t *n)
 {
-    uint16_t w = scr()->width, y0 = (uint16_t)(scr()->height / 2u);
+    uint16_t w = (uint16_t)grid_w(), y0 = (uint16_t)(grid_h() / 2u);
     uint32_t row = max_cells(WRITE_CONS_OPCODE);
     if (max_cells(READ_CONS_OPCODE) < row) row = max_cells(READ_CONS_OPCODE);
     if (row > w) row = w;
@@ -557,7 +565,7 @@ static uint8_t pat_box(uint32_t x, uint32_t y)
     return (uint8_t)((x / 2u + (y / 2u) * 3u + d.salt) % MAT_COUNT);
 }
 
-/* Box sizes. They shrink to fit the screen, and are laid out left to right
+/* Box sizes. They shrink to fit the grid, and are laid out left to right
  * (on to the next line when one is full) from the top-left corner. */
 static const struct { uint16_t w, h; } boxes[] = {
     {  1,  1 },
@@ -568,12 +576,12 @@ static const struct { uint16_t w, h; } boxes[] = {
 };
 #define NBOX       (sizeof boxes / sizeof boxes[0])
 #define CROSS_BOX  2u
-#define BOX_MARGIN 2u               /* from the screen's edges, and between boxes */
+#define BOX_MARGIN 2u               /* from the grid's edges, and between boxes */
 
-/* Size of box b, shrunk to the screen and to N. */
+/* Size of box b, shrunk to the grid and to N. */
 static void box_size(unsigned b, uint16_t *w, uint16_t *h)
 {
-    uint32_t sw = scr()->width, sh = scr()->height;
+    uint32_t sw = grid_w(), sh = grid_h();
     uint32_t maxw = sw > 2u * BOX_MARGIN ? sw - 2u * BOX_MARGIN : 1u;
     uint32_t maxh = sh > 2u * BOX_MARGIN ? sh - 2u * BOX_MARGIN : 1u;
     uint32_t bw = boxes[b].w < maxw ? boxes[b].w : maxw, bh = boxes[b].h;
@@ -594,7 +602,7 @@ static void box_size(unsigned b, uint16_t *w, uint16_t *h)
  * box is read back right after it's written. false: no room at all. */
 static bool box_geo(unsigned b, uint16_t *x, uint16_t *y, uint16_t *w, uint16_t *h)
 {
-    uint32_t sw = scr()->width, sh = scr()->height;
+    uint32_t sw = grid_w(), sh = grid_h();
     uint32_t cx = BOX_MARGIN, cy = BOX_MARGIN, line_h = 0;
     for (unsigned k = 0; k <= b; k++) {
         box_size(k, w, h);
@@ -633,7 +641,7 @@ static step_t box_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
 
     box_op(i - 1u, &b, &op);
     if (!box_geo(b, &x, &y, &w, &h)) {
-        if (op == BOX_WRITE) LOG_INFO("  box %u doesn't fit the screen: skipped", b);
+        if (op == BOX_WRITE) LOG_INFO("  box %u doesn't fit the grid: skipped", b);
         *ms = 0;
         return STEP_WAIT;
     }
@@ -693,7 +701,7 @@ static uint16_t smiley_px(uint32_t x, uint32_t y)
 }
 
 /* Position j of the path: left to right across the middle three quarters
- * of the screen, bouncing up and down (at most 40 rows) on the way. */
+ * of the screen (pixels: sprites), bouncing up and down (at most 40 rows) on the way. */
 static void sprite_pos(unsigned j, uint16_t *x, uint16_t *y)
 {
     int32_t w = scr()->width, h = scr()->height;
@@ -803,18 +811,18 @@ static bool life_at(const char *const *pat, uint32_t rows, uint32_t ox, uint32_t
     return cx < strlen(row) && row[cx] == 'O';
 }
 
-/* inside [x0, x1) x [y0, y1)? (in % of the screen; at least 1 cell each
- * way, so thin shelves don't vanish on a small screen) */
+/* inside [x0, x1) x [y0, y1)? (in % of the grid; at least 1 cell each
+ * way, so thin shelves don't vanish on a small grid) */
 static bool in_pct(uint32_t x, uint32_t y, uint32_t x0, uint32_t x1, uint32_t y0, uint32_t y1)
 {
-    uint32_t w = scr()->width, h = scr()->height;
+    uint32_t w = grid_w(), h = grid_h();
     uint32_t xa = w * x0 / 100u, xb = w * x1 / 100u, ya = h * y0 / 100u, yb = h * y1 / 100u;
     if (xb <= xa) xb = xa + 1u;
     if (yb <= ya) yb = ya + 1u;
     return x >= xa && x < xb && y >= ya && y < yb;
 }
 
-/* Where the game of life patterns go. On a small screen the gun moves to
+/* Where the game of life patterns go. On a small grid the gun moves to
  * the left edge; a pattern that doesn't fit is left out (-1). */
 #define GUN_W     36u
 #define GUN_H     9u
@@ -822,7 +830,7 @@ static bool in_pct(uint32_t x, uint32_t y, uint32_t x0, uint32_t x1, uint32_t y0
 
 static void life_places(int32_t *gx, int32_t *gy, int32_t *px, int32_t *py)
 {
-    int32_t w = scr()->width, h = scr()->height;
+    int32_t w = (int32_t)grid_w(), h = (int32_t)grid_h();
     *gy = h >= 120 ? 6 : 2;
     *gx = w >= 128 ? w * 30 / 100 : 4;
     if (*gx + (int32_t)GUN_W > w - 4 || *gy + (int32_t)GUN_H > h - 5) *gx = -1;
@@ -837,7 +845,7 @@ static void life_places(int32_t *gx, int32_t *gy, int32_t *px, int32_t *py)
 /* A small world with every material. Later rules win over earlier ones. */
 static uint8_t pat_scene(uint32_t x, uint32_t y)
 {
-    uint32_t w = scr()->width, h = scr()->height;
+    uint32_t w = grid_w(), h = grid_h();
 
     /* frame: walls and floor */
     if (x < 3 || x >= w - 3u || y >= h - 4u) return MAT_STONE;
@@ -878,7 +886,7 @@ static uint8_t pat_air(uint32_t x, uint32_t y) { (void)x; (void)y; return MAT_AI
  * carries), START_SIM. */
 static step_t grid_step(unsigned i, fpga_cmd_t *c, pattern_fn p)
 {
-    uint32_t w = scr()->width, h = scr()->height;
+    uint32_t w = grid_w(), h = grid_h();
     uint32_t piece = max_cells(WRITE_CONS_OPCODE);
     piece -= piece % FPGA_SIM_IDS_PER_BYTE;
     if (piece > w) piece = w;
@@ -903,7 +911,7 @@ static step_t clear_step(unsigned i, fpga_cmd_t *c, uint32_t *ms) { (void)ms; re
  * The list, and the public functions
  * ====================================================================== */
 static const test_t t_echo   = { "echo",   "ECHO, 1 byte up to N-1, several bit patterns", true, echo_step, echo_check };
-static const test_t t_info   = { "info",   "INFO: screen size, N, session", false, info_step, NULL };
+static const test_t t_info   = { "info",   "INFO: screen and grid size, N, session", false, info_step, NULL };
 static const test_t t_cons   = { "cons",   "WRITE_CONS then READ_CONS: a row, over a row end, 1 byte", false, cons_step, cons_check };
 static const test_t t_box    = { "box",    "WRITE_BOX then READ_BOX: 1x1 to the biggest, + READ_CONS through one", false, box_step, box_check };
 static const test_t t_sprite = { "sprite", "upload a smiley, place, move, hide, delete (uses a memID)", false, sprite_step, sprite_check };

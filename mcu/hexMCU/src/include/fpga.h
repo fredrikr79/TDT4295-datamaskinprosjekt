@@ -45,8 +45,14 @@
  * cells are one stream, row by row, the last one at (X+W-1, Y+H-1), packed
  * like CONS (FPGA_SIM_IDS_PER_BYTE). Build boxes with fpga_box().
  *
+ * Grid vs screen: the grid is coarser than the screen. The FPGA shows each
+ * cell as an FPGA_SIM_SCALE x FPGA_SIM_SCALE block of pixels (4: a 160x90
+ * grid on a 640x360 screen). So CONS / BOX X,Y,W,H count CELLS, while
+ * sprites (the HUD) and the cursor count screen PIXELS. Convert with
+ * fpga_px_to_cell() / fpga_cell_to_px(); fpga_link_info() has both sizes.
+ *
  * INFO answer, MSB first (FPGA_INFO_BYTES): W, H, N 16 bits, SID 32 bits.
- *   W, H  screen size in pixels
+ *   W, H  screen size in pixels (640x360); the grid is W, H / FPGA_SIM_SCALE
  *   N     the FPGA's input buffer: no command, opcode and parameters
  *         included, may be larger than this
  *   SID   session id; a new one means the FPGA restarted and its memory
@@ -184,6 +190,21 @@ typedef enum {                      /* = MatAir ... MatExplo on the FPGA     */
 } material_t;
 #define MAT_ID_MAX  15u             /* 4 bits: room for 16 materials         */
 
+/* Screen pixels per cell, each way: the FPGA shows a cell as a
+ * FPGA_SIM_SCALE x FPGA_SIM_SCALE block (4: 160x90 cells -> 640x360). */
+#ifndef FPGA_SIM_SCALE
+#define FPGA_SIM_SCALE 4
+#endif
+
+/* Screen pixel -> the cell it lies in, and a cell -> its top-left pixel.
+ * Rounds down, also for negative pixels (left of / above the screen). */
+static inline int32_t fpga_px_to_cell(int32_t px)
+{
+    return px >= 0 ? px / FPGA_SIM_SCALE
+                   : -((-px + FPGA_SIM_SCALE - 1) / FPGA_SIM_SCALE);
+}
+static inline int32_t fpga_cell_to_px(int32_t cell) { return cell * FPGA_SIM_SCALE; }
+
 /* PROTOCOL, not agreed yet: IDs per byte in CONS / BOX data.
  *   1 = one cell per byte, the material in the high 4 bits (N bytes = N cells)
  *   2 = two materials per byte, the first cell in the high nibble
@@ -278,21 +299,24 @@ typedef enum {
     FPGA_ERR_NOT_READY,     /* READY stayed low: nothing was sent      */
 } fpga_err_t;
 
-/* A box on the wire: x1,y1 = top-left pixel, x2 = W (pixels per row),
- * y2 = H (rows) -- see the table above. Make one with fpga_box(). */
+/* A box on the wire, in cells: x1,y1 = top-left cell, x2 = W (cells per
+ * row), y2 = H (rows) -- see the table above. Make one with fpga_box(). */
 typedef struct { uint16_t x1, y1, x2, y2; } fpga_box_t;
 
-/* The box w x h pixels with its top-left corner at x, y. */
+/* The box w x h cells with its top-left corner at cell x, y. */
 static inline fpga_box_t fpga_box(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
     return (fpga_box_t){ .x1 = x, .y1 = y, .x2 = w, .y2 = h };
 }
 
-/* What INFO told us (or what the console set by hand). */
+/* What INFO told us (or what the console set by hand). INFO sends the
+ * screen; the grid is worked out from it. */
 typedef struct {
     bool     valid;         /* false until INFO has succeeded          */
-    uint16_t width;
+    uint16_t width;         /* screen, pixels: cursor, sprites, HUD    */
     uint16_t height;
+    uint16_t sim_w;         /* grid, cells: CONS / BOX, rooms, physics */
+    uint16_t sim_h;
     uint16_t max_cmd;       /* N: largest command in bytes, header included */
     uint32_t session;
 } fpga_info_t;
@@ -384,7 +408,9 @@ uint32_t      fpga_current_ms(void);    /* time spent in that step         */
 
 /* ---- link facts ----------------------------------------------------- */
 const fpga_info_t *fpga_link_info(void);
-void          fpga_set_link_info(const fpga_info_t *info);  /* debug / tests */
+/* Debug / tests. width / height are screen pixels; sim_w / sim_h are
+ * worked out from them here (whatever the caller put there is ignored). */
+void          fpga_set_link_info(const fpga_info_t *info);
 
 /* Most payload (tx bytes) one command with this opcode may carry, header
  * already subtracted. UINT16_MAX while N is not known yet. */

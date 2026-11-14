@@ -4,7 +4,7 @@
  * display_host.c - SIM + HUD layers in an SDL window.
  *
  * The layers are plain arrays that anyone may write at any time. Once per
- * frame (30 Hz) display_poll() composites them into one RGB565 frame --
+ * frame (FPGA_FRAME_HZ, 25 Hz) display_poll() composites them into one RGB565 frame --
  * HUD pixel, unless it is DISPLAY_HUD_CLEAR, then the SIM pixel -- and
  * hands that to SDL as an RGB565 texture. 640x360 is ~230k pixels, cheap
  * enough to redo every frame, so nothing tracks what changed.

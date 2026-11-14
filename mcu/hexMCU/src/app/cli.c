@@ -299,8 +299,10 @@ static void print_info(void)
     if (!in->valid)
         log_raw("fpga info: unknown (no INFO yet), size check off\r\n");
     else
-        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%08lX\r\n",
-                in->width, in->height, in->max_cmd, (unsigned long)in->session);
+        log_raw("fpga info: screen %ux%u px, grid %ux%u cells (%ux%u px each), "
+                "N=%u bytes, session 0x%08lX\r\n",
+                in->width, in->height, in->sim_w, in->sim_h, FPGA_SIM_SCALE,
+                FPGA_SIM_SCALE, in->max_cmd, (unsigned long)in->session);
     cli_async_end();
 }
 
@@ -512,7 +514,8 @@ static void cmd_fecho(int argc, char **argv)
 
 /* info                          show what we know about the FPGA
  * info query                    send INFO and show the answer
- * info set <w> <h> <n> [<sid>]  pretend INFO said this (debugging)
+ * info set <w> <h> <n> [<sid>]  pretend INFO said this (debugging);
+ *                               w, h in screen pixels, the grid follows
  * info clear                    forget it: no size check until next INFO */
 static void cmd_info(int argc, char **argv)
 {
@@ -926,7 +929,7 @@ static const cli_cmd_t cmds[] = {
     { "sprite",  cmd_sprite,   "sprite upload|new|move|del ...  sprite commands by hand" },
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
-    { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]  (w h: screen px)" },
     { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
     { "button",  cmd_button,   "button [watch]      the board button now / watch it for 15 s" },
     { "sd",      cmd_sd,       "sd [ls [<folder>]]  SD card status (mounts now if it can) / list a folder" },

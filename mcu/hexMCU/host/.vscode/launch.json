@@ -9,7 +9,7 @@
             "args": [],
             "cwd": "${workspaceFolder}/..",
             "environment": [
-                { "name": "HEXMCU_SD", "value": "${workspaceFolder}/../sd" }
+                { "name": "HEXMCU_SD", "value": "${workspaceFolder}/sd" }
             ],
             "MIMode": "gdb",
             "preLaunchTask": "build host",

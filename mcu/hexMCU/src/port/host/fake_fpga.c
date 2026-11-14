@@ -1,6 +1,6 @@
 /* ======================================================================
  * fake_fpga.c - what the FPGA does with the commands, for the host build.
- * Follows docs/mcu_fpga_spi_api.md; see fpga.h for the command table.
+ * Follows documentation/SPI/mcu_fpga_spi_api.md; see fpga.h for the command table.
  *
  * Model:
  *   - The grid is the SIM layer, the HUD is sprites. Both layers live in
@@ -21,7 +21,7 @@
  *   - WRITE/READ_BOX move cells too: W x H cells from (X, Y), one stream
  *     row by row, packed the same way. Only the HUD layer (sprites) is RGB565.
  *   - Sprites: WRITE_SPRITE appends its payload to sprite memory and
- *     answers a memID (1, 2, ...; 0 means none). Memory is append-only and
+ *     answers a memID (FPGA_MEMID_FIRST on: 0, 1, 2..., like the real FPGA). Memory is append-only and
  *     contiguous, so an image uploaded as several WRITE_SPRITEs in a row is
  *     one block from its first memID on. SPRITE_WRITE places an instance
  *     (first memID, W, H) and answers the lowest free spriteID. Instances
@@ -41,7 +41,7 @@
  *     MCU does -- like the real FPGA finishing a frame for VGA.
  *   - Screen size, N and the session id live only here; the MCU side
  *     learns them with INFO, like it will from the real FPGA.
- *   - Out-of-bounds pixels are skipped with a warning -- keeping writes
+ *   - Out-of-bounds cells are skipped with a warning -- keeping writes
  *     in bounds is the MCU's job, so this is where you find out.
  *
  * Choices marked PROTOCOL are guesses where the spec isn't settled yet.
@@ -76,7 +76,7 @@ _Static_assert(FAKE_W % FPGA_SIM_SCALE == 0 && FAKE_H % FPGA_SIM_SCALE == 0,
 #define FRAME_NS      (1000000000ull / FRAME_HZ)
 
 /* The real FPGA has 16 MB; memIDs run out long before 2 MB is used
- * (1023 uploads of at most N-1 bytes). */
+ * (1023 uploads of at most N-3 bytes). */
 #define SPRITE_MEM    (2u * 1024u * 1024u)  /* bytes of sprite memory      */
 #define MAX_IMAGES    1024u         /* memID LUT: up to MAX_IMAGES-1 memIDs */
 #define MAX_SPRITES   1024u         /* PROTOCOL: spriteIDs 0 .. 1023       */

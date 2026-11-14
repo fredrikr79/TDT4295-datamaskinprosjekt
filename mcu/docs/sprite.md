@@ -306,8 +306,8 @@ python3 tools/png2spr.py walk_0.png walk_1.png -o sd/sprites/walk.spr         # 
   see-through.
 - An opaque pixel that happens to be exactly 0xF81F is nudged to 0xF81E so it
   doesn't vanish.
-- The tool prints how many memIDs each frame takes. The real cost is one per
-  1020 bytes at N = 1024 (see the chunk size above).
+- The tool prints how many memIDs each frame takes: one per 1020 bytes at
+  N = 1024 (see the chunk size above).
 
 ## assets.c
 

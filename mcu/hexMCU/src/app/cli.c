@@ -1,7 +1,8 @@
 /* ======================================================================
  * cli.c - portable serial console.
  *
- * On linux you could access virtual com thrue sudo minicom -b 115200 -D /dev/ttyACM0   
+ * On Linux: minicom -b 115200 -D /dev/ttyACM0 (with sudo, or join the
+ * dialout group). More in docs/README.md, "The debug console".
  * ====================================================================== */
 #define LOG_TAG "cli"
 
@@ -667,7 +668,7 @@ static void cmd_abort(int argc, char **argv)
     if (n) log_raw("aborted %u fpga command%s\r\n", n, n == 1 ? "" : "s");
 }
 
-/* trace [on|off] -- one debug line per FPGA transfer and step */
+/* demo [<test> | stop] -- FPGA tests and demos (demo.c); no argument lists them */
 static void cmd_demo(int argc, char **argv)
 {
     if (argc == 1)                          { demo_list(); return; }
@@ -872,6 +873,7 @@ static void cmd_loading(int argc, char **argv)
     log_raw("loading: %s\r\n", game_loading() ? "on" : "off (the game holds, no probing)");
 }
 
+/* trace [on|off] -- one debug line per FPGA transfer and step */
 static void cmd_trace(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "on") == 0)       transport_set_trace(true);

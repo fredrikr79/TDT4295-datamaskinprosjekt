@@ -388,4 +388,4 @@ See [transport.md](transport.md) for what the fake FPGA does.
 - [transport.md](transport.md): OCTOSPI, READY/ACK, the fake FPGA
 - [sprite.md](sprite.md): images and sprites on the HUD
 - [storage.md](storage.md): the SD card
-- [usb.md](usb.md): keyboard and mouse
+- [usb.md](usb.md): keyboard, mouse and controllers

@@ -1,7 +1,7 @@
 #ifndef USB_INPUT_H
 #define USB_INPUT_H
 
-/* Keyboard + mouse input for the game.
+/* Keyboard, mouse and controller input for the game (docs/usb.md).
  *
  *   main:       usb_init() once, then usb_poll() every loop iteration
  *   run_frame:  input_take(&in) once per frame, then key_held(&in, KEY_W) ...

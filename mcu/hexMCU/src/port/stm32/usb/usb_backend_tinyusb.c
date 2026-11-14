@@ -101,7 +101,7 @@ void usb_debug_dump(void);
  * packet passes through here on its way from usbh.c to the controller
  * driver, and that one request gets corrected. Needs the linker option
  *   -Wl,--wrap=hcd_setup_send
- * (n6_usbtest.cmake and the main CMakeLists.txt add it). Without it the
+ * (stm32u5.cmake and n6_usbtest.cmake add it). Without it the
  * link fails with "undefined reference to __real_hcd_setup_send". */
 bool __real_hcd_setup_send(uint8_t rhport, uint8_t daddr, uint8_t const setup_packet[8]);
 bool __wrap_hcd_setup_send(uint8_t rhport, uint8_t daddr, uint8_t const setup_packet[8]);
@@ -306,7 +306,7 @@ static void kbd_watchdog(void)
     }
 }
 
-/* Safety net: every keyboard and mouse must always have a report request
+/* Safety net: every keyboard, mouse and controller must always have a report request
  * outstanding, or it goes silent until replugged. The callbacks normally
  * keep the chain going; if it breaks anyway (a request that failed, a
  * failed transfer TinyUSB didn't hand back), it's restarted here and

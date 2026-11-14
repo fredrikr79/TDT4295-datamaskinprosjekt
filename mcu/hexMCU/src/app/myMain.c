@@ -25,9 +25,17 @@ void myMain(void)
 
 
 
-// example
-// static void myfunc (const fpga_cmd_t *c, fpga_err_t e)
-
-// fpga_cmd_t c = fpga_cmd_read_sim_box(area_around(projectile), around_proj,   AREA_BYTES);
-// c.done = myfunc;
-// fpga_status_t st = fpga_submit(&c); 
+/* Example: read the cells around something, with a callback (fpga.h).
+ *
+ *   static void my_done(const fpga_cmd_t *c, fpga_err_t err)
+ *   {
+ *       if (err != FPGA_ERR_NONE) return;       // failed: the game resyncs
+ *       ...c->rx holds w * h cell bytes...
+ *   }
+ *
+ *   fpga_cmd_t c = fpga_cmd_read_box(fpga_box(x, y, w, h), buf,
+ *                                    (uint16_t)fpga_sim_bytes(w * h));
+ *   c.done = my_done;
+ *   fpga_status_t st = fpga_submit(&c);         // FPGA_EFULL: try again next poll
+ *
+ * x, y, w, h count grid cells (160x90), not screen pixels. */

@@ -10,7 +10,8 @@
  * enough to redo every frame, so nothing tracks what changed.
  *
  * Keyboard and mouse events belong to usb_backend_sdl.c; this file only
- * handles quit (window close or Esc) and drops the other event types.
+ * handles quit (window close or F4; Esc is the game's) and drops the
+ * other event types.
  * ====================================================================== */
 
 #include "display_host.h"

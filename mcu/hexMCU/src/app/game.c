@@ -132,7 +132,8 @@ static struct {
 } run;
 
 /* State machine for run: playing, in the menu (the simulation paused), or
- * drawing (the simulation runs, the mouse draws cells -- comes later). */
+ * drawing (no player; the mouse or a controller puts material into the
+ * grid, see draw.h; it starts paused). */
 typedef enum { RS_SIM, RS_MENU, RS_DRAW } run_state_t;
 static const char *const run_state_names[] =
     { "simulating", "menu", "drawing" };
@@ -279,9 +280,6 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
-/* Runs on every way into RUN, also after a resync that kept the session,
- * so nothing here may reset the game. Frames that went by while probing
- * or loading don't count as missed. */
 /* ---- frames: the FPGA's SYNC, or a timer while there is none -------------
  * RUN steps once per SYNC (FPGA_FRAME_HZ, 25 Hz). If no SYNC has come for
  * SYNC_LOST_MS, frames come from a FRAME_MS timer instead, so the game
@@ -322,6 +320,9 @@ static uint32_t frames_due(void)
     return n;
 }
 
+/* Runs on every way into RUN, also after a resync that kept the session,
+ * so nothing here may reset the game. Frames that went by while probing
+ * or loading don't count as missed. */
 static void run_enter(void)
 {
     input_t stale;
@@ -351,7 +352,7 @@ static void sprites_setup(void)
     int32_t x = w < scr->width ? (scr->width - w) / 2 : 0;
     title = sprite_new(assets.title, (int16_t)x, 16, true);
 
-    /* demo: an animation from the card, top-left, 10 frames a second */
+    /* demo: an animation from the card, top-left, ticks 6: about 4 frames a second */
     spinner = sprite_ani_file("sprites/spinner.spr", 6, 8, 8, true);
 
     menu_init(scr->width, scr->height);    /* before the cursor: drawn under it */
@@ -369,7 +370,7 @@ static void room_enter(void)
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);
 }
 
-/* Set the next velocity box */
+/* The player's state, from player.c */
 void set_player(player_t plr)
 {
     player = plr;

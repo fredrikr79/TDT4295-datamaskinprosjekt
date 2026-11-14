@@ -21,7 +21,8 @@
  * first. FPGA sprite memory can't be freed, so neither can images: make
  * them once (at start, see assets.c), not every frame.
  *
- * A SPRITE is an instance of an image on the screen (SPRITE_WRITE ->
+ * A SPRITE is an instance of an image on the screen, placed in screen
+ * pixels (640x360), not grid cells (SPRITE_WRITE ->
  * spriteID): moved, shown or hidden (SPRITE_UPDATE), deleted. Its image
  * and size are fixed. Many sprites can share one image.
  *
@@ -70,14 +71,14 @@
 #endif
 /* Pixels are made into these buffers before they go out. A chunk (one
  * WRITE_SPRITE, one memID) is at most this big, so it should be at least
- * the FPGA's payload limit, N-1 (1023 for N = 1024). */
+ * WRITE_SPRITE's payload limit, N-3 (1021 for N = 1024). */
 #ifndef SPRITE_STAGE_BYTES
 #define SPRITE_STAGE_BYTES  1024u
 #endif
 #ifndef SPRITE_STAGE_BUFS
 #define SPRITE_STAGE_BUFS   4u      /* chunks in flight at once          */
 #endif
-/* memIDs the FPGA has per session (LUT of 1024, assumed 0 = none). */
+/* memIDs the FPGA has per session (a LUT of 1024), from FPGA_MEMID_FIRST (0). */
 #ifndef SPRITE_MEMIDS
 #define SPRITE_MEMIDS       1023u
 #endif
@@ -128,7 +129,8 @@ sprite_img_t *sprite_image(const sprite_t *s);
 typedef struct sprite_ani sprite_ani_t;
 
 /* n frames (at most SPRITE_ANI_FRAMES), each shown for `ticks` game frames
- * (60 Hz: ticks 6 = 10 frames a second). All frames must be the same size. */
+ * (game frames follow SYNC, 25 a second: ticks 5 = 5 frames a second).
+ * All frames must be the same size. */
 sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t ticks,
                              int16_t x, int16_t y, bool visible);
 /* Every frame of a sprite file. */

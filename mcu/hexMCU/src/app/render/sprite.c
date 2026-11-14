@@ -96,7 +96,8 @@ static bool          stage_busy[SPRITE_STAGE_BUFS];
 static uint8_t      *ready_buf;     /* made for uploading->sent, not submitted yet */
 
 static sprite_img_t *uploading;     /* image whose chunks are being submitted  */
-/* memID budget. memIDs are handed out in order (1, 2, 3...), so each OK
+/* memID budget. memIDs are handed out in order (from FPGA_MEMID_FIRST:
+ * 0, 1, 2...), so each OK
  * answer tells exactly how many are in use. In between, a chunk whose
  * fate is unknown (lost answer) counts as used. */
 static unsigned      memids_known;  /* in use after the chunks resolved so far */
@@ -736,7 +737,7 @@ static bool image_needed(const sprite_img_t *img)
 }
 
 /* Pick the next image to upload and work out its chunks.
- *   - Chunk size: as much as one WRITE_SPRITE may carry (N - 1), but at
+ *   - Chunk size: as much as one WRITE_SPRITE may carry (N - 3), but at
  *     most a staging buffer, rounded down to whole pixels. Nothing until
  *     INFO has told us N.
  *   - Two passes: first images a sprite waits for, then all the rest.

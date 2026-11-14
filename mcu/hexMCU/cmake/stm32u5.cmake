@@ -3,7 +3,7 @@
 # its CubeMX project: our common code, the STM32 port, TinyUSB.
 #
 # Used by both STM32 projects:
-#   CMakeLists.txt               the Nucleo-U545RE-Q (USB_IP fsdev)
+#   cube/hexU54/CMakeLists.txt   the Nucleo-U545RE-Q (USB_IP fsdev)
 #   cube/hexU59/CMakeLists.txt   the final board, STM32U595ZJT6 (USB_IP dwc2)
 #
 # How to use it, in a CubeMX CMakeLists.txt, after add_executable():

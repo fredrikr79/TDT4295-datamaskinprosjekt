@@ -1,0 +1,47 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Host: game (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../build/host/hexmcu_host",
+            "args": [],
+            "cwd": "${workspaceFolder}/..",
+            "environment": [
+                { "name": "HEXMCU_SD", "value": "${workspaceFolder}/../sd" }
+            ],
+            "MIMode": "gdb",
+            "preLaunchTask": "build host",
+            "setupCommands": [
+                { "description": "Pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+            ]
+        },
+        {
+            "name": "Host: test_host (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../build/host/test_host",
+            "args": ["${workspaceFolder}/test565.bmp"],
+            "cwd": "${workspaceFolder}/..",
+            "MIMode": "gdb",
+            "preLaunchTask": "build host",
+            "setupCommands": [
+                { "description": "Pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+            ]
+        },
+        {
+            "name": "Host: test_host, 2 % errors (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/../build/host/test_host",
+            "args": ["--errors=2", "${workspaceFolder}/test565.bmp"],
+            "cwd": "${workspaceFolder}/..",
+            "MIMode": "gdb",
+            "preLaunchTask": "build host",
+            "setupCommands": [
+                { "description": "Pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+            ]
+        }
+    ]
+}

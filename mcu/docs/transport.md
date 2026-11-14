@@ -61,9 +61,10 @@ command fills it:
 
 | Command | fields | x, y | alt | len (write) |
 |---|---|---|---|---|
-| WRITE_CONS / READ_CONS | XY + ALT16 | X, Y | N | N / 0 |
-| WRITE_BOX / READ_BOX | XY + ALT32 | X, Y | W:H (hi:lo) | material IDs / 0 |
-| WRITE_SPRITE, ECHO | — | — | — | payload |
+| WRITE_CONS / READ_CONS | XY + ALT16 | X, Y (cells) | N | N / 0 |
+| WRITE_BOX / READ_BOX | XY + ALT32 | X, Y (cells) | W:H in cells (hi:lo) | material IDs / 0 |
+| WRITE_SPRITE | ALT16 | — | LEN (payload size) | pixels |
+| ECHO | — | — | — | payload |
 | SPRITE_* | — | — | — | the parameters, as payload |
 | INFO, START/STOP_SIM | — | — | — | 0 |
 | answer READ | — | — | — | (read) answer bytes, opcode 0x00 |
@@ -79,7 +80,8 @@ the command worked.
 ```c
 void transport_ready_isr(void)          /* called on each READY rising edge */
 {
-    ready_status = BACKEND->read_status();   /* ACK, latched FIRST...       */
+    ready_status = BACKEND->read_status        /* ACK, latched FIRST...       */
+                 ? BACKEND->read_status() & TRANSPORT_STATUS_MASK : 0;
     ready_count++;                            /* ...then the count goes up   */
 }
 ```
@@ -92,6 +94,10 @@ void transport_ready_isr(void)          /* called on each READY rising edge */
   READY came, and `transport_ready_status()` is the ACK that went with it.
 - The status is stored before the count goes up, so whoever sees the new count
   also sees its status.
+- READY is also a level: it drops while the FPGA is busy and rises when it's
+  done, after every transfer (the answer READ included). `fpga.c` reads the
+  level through `plat_fpga_ready_pin()` as well as counting edges
+  ([fpga.md](fpga.md)).
 
 ## STM32 backend: transport_ospi.c
 
@@ -152,30 +158,33 @@ It models only the wires; what the FPGA does is `fake_fpga.c`.
   READY, just like a garbled one on real hardware. This is how resync was tested.
 - **`host_poll()` stands in for the interrupts.** When a transfer's time is up,
   a write goes to `fake_fpga_write()`, a read gets its bytes from
-  `fake_fpga_read()`, and `done` is set. When the fake FPGA's READY delay has
-  passed, the ACK pins are set and `transport_ready_isr()` is called, the same
-  entry point as the EXTI.
+  `fake_fpga_read()`, and `done` is set. The READY pin goes low until the fake
+  FPGA's READY delay has passed; then the ACK pins are set, READY goes high and
+  `transport_ready_isr()` is called, the same entry point as the EXTI. A read
+  gets its own READY too, 2 µs after it ends, like the real FPGA
+  (`FPGA_READY_AFTER_READ`).
 
 ### The fake FPGA (fake_fpga.c)
 
 | Thing | How it's modelled |
 |---|---|
-| Screen | 640 × 360 (`DISPLAY_W/H`), reported by INFO |
+| Screen | 640 × 360 pixels (`DISPLAY_W/H`), reported by INFO, like the real FPGA |
 | N | 1024 bytes (input FIFO); bytes beyond it are dropped with a warning |
-| Grid | the SIM layer: a byte per cell, the material in its high 4 bits, shown through a stand-in colour table (air black, stone grey, sand tan, water blue, lava orange, acid yellow-green, life white, explosive red, unused IDs bright magenta). The low 4 bits are kept as written. CONS and BOX read and write cells, one or two per byte (`FPGA_SIM_IDS_PER_BYTE`) |
-| Sprite memory | 2 MB, append-only; memIDs 1–1023, each WRITE_SPRITE takes one |
-| Sprite instances | 1024 (spriteIDs 0–1023); redrawn into the HUD layer every frame in ID order, 0xF81F see-through |
+| Grid | the SIM layer: 160 × 90 cells, each shown as a 4 × 4 block of the screen (`FPGA_SIM_SCALE`), like the real FPGA's upscaling. A byte per cell, the material in its high 4 bits, shown through a stand-in colour table (air black, stone grey, sand tan, water blue, lava orange, acid yellow-green, life white, explosive red, unused IDs bright magenta). The low 4 bits are kept as written; nothing is simulated. CONS and BOX read and write cells, one or two per byte (`FPGA_SIM_IDS_PER_BYTE`). Cells off the grid are skipped with a warning (written) or read as air |
+| Sprite memory | 2 MB, append-only; 1023 memIDs from `FPGA_MEMID_FIRST` (0, like the real FPGA), each WRITE_SPRITE takes one |
+| Sprite instances | 1024 (spriteIDs 0–1023), in screen pixels; redrawn into the HUD layer every frame in ID order, 0xF81F see-through |
 | READY | 200 µs after each command |
-| SYNC | 30 times a second, whatever the MCU does |
+| SYNC | 25 times a second (`FPGA_FRAME_HZ`), whatever the MCU does |
 | NACK | unknown ID, wrong parameter count, out of memIDs…: ACK low, FIFOs emptied, error code in the answer FIFO |
 | Session | a random 32-bit ID, new on each `fake_fpga_reset()` |
 
 Choices marked `PROTOCOL` in the source are guesses where the spec isn't settled.
 
-`display_host.c` holds the two layers as plain arrays. At 30 Hz it combines them
-(a HUD pixel wins unless it's 0xF81F) and shows the result in the SDL window.
-Keyboard and mouse events in that window belong to the
-[SDL input backend](usb.md); the display only handles quit.
+`display_host.c` holds the two layers as plain 640 × 360 arrays. At 25 Hz it
+combines them (a HUD pixel wins unless it's 0xF81F) and shows the result in the
+SDL window, scaled up 2×. Keyboard and mouse events in that window belong to the
+[SDL input backend](usb.md); the display only handles quit (closing the window,
+or F4).
 
 ## Trace
 

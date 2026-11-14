@@ -2,7 +2,8 @@
 
 [← back to the overview](README.md)
 
-`sprite.c` manages everything on the FPGA's HUD layer: it uploads images
+`sprite.c` manages everything on the FPGA's HUD layer (640 × 360 screen
+pixels, not grid cells; see [fpga.md](fpga.md)): it uploads images
 (including from the SD card), places them as sprites, moves, hides and deletes
 them, runs animations, and puts it all back after an error or an FPGA restart.
 It replaced `hud.c` and `text.c`.
@@ -136,7 +137,8 @@ Only file images touch storage at registration, and only to read the header.
 
 - **Chunk size** = `min(fpga_max_payload(WRITE_SPRITE), SPRITE_STAGE_BYTES)`,
   rounded down to an even number so a pixel is never split. With N = 1024 that's
-  1022 bytes. Each chunk is one WRITE_SPRITE and one memID.
+  1020 bytes (N minus the opcode and the 2-byte LEN). Each chunk is one
+  WRITE_SPRITE and one memID.
 - **Two passes:** first the images a sprite is waiting for, then the rest.
 - **Budget check:** if the image's chunks don't fit in the memIDs left, it becomes
   NO_ROOM and is skipped (logged).
@@ -227,8 +229,9 @@ deleted as soon as the create finishes.
 - If a step is due, `ani_to(new_frame)` hides the current sprite and calls
   `sprite_set(new sprite, ani x, ani y, visible)`.
 
-`ticks` is game frames per animation frame: at 60 Hz, `ticks = 6` gives 10 frames
-a second. The fake FPGA on the PC runs at 30 Hz, so there it's 5 a second.
+`ticks` is game frames per animation frame. Game frames follow the FPGA's SYNC,
+25 a second (`FPGA_FRAME_HZ`) on both the board and the fake FPGA, so
+`ticks = 5` gives 5 animation frames a second and `ticks = 2` about 12.
 
 `sprite_ani_move` moves only the visible frame. A hidden frame gets its position
 when it's next shown, in that same `sprite_set`. So **a move costs one update and
@@ -272,12 +275,13 @@ all sprites" command, or letting the MCU choose spriteIDs, would fix it.
 2. `sprite_new(assets.cursor, 0, 0, true)` gives a sprite in state NONE.
 3. INFO arrives (N = 1024). In the next `sprite_poll`, `next_upload()` picks the
    cursor first, because a sprite needs it. 384 bytes is one chunk:
-   `memids_pending = 1`, and the image is SENDING.
+   `memids_pending = 1`, and the image is SENDING. (Say it's the first upload of
+   the session; memIDs start at `FPGA_MEMID_FIRST`, 0.)
 4. The chunk loop takes a staging buffer, `make_chunk` → `storage_read(path, 8,
    buf, 384)` → WRITE_SPRITE.
-5. `image_done`: buffer freed, `memids_known = 1`, `mem_id = 1`, UPLOADED.
+5. `image_done`: buffer freed, `memids_known = 1`, `mem_id = 0`, UPLOADED.
 6. In the next poll, the sprite loop sees NONE with an uploaded image and sends
-   SPRITE_WRITE(memID 1, x, y, 12, 16). The answer gives spriteID 0, and the
+   SPRITE_WRITE(memID 0, x, y, 12, 16). The answer gives spriteID 0, and the
    sprite is LIVE.
 7. The mouse moves, and `sprite_move` changes `x/y`. The next poll sees
    `x ≠ s_x` and sends SPRITE_UPDATE(0, …), one at a time with the newest
@@ -302,8 +306,8 @@ python3 tools/png2spr.py walk_0.png walk_1.png -o sd/sprites/walk.spr         # 
   see-through.
 - An opaque pixel that happens to be exactly 0xF81F is nudged to 0xF81E so it
   doesn't vanish.
-- The tool prints how many memIDs each frame takes: about one per 1022 bytes at
-  N = 1024.
+- The tool prints how many memIDs each frame takes. The real cost is one per
+  1020 bytes at N = 1024 (see the chunk size above).
 
 ## assets.c
 
@@ -321,14 +325,14 @@ missing), the texts (one image each) and generated ones. `game.c` calls
 | `SPRITE_MAX` | 256 | sprites |
 | `SPRITE_ANI_MAX` / `SPRITE_ANI_FRAMES` | 16 / 16 | animations / frames each |
 | `SPRITE_NAME_MAX` | 40 | longest file path or text, including the end byte |
-| `SPRITE_STAGE_BYTES` | 1024 | staging buffer size = largest chunk; keep ≥ N − 1 |
+| `SPRITE_STAGE_BYTES` | 1024 | staging buffer size = largest chunk; keep ≥ N − 3 (WRITE_SPRITE's payload limit) |
 | `SPRITE_STAGE_BUFS` | 4 | chunks in flight at once |
-| `SPRITE_MEMIDS` | 1023 | memIDs per FPGA session (assumed 1–1023, 0 = none) |
+| `SPRITE_MEMIDS` | 1023 | memIDs per FPGA session, from `FPGA_MEMID_FIRST` (0) on |
 
 With these defaults `sprite.c` uses about 30 KB of RAM on the MCU. Lower the pool
 sizes with `-D` if needed.
 
-- **memID cost:** one per 1022 bytes of an image. A 12 × 16 cursor takes 1; a
+- **memID cost:** one per 1020 bytes of an image. A 12 × 16 cursor takes 1; a
   32 × 32 frame (2048 bytes) takes 3; a long text at scale 2 can take 10 or more.
 - **Commands per frame:** one per sprite that moved, two per animation frame
   change.

@@ -127,7 +127,7 @@ looks like this:
 mcu/
 ├── README.md               points here
 ├── mcu.code-workspace      open this in VS Code
-├── docs/                   this file; README2.md (the older docs index); io/*.md
+├── docs/                   this file, and a page per part: fpga, transport, sprite, storage, usb
 ├── tools/                  png2spr.py, spr_viewer.html, ttf2c.py
 └── hexMCU/
     ├── .clangd             go-to-definition for src/ (uses hexU59's build)    [hidden]
@@ -378,16 +378,14 @@ cmake --build build/host
   `fpga.h`). CONS and BOX commands count cells; sprites and the mouse count
   screen pixels. INFO reports the screen (640x360).
 
-See [io/transport.md](io/transport.md) for what the fake FPGA does.
+See [transport.md](transport.md) for what the fake FPGA does.
 
 ---
 
 ## Documentation
 
-- [README2.md](README2.md): the older docs index
-- [io/README.md](io/README.md): overview and the main loop
-- [io/fpga.md](io/fpga.md): the command queue, protocol, error recovery
-- [io/transport.md](io/transport.md): OCTOSPI, READY/ACK, the fake FPGA
-- [io/sprite.md](io/sprite.md): images and sprites on the HUD
-- [io/storage.md](io/storage.md): the SD card
-- [io/usb.md](io/usb.md): keyboard, mouse and controller
+- [fpga.md](fpga.md): the command queue, protocol, grid and screen sizes, error recovery
+- [transport.md](transport.md): OCTOSPI, READY/ACK, the fake FPGA
+- [sprite.md](sprite.md): images and sprites on the HUD
+- [storage.md](storage.md): the SD card
+- [usb.md](usb.md): keyboard and mouse

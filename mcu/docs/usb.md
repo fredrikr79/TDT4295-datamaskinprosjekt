@@ -1,5 +1,9 @@
 # USB input: keyboard and mouse
 
+> **Not covered yet:** game controllers (`input_t.pad[]`, the `PAD_*`
+> buttons, sticks and touchpad that `game.c`, `menu.c` and `draw.c` use). This
+> page only describes the keyboard and mouse.
+
 [← back to the overview](README.md)
 
 The game reads keys and mouse movement through one small API. On the MCU the
@@ -174,6 +178,9 @@ Same job, for the N6 test board:
   everything else and leaves those ranges alone, so it doesn't matter which polls
   first.
 - The keyboard and mouse count as connected from the start.
+- **The mouse moves in screen pixels** (640 × 360). The game keeps the cursor
+  there; drawing turns it into a grid cell with `fpga_px_to_cell()`
+  ([fpga.md](fpga.md)).
 
 ## Moving to another chip
 

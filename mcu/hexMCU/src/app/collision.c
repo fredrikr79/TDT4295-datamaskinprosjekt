@@ -121,14 +121,15 @@ bool perform_object_movement(
                 {
                     if (y_is_down && sim_is(id, MAT_SAND))
                     {
-                        if (x < slide_ease)
+                        if (x - x_start < slide_ease)
                         {
-                            slide_start = x + 1;
+                            slide_start = x - x_start + 1;
                             continue;
                         }
-                        else if (x_target - x - 1 < slide_ease && slide_end < x_target - x)
+                        else if (x_target - x - 2 < slide_ease)
                         {
-                            slide_end = x_target - x;
+                            if (slide_end < x_target - x)
+                                slide_end = x_target - x;
                             continue;
                         }
                     }
@@ -156,7 +157,7 @@ bool perform_object_movement(
                     uint8_t x_end;
                     if (slide_start)
                     {
-                        x += PLAYER_SIZE_X;
+                        x += PLAYER_SIZE_X + 1;
                         x_end = x + slide_start;
                     }
                     else x_end = x - slide_end;
@@ -176,13 +177,17 @@ bool perform_object_movement(
                     }
                     if (0 < slide_amount)
                     {
-                        if ((slide_end && x_is_right) || (!slide_end && !x_is_right)) {
+                        if ((slide_end && x_is_right) || (!slide_end && *velocity_x < 0)) {
                             horizontal_done = true;
                             horizontal_collision = true;
                         }
                         horizontal_progress += slide_start ? slide_amount : -slide_amount;
                         horizontal_movement_after_force = false;
                     }
+                    // LOG_DBG(
+                    //     "slide start %u. slide end %u",
+                    //     slide_start, slide_end
+                    // );
                     // LOG_DBG(
                     //     "Tried to slide %u. Slided %u. Hit wall: %u",
                     //     slide_start + slide_end, slide_amount, hit_wall
@@ -326,6 +331,7 @@ bool perform_object_movement(
     else if (!horizontal_movement_after_force)
     {
         *pos_x += horizontal_progress;
+        *velocity_y *= 0.3;
     }
     else *pos_x += *velocity_x;
     if (vertical_collision)

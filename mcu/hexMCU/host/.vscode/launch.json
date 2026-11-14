@@ -9,12 +9,23 @@
             "args": [],
             "cwd": "${workspaceFolder}/..",
             "environment": [
-                { "name": "HEXMCU_SD", "value": "${workspaceFolder}/sd" }
+                {
+                    "name": "HEXMCU_SD",
+                    "value": "${workspaceFolder}/sd"
+                },
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0"
+                }
             ],
             "MIMode": "gdb",
             "preLaunchTask": "build host",
             "setupCommands": [
-                { "description": "Pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+                {
+                    "description": "Pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
             ]
         },
         {
@@ -22,15 +33,28 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/../build/host/hexmcu_host",
-            "args": ["--errors=2"],
+            "args": [
+                "--errors=2"
+            ],
             "cwd": "${workspaceFolder}/..",
             "environment": [
-                { "name": "HEXMCU_SD", "value": "${workspaceFolder}/sd" }
+                {
+                    "name": "HEXMCU_SD",
+                    "value": "${workspaceFolder}/sd"
+                },
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "detect_leaks=0"
+                }
             ],
             "MIMode": "gdb",
             "preLaunchTask": "build host",
             "setupCommands": [
-                { "description": "Pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+                {
+                    "description": "Pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
             ]
         }
     ]

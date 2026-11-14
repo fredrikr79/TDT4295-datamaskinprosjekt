@@ -40,12 +40,14 @@ module fb_compositor #(
 );
 
   localparam int unsigned GridHeight = mem_map_pkg::GridHeight;  // 360
-  localparam int unsigned RowBits = LineBytes * 8;  // 5120
-  localparam int unsigned CountBits = $clog2(LineBytes + 1);  // 11
+  localparam int unsigned RowBits = LineBytes * 8;  // 1280
+  localparam int unsigned ScreenBits = mem_map_pkg::ScreenWidth * 8;  // 1280
+  localparam int unsigned CountBits = $clog2(ScreenBits + 1);  // 11
   localparam int unsigned RowCountBits = $clog2(GridHeight + 1);  // 9
 
   // The row being written out to a fb, and to which fb.
   logic [RowBits-1:0] row_shift;
+  logic [RowBits-1:0] res_copy;
   mem_map_pkg::fb_y_t row_y;
   logic row_writing_active;
   logic wr_buffer; // which fb to write to
@@ -55,7 +57,7 @@ module fb_compositor #(
   logic restart_pending; // sim restarted while compositor was busy
 
   logic [CountBits-1:0] remaining;
-  assign remaining = CountBits'(LineBytes) - bytes_requested;
+  assign remaining = CountBits'(mem_map_pkg::ScreenWidth) - bytes_requested;
 
   memory_pkg::message_length_t burst_length;
   always_comb begin
@@ -79,7 +81,13 @@ module fb_compositor #(
 
   // A row finished being written out.
   logic advance_row;
-  assign advance_row = row_writing_active && (32'(bytes_moved) >= LineBytes) && !mem_busy;
+  assign advance_row = row_writing_active
+    && (32'(bytes_moved) >= mem_map_pkg::ScreenWidth)
+    && !mem_busy && rowStride == 2'd3 ;
+
+  // How many times should a row_shift pixel be written before the next one is evaluated.
+  logic [1:0] colStride = 2'b0;
+  logic [1:0] rowStride = 2'b0;
 
   always_ff @(posedge clk) begin
     frame_written <= 1'b0;
@@ -112,20 +120,24 @@ module fb_compositor #(
 
           // Load in the row to be written to the fb in a makeshift shift-register.
           row_shift <= res_buffer[commit_res_buffer][RowBits-1:0];
-          row_y <= commit_y;
+          res_copy <= res_buffer[commit_res_buffer][RowBits-1:0];
+          row_y <= commit_y * sim_pkg::GridScale;
           bytes_requested <= '0;
           bytes_moved <= '0;
           row_writing_active <= 1'b1;
         end
       end else if (row_writing_active) begin
         if (mem_data_on_cable) begin
+          if(colStride == 2'd3) begin
+            row_shift   <= {8'h00, row_shift[RowBits-1:8]};  // Shift one byte
+          end
           bytes_moved <= bytes_moved + 1'b1;
-          row_shift   <= {8'h00, row_shift[RowBits-1:8]};  // Shift one byte
+          colStride <= colStride + 1'd1;
         end
 
         // Initiate next burst
         if (hud_row_ready && !mem_busy && bytes_moved == bytes_requested
-            && 32'(bytes_requested) < LineBytes) begin
+            && 32'(bytes_requested) < mem_map_pkg::ScreenWidth) begin
           mem_address <= mem_map_pkg::fb_line_addr(wr_buffer, row_y)
               + memory_pkg::address_t'(bytes_requested);
           mem_length <= burst_length;
@@ -134,11 +146,21 @@ module fb_compositor #(
         end
 
         // Done!
-        if (32'(bytes_moved) >= LineBytes && !mem_busy) row_writing_active <= 1'b0;
+        if (32'(bytes_moved) >= mem_map_pkg::ScreenWidth && !mem_busy) begin
+          if (rowStride >= 2'd3) begin
+            row_writing_active <= 1'b0;
+          end else begin
+            row_y <= row_y + 1'b1;
+            bytes_requested <= '0;
+            bytes_moved <= '0;
+            row_shift <= res_copy;
+          end
+          rowStride <= rowStride + 1'b1;
+        end
       end
 
       if (advance_row) begin
-        if (32'(rows_written) + 1 >= GridHeight) begin
+        if (32'(rows_written) + 1 >= GridHeight / sim_pkg::GridScale) begin
           rows_written    <= '0;
           restart_pending <= 1'b0;
           frame_written   <= 1'b1;

@@ -1,7 +1,9 @@
 package mem_map_pkg;
-  localparam int unsigned GridWidth = int'(config_pkg::ActiveWidth);  // 640
-  localparam int unsigned GridHeight = int'(config_pkg::ActiveHeight);  // 360
-  localparam int unsigned GridCells = GridWidth * GridHeight;  // 230,400
+  localparam int unsigned GridWidth = sim_pkg::CellGridWidth;  // 160
+  localparam int unsigned GridHeight = sim_pkg::CellGridHeight;  // 90
+  localparam int unsigned ScreenWidth = config_pkg::ActiveWidth;  // 640
+  localparam int unsigned ScreenHeight = config_pkg::ActiveHeight;  // 360
+  localparam int unsigned GridCells = ScreenHeight * ScreenWidth;  // 230,400
 
   // Device: Infineon S70KL1283, 128 Mbit HyperRAM, xSPI (Octal) interface.
   localparam int unsigned PageBytes = 1024;
@@ -45,8 +47,8 @@ package mem_map_pkg;
 
 
   // Framebuffer helper functions //
-  localparam int unsigned FbXBits = $clog2(GridWidth);  // 10
-  localparam int unsigned FbYBits = $clog2(GridHeight);  // 9
+  localparam int unsigned FbXBits = $clog2(ScreenWidth);  // 10
+  localparam int unsigned FbYBits = $clog2(ScreenHeight);  // 9
 
   typedef logic unsigned [FbXBits-1:0] fb_x_t;
   typedef logic unsigned [FbYBits-1:0] fb_y_t;
@@ -57,7 +59,7 @@ package mem_map_pkg;
 
   // Start of a scanline. This is the address the line fetcher bursts from
   function automatic memory_pkg::address_t fb_line_addr(input logic buffer_sel, input fb_y_t y);
-    return fb_base(buffer_sel) + memory_pkg::address_t'(int'(y) * GridWidth);
+    return fb_base(buffer_sel) + memory_pkg::address_t'(int'(y) * ScreenWidth);
   endfunction
 
   function automatic memory_pkg::address_t fb_byte_addr(input logic buffer_sel, input fb_x_t x,

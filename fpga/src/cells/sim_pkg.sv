@@ -1,6 +1,7 @@
 package sim_pkg;
-  localparam int unsigned CellGridWidth = config_pkg::ActiveWidth;
-  localparam int unsigned CellGridHeight = config_pkg::ActiveHeight;
+  localparam int unsigned GridScale = 4;
+  localparam int unsigned CellGridWidth = config_pkg::ActiveWidth / GridScale;
+  localparam int unsigned CellGridHeight = config_pkg::ActiveHeight / GridScale;
 
   localparam int unsigned MaterialBits = 4;  // support for 16 materials
   localparam int unsigned BitsPerPixel = 8;  // support for 16 materials

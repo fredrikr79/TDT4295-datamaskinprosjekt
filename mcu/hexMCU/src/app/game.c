@@ -21,7 +21,7 @@
 #include "draw.h"
 
 /* tuning */
-#define FIRST_ROOM_X -3
+#define FIRST_ROOM_X  0
 #define FIRST_ROOM_Y  0
 
 /* ======================================================================
@@ -344,7 +344,7 @@ static void sprites_setup(void)
     assets_init();              /* reads the sprite files' headers from the card */
 
     const fpga_info_t *scr = fpga_link_info();
-    player_sprite_init(100, 100);   /* the player's picture, until it first moves */
+    player_sprite_init((int) player.x, (int) player.y);   /* the player's picture, until it first moves */
 
     /* test: a sentence centred near the top */
     int32_t w = sprite_img_w(assets.title);

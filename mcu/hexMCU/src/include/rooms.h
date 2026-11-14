@@ -7,8 +7,8 @@
 
 #include "fpga.h"
 
-#define ROOM_X 640
-#define ROOM_Y 360
+#define ROOM_X 160
+#define ROOM_Y 90
 #define MAX_PORTALS 8
 #define DATA_MAX_SIZE (1 + 14*MAX_PORTALS + ROOM_X*ROOM_Y*2)
 

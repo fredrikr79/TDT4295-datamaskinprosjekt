@@ -547,13 +547,3 @@ void fake_fpga_reset(void)
              MAX_CMD, (unsigned long)ff.session, SPRITE_MEM / 1024u,
              MAX_IMAGES - 1u, MAX_SPRITES, READY_US, FRAME_HZ);
 }
-
-/* For tests and the console: what the FPGA has in its sprite tables. */
-void fake_fpga_sprite_stats(unsigned *sprites, unsigned *images, uint32_t *mem_bytes)
-{
-    unsigned n = 0;
-    for (unsigned id = 0; id < MAX_SPRITES; id++) n += ff.sprite[id].used;
-    *sprites   = n;
-    *images    = ff.n_images;
-    *mem_bytes = ff.mem_used;
-}

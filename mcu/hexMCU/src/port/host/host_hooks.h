@@ -11,10 +11,3 @@ extern bool host_ready_pin;
 /* Fake FPGA tunables, so the CLI or argv can change them at runtime. */
 void host_fpga_set_clock(double mhz, unsigned lanes);
 void host_fpga_set_error_rate(unsigned percent);
-
-
-// disk hooks
-void        host_disk_set_image(const char *path);
-void        host_disk_fail_next_reads(int n);
-void        host_disk_fail_next_writes(int n);
-const char *host_disk_image_path(void);

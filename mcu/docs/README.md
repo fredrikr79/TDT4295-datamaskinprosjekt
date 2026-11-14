@@ -39,8 +39,7 @@ Without them, the USB code and the host build won't compile.
 - **Linux:** run *Install ST-Link udev rules* from the extension once.
   Without the rules, flashing fails with a permission error.
 - **For the host emulator:** gcc, CMake, Ninja and gdb, plus Microsoft's
-  **C/C++** extension for debugging it in VS Code. The card image tasks need
-  `dosfstools` and `mtools`, the test picture needs ImageMagick.
+  **C/C++** extension for debugging it in VS Code.
 - **STM32CubeMX**, to generate the CubeMX code (next step) and to change pins
   or peripherals.
 
@@ -91,8 +90,7 @@ Pick a configuration in the list at the top and press F5:
 | MCU: ST-Link (flash + debug) **(hexU59 …)** | builds the final board, flashes it, stops at `main()` |
 | MCU: ST-Link (flash + debug) **(hexU54 …)** | the same for the Nucleo |
 | Host: game (gdb) **(host …)** | builds the emulator and runs the game under gdb |
-| Host: test_host (gdb) | the example program on top of `fpga.c` |
-| Host: test_host, 2 % errors (gdb) | the same with 2 % failed transfers, to watch the resync |
+| Host: game, 2 % errors (gdb) | the same with 2 % failed transfers, to watch the resync |
 
 Press F5 again (continue) to run after it stops at `main()`.
 
@@ -144,7 +142,7 @@ mcu/
     │   ├── hexU59/         final board: hexU59.ioc, Core/, Drivers/, CMakeLists.txt
     │   ├── hexU54/         Nucleo: hexU54.ioc, Core/, Drivers/, CMakeLists.txt
     │   └── n6test/         USB test on the Nucleo-N657X0-Q                [not in the workspace]
-    ├── host/               host CMakeLists.txt, .vscode/ (tasks, debug), card.img
+    ├── host/               host CMakeLists.txt, .vscode/ (tasks, debug)
     ├── third_party/        git submodules: tinyusb, SDL                   [hidden]
     └── build/              host build output                             [hidden]
 ```
@@ -290,7 +288,7 @@ The highest level that can be shown is set at build time with
 | `loading off` / `loading on` | Off: the game stops, along with the handshake retries, and the FPGA is yours to test by hand. On: handshake again, then carry on. |
 | `demo` | Lists the FPGA tests; `demo echo`, `demo cons`, `demo box`, `demo sprite`, `demo scene`, `demo clear` runs one (PASS/FAIL in the log) |
 | `fecho -r 100 64` | 100 rounds of a 64-byte random ECHO: a quick link test |
-| `info` | Ask the FPGA for screen size, N and session |
+| `info` | Ask the FPGA for screen size (and the grid it gives), N and session |
 | `readrdy` | READY pin, ACK, and the command queue right now |
 | `sd`, `sd ls [folder]` | SD card status (mounts it if it can), and what's on it |
 | `led list`, `led show <state>`, `led cycle`, `led r` … `led auto` | Test the status LED, no FPGA needed |
@@ -363,20 +361,22 @@ first. The same without VS Code, from `mcu/hexMCU`:
 ```bash
 cmake -S host -B build/host -G Ninja
 cmake --build build/host
-./build/host/hexmcu_host          # the game
-./build/host/test_host host/test565.bmp   # the example program (--errors=N to fail N % of transfers)
+./build/host/hexmcu_host              # the game
+./build/host/hexmcu_host --errors=2   # the same, 2 % of transfers fail (resync test)
+./build/host/hexmcu_host --help       # also --mhz=N and --lanes=N for the link
 ```
 
 - **The SD card:** the folder in `$HEXMCU_SD` (the debug configuration sets it
   to `hexMCU/sd/`). Lay it out like the card: `sd/rom/`, `sd/save/`,
   `sd/sprites/`. No folder behaves like no card.
-- **Tasks** (*Terminal → Run Task*): `build host`, `card image` (makes
-  `host/card.img`, a 512 MB FAT32 image), `card image: reset`,
-  `card image: list`, `test picture` (makes `host/test565.bmp` from
-  `host/test.bmp`).
+- **Tasks** (*Terminal → Run Task*): `build host`.
 - **The link:** modelled at 20 MHz × 8 lanes, with a READY 200 µs after each
   command and SYNC at 25 Hz. A share of transfers can be made to fail on
   purpose, to test the resync.
+- **The picture:** like the real FPGA, a 640x360 screen with the simulation
+  grid at 160x90 cells, each cell shown as a 4x4 block (`FPGA_SIM_SCALE` in
+  `fpga.h`). CONS and BOX commands count cells; sprites and the mouse count
+  screen pixels. INFO reports the screen (640x360).
 
 See [io/transport.md](io/transport.md) for what the fake FPGA does.
 

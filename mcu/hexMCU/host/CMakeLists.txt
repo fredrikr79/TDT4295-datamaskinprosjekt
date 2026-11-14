@@ -17,11 +17,11 @@ set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 add_subdirectory(${APP_ROOT}/third_party/SDL
                  ${CMAKE_BINARY_DIR}/SDL EXCLUDE_FROM_ALL)
 
-# Everything except main(), compiled once and shared by both programs:
-#   hexmcu_host  the emulator (host_main.c -> myMain)
-#   test_host    the fpga.c example (test_host.c has its own main loop)
-add_library(hexmcu_host_common OBJECT
+# The emulator: the portable code plus the host port. host_main.c stands in
+# for CubeMX's main() and calls the same myMain() as the firmware.
+add_executable(hexmcu_host
     ${APP_SOURCES}
+    ${APP_ROOT}/src/port/host/host_main.c
     ${APP_ROOT}/src/port/host/io_stdio.c
     ${APP_ROOT}/src/port/host/platform_host.c
     ${APP_ROOT}/src/port/host/transport_host.c
@@ -31,27 +31,19 @@ add_library(hexmcu_host_common OBJECT
     ${APP_ROOT}/src/port/host/storage_host.c
 )
 
-# PUBLIC: both executables inherit includes, defines, flags and SDL.
-target_link_libraries(hexmcu_host_common PUBLIC SDL3::SDL3)
+target_link_libraries(hexmcu_host PRIVATE SDL3::SDL3)
 
-target_compile_definitions(hexmcu_host_common PRIVATE STORAGE_HOST_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/sd")
-
-target_include_directories(hexmcu_host_common PUBLIC
+target_include_directories(hexmcu_host PRIVATE
     ${APP_INCLUDES}
     ${APP_ROOT}/src/port/host
 )
 
-target_compile_definitions(hexmcu_host_common PUBLIC
+target_compile_definitions(hexmcu_host PRIVATE
     LOG_LEVEL=LOG_LEVEL_DEBUG
+    STORAGE_HOST_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/sd"
 )
 
-target_compile_options(hexmcu_host_common PUBLIC
+target_compile_options(hexmcu_host PRIVATE
     -Wall -Wextra -g -fsanitize=address,undefined)
-target_link_options(hexmcu_host_common PUBLIC
+target_link_options(hexmcu_host PRIVATE
     -fsanitize=address,undefined)
-
-add_executable(hexmcu_host ${APP_ROOT}/src/port/host/host_main.c)
-target_link_libraries(hexmcu_host PRIVATE hexmcu_host_common)
-
-add_executable(test_host ${APP_ROOT}/src/port/host/test_host.c)
-target_link_libraries(test_host PRIVATE hexmcu_host_common)

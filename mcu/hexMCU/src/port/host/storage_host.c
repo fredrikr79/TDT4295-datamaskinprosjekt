@@ -3,7 +3,7 @@
  *
  * The folder: $HEXMCU_SD if set, else STORAGE_HOST_ROOT (default "sd",
  * relative to where the program runs). Give CMake an absolute one, e.g.
- *   target_compile_definitions(hexmcu_host_common PRIVATE
+ *   target_compile_definitions(hexmcu_host PRIVATE
  *       STORAGE_HOST_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/sd")
  * No folder behaves like no card -- handy for testing that path. */
 

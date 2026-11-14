@@ -32,8 +32,4 @@ void fake_fpga_read(const transport_hdr_t *hdr, uint8_t *buf);
  * closed. */
 bool fake_fpga_poll(uint64_t now_ns);
 
-/* For tests and the console: sprite instances in use, images uploaded,
- * and the bytes of sprite memory they take. */
-void fake_fpga_sprite_stats(unsigned *sprites, unsigned *images, uint32_t *mem_bytes);
-
 #endif /* FAKE_FPGA_H */

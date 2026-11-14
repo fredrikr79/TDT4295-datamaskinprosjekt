@@ -170,8 +170,9 @@ static void info_done(const fpga_cmd_t *cmd, fpga_err_t err)
         LOG_INFO("FPGA answered after %lu failed tr%s", (unsigned long)p.tries,
                  p.tries == 1 ? "y" : "ies");
     const fpga_info_t *in = fpga_link_info();
-    LOG_INFO("fpga: %ux%u, N=%u, session 0x%08lX",
-             in->width, in->height, in->max_cmd, (unsigned long)in->session);
+    LOG_INFO("fpga: screen %ux%u, grid %ux%u cells, N=%u, session 0x%08lX",
+             in->width, in->height, in->sim_w, in->sim_h, in->max_cmd,
+             (unsigned long)in->session);
     p.tries = 0;
     p.ph = P_DONE;
 }

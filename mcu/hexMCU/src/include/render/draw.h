@@ -15,11 +15,15 @@
  * Holding a button keeps placing every frame, so sand pours and lines draw.
  * After draw_enter() nothing is placed until those buttons have all been let
  * go once, so the click or cross that chose Draw in the menu doesn't place.
- * Brush sizes are 1, 2, 4, 8, 16 and then the biggest square one WRITE_BOX
- * can carry (31 x 31 at N = 1024), so every placement is one command.
+ * Brush sizes count grid CELLS: 1, 2, 4, 8, 16 and then the biggest square
+ * one WRITE_BOX can carry (31 x 31 at N = 1024), so every placement is one
+ * command. The cursor moves in screen pixels; the brush is centred on the
+ * cell under it (fpga_px_to_cell()), so size 1 is one byte of payload and
+ * shows as one FPGA_SIM_SCALE x FPGA_SIM_SCALE (4x4) block.
  * The bottom-left corner shows the material and the size, the bottom-right
- * corner whether the simulation is paused or running, and an outline at
- * the cursor shows where the box goes.
+ * corner whether the simulation is paused or running, and an outline
+ * around the cells under the cursor shows where the box goes; it snaps
+ * from cell to cell while the cursor moves smoothly.
  *
  * Drawing starts paused. draw.c only shows the state and asks for changes
  * (DRAW_PAUSE / DRAW_RUN); game.c sends STOP_SIM / START_SIM.
@@ -44,14 +48,16 @@ typedef enum {
     DRAW_RUN,           /* the player started it: START_SIM       */
 } draw_event_t;
 
-/* The brush sizes for this FPGA (from N), smallest first. Returns how many. */
+/* The brush sizes for this FPGA (from N), in cells, smallest first.
+ * Returns how many. */
 unsigned draw_sizes(uint16_t out[DRAW_SIZES_MAX]);
 
-void draw_init(uint16_t screen_w, uint16_t screen_h);
+void draw_init(uint16_t screen_w, uint16_t screen_h);  /* pixels; the grid is / FPGA_SIM_SCALE */
 void draw_enter(void);                  /* shows "Paused": the sim must be stopped */
 void draw_leave(void);
 bool draw_active(void);
 
+/* cx, cy: the cursor in screen pixels */
 draw_event_t draw_frame(const input_t *in, int32_t cx, int32_t cy);
 
 #endif

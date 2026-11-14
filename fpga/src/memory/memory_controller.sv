@@ -65,6 +65,8 @@ module memory_controller (
     read_alignment_buff[memory_pkg::ReadDataDelay - 1] ||
     current_state == memory_pkg::WRITING;
 
+  memory_pkg::message_length_t bytes_this_state;
+
   always_comb begin
     case (current_state)
       memory_pkg::IDLE: begin
@@ -93,7 +95,8 @@ module memory_controller (
       end
       memory_pkg::WAITING_ON_LATENCY: begin
         dq_oe = 0;
-        rwds_oe = 0;
+        rwds_oe = (current_transaction == memory_pkg::WRITE) &&
+            bytes_this_state >= 2 * memory_pkg::LatencyCount - 2'd1;
         cs_n = 0;
         run_clock = 1;
       end
@@ -131,7 +134,6 @@ module memory_controller (
       ? $clog2(memory_pkg::MaxMessageLength) : 1;
 
   logic [ByteCounterWidth-1:0] bytes_this_state_raw;
-  memory_pkg::message_length_t bytes_this_state;
   assign bytes_this_state = memory_pkg::message_length_t'(bytes_this_state_raw);
 
   mod_n_counter #(

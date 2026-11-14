@@ -46,17 +46,24 @@ module write_box #(
 
   w_box_states_e state = START;
 
+  logic do_r_en;
+  logic data_pop;
+
+  assign data_pop = send_write_box && (state == DATA) && mem_data_on_wire;
+  assign write_box_r_en = do_r_en | data_pop;
+  assign mem_in = in_fifo;
+
   always_ff @(posedge clk) begin
 
     if (ck_rst) begin
       col_index      <= 16'd0;
       row_index      <= 16'd0;
       write_box_done <= 1'b0;
-      write_box_r_en <= 1'b0;
+      do_r_en <= 1'b0;
       mem_req        <= 1'b0;
       state          <= START;
     end else begin
-      write_box_r_en <= 1'b0;
+      do_r_en <= 1'b0;
       write_box_done <= 1'b0;
       mem_req        <= 1'b0;
       error_valid    <= 1'b0;
@@ -64,41 +71,41 @@ module write_box #(
       if (send_write_box) begin
         case (state)
           START: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             state <= GET_X_TOP;
           end
           GET_X_TOP: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridX[15:8] <= in_fifo;
             state <= GET_X_BOTTOM;
           end
           GET_X_BOTTOM: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridX[7:0] <= in_fifo;
             state <= GET_Y_TOP;
           end
           GET_Y_TOP: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridY[15:8] <= in_fifo;
             state <= GET_Y_BOTTOM;
           end
           GET_Y_BOTTOM: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridY[7:0] <= in_fifo;
             state <= GET_WIDTH_TOP;
           end
           GET_WIDTH_TOP: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             cols[15:8] <= in_fifo;
             state <= GET_WIDTH_BOTTOM;
           end
           GET_WIDTH_BOTTOM: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             cols[7:0] <= in_fifo;
             state <= GET_HEIGHT_TOP;
           end
           GET_HEIGHT_TOP: begin
-            write_box_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             rows[15:8] <= in_fifo;
             state <= GET_HEIGHT_BOTTOM;
           end
@@ -112,7 +119,7 @@ module write_box #(
             end
           end
           GET_MEM_ADDR: begin
-            mem_len <= 32'(cols) > memory_pkg::MaxMessageLength
+            mem_len <= 32'(cols - col_index) > memory_pkg::MaxMessageLength
               ? 16'(memory_pkg::MaxMessageLength)
               : cols - col_index;
             mem_addr <= GridPosToMemAddr(gridX + col_index, gridY + row_index);
@@ -130,36 +137,29 @@ module write_box #(
 
             // Once finished with a row, start a new row in a new transaction.
               // cycle as data is pushed
+            if (mem_data_on_wire) begin
+              // Read N bytes from in_fifo to mem_in
+              if (col_index >= cols - 1) begin // include final boundary
+                col_index <= 16'd0;
+                written_bytes <= 16'd0;
 
-              if (mem_data_on_wire) begin
-                write_box_r_en <= 1'b1;
-              end
-              if (write_box_r_en) begin
-                mem_in <= in_fifo;
-
-                // Read N bytes from in_fifo to mem_in
-                if (col_index >= cols - 1) begin // include final boundary
-                  col_index <= 16'd0;
-                  write_box_r_en <= 1'b0;
-
-                  if (row_index < rows - 1) begin
-                    row_index <= row_index + 16'd1;
-                    state <= GET_MEM_ADDR;
-                  end else begin
-                    row_index <= 16'd0;
-                    write_box_done <= 1'b1;
-                    state <= DONE;
-                  end
-                end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength) - 1) begin
-                  // Memory needs to end transaction
-                  col_index <= col_index + 16'd1;
-                  written_bytes <= 16'b0;
+                if (row_index < rows - 1) begin
+                  row_index <= row_index + 16'd1;
                   state <= GET_MEM_ADDR;
                 end else begin
-                  col_index <= col_index + 16'd1;
-                  written_bytes <= written_bytes + 16'd1;
-                  write_box_r_en <= mem_data_on_wire;
+                  row_index <= 16'd0;
+                  write_box_done <= 1'b1;
+                  state <= DONE;
                 end
+              end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength) - 1) begin
+                // Memory needs to end transaction
+                col_index <= col_index + 16'd1;
+                written_bytes <= 16'b0;
+                state <= GET_MEM_ADDR;
+              end else begin
+                col_index <= col_index + 16'd1;
+                written_bytes <= written_bytes + 16'd1;
+              end
             end
           end
           DONE: begin

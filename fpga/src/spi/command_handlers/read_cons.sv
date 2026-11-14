@@ -33,9 +33,6 @@ module read_cons #(
 
   mem_driver_pkg::mem_states_e state = MEM_START;
 
-  logic data_valid = 1'b0;
-  always @(posedge clk) data_valid <= mem_data_on_wire;
-
   always_ff @(posedge clk) begin
 
     if (ck_rst) begin
@@ -108,7 +105,7 @@ module read_cons #(
             end
           end
           MEM_DATA: begin
-            if (data_valid) begin
+            if (mem_data_on_wire) begin
               // Capture data once write_cons is visible to fifo.
               read_cons_fifo <= mem_out;
               read_cons_w_en <= 1'b1;

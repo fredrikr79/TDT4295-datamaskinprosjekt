@@ -47,9 +47,6 @@ module read_box #(
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
 
-  logic data_valid = 1'b0;
-  always @(posedge clk) data_valid <= mem_data_on_wire;
-
   r_box_states_e state = START;
 
   always_ff @(posedge clk) begin
@@ -137,7 +134,7 @@ module read_box #(
             end
           end
           DATA: begin
-            if (data_valid) begin
+            if (mem_data_on_wire) begin
               read_box_fifo <= mem_out;
               read_box_w_en <= 1'b1;
               read_bytes <= read_bytes + 16'd1;

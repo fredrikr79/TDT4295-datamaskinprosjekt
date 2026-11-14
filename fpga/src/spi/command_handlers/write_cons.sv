@@ -30,17 +30,24 @@ module write_cons #(
   logic [15:0] gridX, gridY;
 
   mem_driver_pkg::mem_states_e state = MEM_START;
+  logic do_r_en;
+  logic data_pop;
+
+  assign data_pop        = send_write_cons && (state == MEM_DATA) && mem_data_on_wire;
+  assign write_cons_r_en = do_r_en | data_pop;
+  assign mem_in          = in_fifo;      // FWFT head = byte for the current slot
+
 
   always_ff @(posedge clk) begin
 
     if (ck_rst) begin
       tx_index <= 16'd0;
       write_cons_done <= 1'b0;
-      write_cons_r_en <= 1'b0;
+      do_r_en <= 1'b0;
       state <= MEM_START;
     end else begin
       error_valid <= 1'b0;
-      write_cons_r_en <= 1'b0;
+      do_r_en <= 1'b0;
       write_cons_done <= 1'b0;
       mem_req         <= 1'b0;
 
@@ -48,32 +55,32 @@ module write_cons #(
         // Fetch target memory address
         case (state)
           MEM_START: begin
-            write_cons_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             state <= MEM_GET_X_TOP;
           end
           MEM_GET_X_TOP: begin
-            write_cons_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridX[15:8] <= in_fifo;
             state <= MEM_GET_X_BOTTOM;
           end
           MEM_GET_X_BOTTOM: begin
-            write_cons_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridX[7:0] <= in_fifo;
             state <= MEM_GET_Y_TOP;
           end
           MEM_GET_Y_TOP: begin
-            write_cons_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridY[15:8] <= in_fifo;
             state <= MEM_GET_Y_BOTTOM;
           end
           MEM_GET_Y_BOTTOM: begin
-            write_cons_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             gridY[7:0] <= in_fifo;
             state <= MEM_GET_MSG_LENGTH_TOP;
           end
           MEM_GET_MSG_LENGTH_TOP: begin
             //TODO fix MSG is two bytes
-            write_cons_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             total_bytes[15:8] <= in_fifo;
             state <= MEM_GET_MSG_LENGTH_BOTTOM;
           end
@@ -99,33 +106,21 @@ module write_cons #(
               state   <= MEM_DATA;
             end
           end
-          MEM_DATA: begin
-            if (write_cons_r_en) begin
-              // Capture data once write_cons is visible to fifo.
-              mem_in <= in_fifo;
-              written_bytes <= written_bytes + 16'd1;
-              tx_index <= tx_index + 16'd1;
-
-              if (tx_index >= total_bytes - 1) begin
-                // Command end
-                write_cons_r_en <= 1'b0;
-                write_cons_done <= 1'b1;
-                tx_index <= 16'd0;
-                written_bytes <= 16'd0;
-                state <= MEM_DONE;
-              end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength - 1)) begin
-                // Transaction timeout, issue new where we finished.
-                write_cons_r_en <= 1'b0;
-                written_bytes <= 16'd0;
-                state <= MEM_GET_MEM_ADDR;
-              end else begin
-                write_cons_r_en <= mem_data_on_wire;
-              end
-            end else if (mem_data_on_wire) begin
-              // write byte next cycle.
-              write_cons_r_en <= 1'b1;
+        MEM_DATA: begin
+          if (mem_data_on_wire) begin
+            written_bytes <= written_bytes + 16'd1;
+            tx_index      <= tx_index + 16'd1;
+            if (tx_index >= total_bytes - 1) begin
+              write_cons_done <= 1'b1;
+              tx_index        <= 16'd0;
+              written_bytes   <= 16'd0;
+              state           <= MEM_DONE;
+            end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength - 1)) begin
+              written_bytes <= 16'd0;
+              state         <= MEM_GET_MEM_ADDR;
             end
           end
+        end
           MEM_DONE: begin
             // Simply wait one cycle for done signal to be processed.
             state <= MEM_START;

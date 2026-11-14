@@ -1,225 +1,192 @@
 {
-    "full": {
+    "final": {
         "0,0": {
-            "path": "full/start.png",
+            "path": "final/start.png",
             "portals": [
                 {
-                    "from": [0, 143], "to": [8, 159],
-                    "room": [-1, 0], "pos": [632, 141]
+                    "from": [0, 35], "to": [2, 40],
+                    "room": [-1, 0], "pos": [158, null]
                 },
                 {
-                    "from": [632, 165], "to": [640, 181],
-                    "room": [1, 0], "pos": [0, 165]
+                    "from": [158, 41], "to": [160, 46],
+                    "room": [1, 0], "pos": [0, null]
                 }
             ]
         },
         "-1,0": {
-            "path": "full/cave_enterance.png",
+            "path": "final/cave_enterance.png",
             "portals": [
                 {
-                    "from": [0, 263], "to": [8, 279],
-                    "room": [-2, 0], "pos": [632, 262]
+                    "from": [0, 65], "to": [2, 70],
+                    "room": [-2, 0], "pos": [158, null]
                 },
                 {
-                    "from": [632, 143], "to": [640, 159],
-                    "room": [0, 0], "pos": [0, 143]
+                    "from": [158, 35], "to": [160, 40],
+                    "room": [0, 0], "pos": [0, null]
                 }
             ]
         },
         "-2,0": {
-            "path": "full/maze.png",
+            "path": "final/maze.png",
             "portals": [
                 {
-                    "from": [0, 106], "to": [8, 122],
-                    "room": [-3, 0], "pos": [632, 106]
+                    "from": [0, 26], "to": [2, 31],
+                    "room": [-3, 0], "pos": [158, null]
                 },
                 {
-                    "from": [632, 262], "to": [640, 278],
-                    "room": [-1, 0], "pos": [0, 263]
+                    "from": [158, 65], "to": [160, 70],
+                    "room": [-1, 0], "pos": [0, null]
                 },
                 {
-                    "from": [67, 340], "to": [177, 360],
+                    "from": [16, 88], "to": [45, 90],
                     "room": [-2, 1], "pos": [null, 0]
                 }
             ]
         },
         "-3,0": {
-            "path": "full/shore.png",
+            "path": "final/shore.png",
             "portals": [
                 {
-                    "from": [632, 106], "to": [640, 122],
-                    "room": [-2, 0], "pos": [0, 105]
+                    "from": [158, 26], "to": [160, 31],
+                    "room": [-2, 0], "pos": [0, null]
                 },
                 {
-                    "from": [0, 0], "to": [8, 360],
-                    "room": [-4, 0], "pos": [632, null]
+                    "from": [0, 0], "to": [2, 90],
+                    "room": [-4, 0], "pos": [158, null]
                 }
             ]
         },
         "-2,1": {
-            "path": "full/maze_cellar.png",
+            "path": "final/maze_cellar.png",
             "portals": []
         },
         "1,0": {
-            "path": "full/gol_opening.png",
+            "path": "final/gol_opening.png",
             "portals": [
                 {
-                    "from": [0, 165], "to": [8, 181],
-                    "room": [0, 0], "pos": [632, 165]
+                    "from": [0, 41], "to": [2, 46],
+                    "room": [0, 0], "pos": [158, null]
                 },
                 {
-                    "from": [632, 218], "to": [640, 307],
-                    "room": [2, 0], "pos": [0, 291]
+                    "from": [158, 54], "to": [160, 77],
+                    "room": [2, 0], "pos": [0, null]
                 }
             ]
         },
         "2,0": {
-            "path": "full/gol_intro.png",
+            "path": "final/gol_intro.png",
             "portals": [
                 {
-                    "from": [0, 218], "to": [8, 307],
-                    "room": [1, 0], "pos": [632, 291]
+                    "from": [0, 54], "to": [8, 77],
+                    "room": [1, 0], "pos": [158, null]
                 }
             ]
         },
         "-4,0": {
-            "path": "full/ocean_sky_temple_enterance.png",
+            "path": "final/ocean_sky_temple_enterance.png",
             "portals": [
                 {
-                    "from": [632, 0], "to": [640, 360],
+                    "from": [158, 0], "to": [160, 90],
                     "room": [-3, 0], "pos": [0, null]
                 },
                 {
-                    "from": [0, 94], "to": [8, 171],
-                    "room": [-5, 0], "pos": [632, null]
+                    "from": [0, 23], "to": [8, 43],
+                    "room": [-5, 0], "pos": [158, null]
                 }
             ]
         },
         "-5,0": {
-            "path": "full/ocean_sky_temple_level_1.png",
+            "path": "final/ocean_sky_temple_level_1.png",
             "portals": [
                 {
-                    "from": [632, 94], "to": [640, 171],
+                    "from": [158, 23], "to": [160, 43],
                     "room": [-4, 0], "pos": [0, null]
                 },
                 {
-                    "from": [232, 0], "to": [397, 8],
-                    "room": [-5, -1], "pos": [null, 344]
+                    "from": [58, 0], "to": [100, 8],
+                    "room": [-5, -1], "pos": [null, 86]
                 }
             ]
         },
         "-5,-1": {
-            "path": "full/ocean_sky_temple_level_2.png",
+            "path": "final/ocean_sky_temple_level_2.png",
             "portals": [
                 {
-                    "from": [232, 352], "to": [397, 360],
+                    "from": [58, 88], "to": [100, 90],
                     "room": [-5, 0], "pos": [null, 0]
                 },
                 {
-                    "from": [232, 0], "to": [397, 8],
-                    "room": [-5, -2], "pos": [null, 344]
+                    "from": [58, 0], "to": [100, 8],
+                    "room": [-5, -2], "pos": [null, 86]
                 }
             ]
         },
         "-5,-2": {
-            "path": "full/ocean_sky_temple_level_3.png",
+            "path": "final/ocean_sky_temple_level_3.png",
             "portals": [
                 {
-                    "from": [232, 352], "to": [397, 360],
+                    "from": [58, 88], "to": [100, 90],
                     "room": [-5, -1], "pos": [null, 0]
                 },
                 {
-                    "from": [12, 0], "to": [164, 8],
-                    "room": [-5, -3], "pos": [null, 344]
+                    "from": [3, 0], "to": [41, 2],
+                    "room": [-5, -3], "pos": [null, 86]
                 },
                 {
-                    "from": [506, 0], "to": [620, 8],
-                    "room": [-5, -3], "pos": [null, 344]
+                    "from": [126, 0], "to": [155, 2],
+                    "room": [-5, -3], "pos": [null, 86]
                 },
                 {
-                    "from": [632, 150], "to": [640, 263],
+                    "from": [158, 37], "to": [160, 66],
                     "room": [-4, -2], "pos": [0, null]
                 },
                 {
-                    "from": [0, 141], "to": [8, 265],
-                    "room": [-6, -2], "pos": [632, null]
+                    "from": [0, 35], "to": [2, 67],
+                    "room": [-6, -2], "pos": [158, null]
                 }
             ]
         },
         "-5,-3": {
-            "path": "full/ocean_sky_temple_level_4.png",
+            "path": "final/ocean_sky_temple_level_4.png",
             "portals": [
                 {
-                    "from": [12, 352], "to": [164, 360],
+                    "from": [3, 88], "to": [41, 90],
                     "room": [-5, -2], "pos": [null, 0]
                 },
                 {
-                    "from": [506, 352], "to": [620, 360],
+                    "from": [126, 88], "to": [155, 90],
                     "room": [-5, -2], "pos": [null, 0]
                 }
             ]
         },
         "-4,-2": {
-            "path": "full/ocean_sky_temple_level_3_right.png",
+            "path": "final/ocean_sky_temple_level_3_right.png",
             "portals": [
                 {
-                    "from": [0, 150], "to": [8, 263],
-                    "room": [-5, -2], "pos": [632, null]
+                    "from": [0, 37], "to": [2, 66],
+                    "room": [-5, -2], "pos": [158, null]
                 },
                 {
-                    "from": [71, 352], "to": [640, 360],
+                    "from": [17, 88], "to": [160, 90],
                     "room": [-4, -1], "pos": [null, 0]
                 }
             ]
         },
         "-4,-1": {
-            "path": "full/ocean_sky_temple_level_3_right_fall.png",
+            "path": "final/ocean_sky_temple_level_3_right_fall.png",
             "portals": [
                 {
-                    "from": [57, 352], "to": [640, 360],
+                    "from": [14, 88], "to": [160, 90],
                     "room": [-4, 0], "pos": [null, 0]
                 }
             ]
         },
         "-6,-2": {
-            "path": "full/ocean_sky_temple_level_3_left.png",
+            "path": "final/ocean_sky_temple_level_3_left.png",
             "portals": [
                 {
-                    "from": [632, 141], "to": [640, 265],
+                    "from": [158, 35], "to": [160, 67],
                     "room": [-5, -2], "pos": [0, null]
-                }
-            ]
-        }
-    },
-    "mini": {
-        "0,0": {
-            "path": "mini/start.png",
-            "portals": [
-                {
-                    "from": [0, 24], "to": [3, 38],
-                    "room": [-1, 0], "pos": [30, 30]
-                },
-                {
-                    "from": [37, 24], "to": [40, 38],
-                    "room": [1, 0], "pos": [5, 30]
-                }
-            ]
-        },
-        "-1,0": {
-            "path": "mini/ocean.png",
-            "portals": [
-                {
-                    "from": [37, 24], "to": [40, 38],
-                    "room": [0, 0], "pos": [5, 30]
-                }
-            ]
-        },
-        "1,0": {
-            "path": "mini/hill.png",
-            "portals": [
-                {
-                    "from": [0, 24], "to": [3, 38],
-                    "room": [0, 0], "pos": [30, 30]
                 }
             ]
         }

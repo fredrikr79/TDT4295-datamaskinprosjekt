@@ -237,7 +237,6 @@ def main() -> None:
                 join(fpga_version, pos + '.dat'),
                 id_bytes
             )
-    print(approximations)
 
 if __name__ == '__main__':
     main()

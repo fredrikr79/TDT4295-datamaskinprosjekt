@@ -208,14 +208,31 @@ breaks:
 `tuh_mount_cb` for hubs, so `hubs_poll()` logs them when they come and go,
 with their speed and whether they're single- or multi-TT.
 
-**Two TinyUSB fixes, without changing `third_party/`.** Both wrap a TinyUSB
-function at link time; `stm32u5.cmake` (and `n6_usbtest.cmake`) add the
-`-Wl,--wrap=...` options, and the build fails to link if they're missing:
+**TinyUSB fixes, without changing `third_party/`.** They're applied at build
+time, so an update of the submodule can't silently drop them.
+
+Two wrap a TinyUSB function at link time; `stm32u5.cmake` (and
+`n6_usbtest.cmake`) add the `-Wl,--wrap=...` options, and the build fails to
+link if they're missing:
 
 | Wrapped | Problem | Fix |
 |---|---|---|
 | `hcd_setup_send` | TinyUSB's Get Hub Descriptor has wValue = 0; strict hubs (StarTech 5G2A2CPDB) stall it | that one setup packet gets the descriptor type (0x29) put in |
 | `hcd_edpt_xfer` | dwc2: the USB interrupt can land between starting a periodic transfer and marking it "not pending", and the device goes silent until replugged (seen with two devices behind a hub) | runs with interrupts masked for those few µs |
+
+Two more change lines inside TinyUSB's dwc2 host driver. `tinyusb_patches.cmake`
+copies `hcd_dwc2.c` into the build folder, changes the lines there, and the
+dwc2 builds compile that copy (`hexmcu_tinyusb_hcd_dwc2()` in `stm32u5.cmake`).
+If a TinyUSB update changes those lines, the build stops with an error instead
+of using the unpatched driver. Both are about slow (low-speed) devices behind a
+high-speed hub, whose polls are split in two through the hub:
+- a poll is given up after the hub has said "not yet" (NYET) 3 times, often
+  before the device has answered: raised to 7, the most the counter holds;
+- these split polls are only started in the first half of each 1 ms frame,
+  since the hub doesn't run ones started late, and a device that ended up late
+  stayed dead.
+
+The report's appendix D.1 has how these were found.
 
 **Debugging:** `usb_debug_dump()` logs every device (reports so far, time
 since the last, restarts, whether a request is outstanding), then the

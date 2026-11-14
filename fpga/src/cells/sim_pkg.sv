@@ -69,7 +69,6 @@ package sim_pkg;
     logic              spreads;
     logic              solid;
     logic              displaceable;
-    int                delay;
     logic [3:0]        blast_resistance;
   } material_props_t;
 
@@ -85,7 +84,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd2;
       end
       MatWater: begin
@@ -94,7 +92,6 @@ package sim_pkg;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd2;
       end
       MatStone: begin
@@ -103,7 +100,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b0;
-        p.delay            = 'd1;
         p.blast_resistance = 'd3;
       end
       MatGOL: begin
@@ -112,7 +108,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b0;
-        p.delay            = 'd1;
         p.blast_resistance = 'd3;
       end
       MatExplo: begin
@@ -121,7 +116,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b0;
         p.displaceable     = 1'b0;
-        p.delay            = 'd1;
         p.blast_resistance = 'd0;
       end
       MatLava: begin
@@ -130,7 +124,6 @@ package sim_pkg;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd3;
       end
       MatAcid: begin
@@ -139,7 +132,6 @@ package sim_pkg;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd2;
       end
       default: begin  // MatAir, and every unassigned id
@@ -148,7 +140,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b0;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd0;
       end
     endcase

@@ -106,7 +106,7 @@ package sim_rules;
         stencil.bottom[7:4]      == sim_pkg::MatExplo ||
         stencil.bottomRight[7:4] == sim_pkg::MatExplo;
 
-    if (is_exploding && counter % sim_pkg::props(sim_pkg::MatExplo).delay == 0) begin
+    if (is_exploding) begin
       if (full_force > 0) begin
         force_strength = 4'(full_force);
         return {sim_pkg::MatExplo, force_strength};
@@ -133,15 +133,6 @@ package sim_rules;
 
     logic center_is_alive = stencil.center[7:4] == sim_pkg::MatGOL && stencil.center[3];
 
-    if (counter % sim_pkg::props(sim_pkg::MatGOL).delay != 0) begin
-      if (refresh && stencil.center[7:4] == sim_pkg::MatGOL) begin
-        return {sim_pkg::MatGOL, refresh_state, 3'b000};
-      end else begin
-        return 'hFF;
-      end
-    end
-    ;
-
     if (sim_pkg::props(
             stencil.center[7:4]
         ).solid && !sim_pkg::props(
@@ -159,11 +150,6 @@ package sim_rules;
       input logic r, input int curr, input int counter);
 
     int center_density = sim_pkg::props(stencil.center[7:4]).density;
-
-    logic c_0_0 = counter % sim_pkg::props(stencil.center[7:4]).delay == 0;
-    logic c_n1_n1 = counter % sim_pkg::props(stencil.topLeft[7:4]).delay == 0;
-    logic c_0_n1 = counter % sim_pkg::props(stencil.top[7:4]).delay == 0;
-    logic c_1_n1 = counter % sim_pkg::props(stencil.topRight[7:4]).delay == 0;
 
     logic m_n1_n1 = sim_pkg::props(stencil.topLeft[7:4]).displaceable;
     logic m_n1_0 = sim_pkg::props(stencil.left[7:4]).displaceable;
@@ -211,23 +197,21 @@ package sim_rules;
         stencil.bottomRight[7:4]
     ).density;
 
-    logic moveDown = unchanged_0_n1 && unchanged_0_0 && m_0_n1 && d_0_n1 && c_0_n1;
+    logic moveDown = unchanged_0_n1 && unchanged_0_0 && m_0_n1 && d_0_n1;
 
     logic moveRight = r &&
         unchanged_n1_n1 &&
         unchanged_0_0 &&
         m_n1_n1 &&
         d_n1_n1 &&
-        (!m_n1_0 || d_topLeft_lte_left) &&
-        c_n1_n1;
+        (!m_n1_0 || d_topLeft_lte_left);
 
     logic moveLeft = !r &&
         unchanged_1_n1 &&
         unchanged_0_0 &&
         m_1_n1 &&
         d_1_n1 &&
-        (!m_1_0 || d_topRight_lte_right) &&
-        c_1_n1;
+        (!m_1_0 || d_topRight_lte_right);
 
     if (m_0_0)  // Center pixel decides movement timings
       if (moveDown) return sim_pkg::Down;
@@ -244,8 +228,6 @@ package sim_rules;
     int left_bit_column = center_bit_column - sim_pkg::BitsPerPixel;
     int right_bit_column = center_bit_column + sim_pkg::BitsPerPixel;
     // Relies on the fact that every gravity rule has been evaluated prior.
-    logic c_0_n1 = counter % sim_pkg::props(stencil.top[7:4]).delay == 0;
-    logic c_0_0 = counter % sim_pkg::props(stencil.center[7:4]).delay == 0;
 
     logic a_0_n1 = stencil.top[7:4] == sim_pkg::MatAir;
     logic a_n1_n1 = stencil.topLeft[7:4] == sim_pkg::MatAir;
@@ -334,7 +316,7 @@ package sim_rules;
     end
 
     // Top row
-    if (!top_can_fall && c_0_n1 && !a_0_n1 && s_0_n1) begin
+    if (!top_can_fall && !a_0_n1 && s_0_n1) begin
       // Incoming
       if (r
           && column < sim_pkg::CellGridWidth - 1
@@ -347,7 +329,7 @@ package sim_rules;
     end
 
     // Bottom row
-    if (!center_can_fall && c_0_0 && !a_0_0 && s_0_0) begin
+    if (!center_can_fall && !a_0_0 && s_0_0) begin
       // Incoming
       if (r && column < sim_pkg::CellGridWidth - 1 && a_1_0 && center_unchanged && right_unchanged)
         res.centerRight = 1;

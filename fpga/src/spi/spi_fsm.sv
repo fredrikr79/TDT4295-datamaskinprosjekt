@@ -7,7 +7,7 @@ module spi_fsm #(
     ck_ss_s,
     clk,
     in_empty,
-    out_full,
+    out_empty,
     proc_done,
     input spi_pck::error_event_t error_event,  // Incoming global error decision
     output logic error_valid,  // outgoing error proposition
@@ -114,7 +114,7 @@ module spi_fsm #(
           end
 
           ST_FAILED: begin
-            if (!out_full) begin
+            if (!out_empty) begin
               // FAILED process description sets the opcode
               // to a designated failed procedure in spi_processor
               state <= ST_BUSY;

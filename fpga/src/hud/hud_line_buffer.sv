@@ -12,8 +12,8 @@ module hud_line_buffer #(
     input logic [31:0] lookup_mem_addr,
 
     input logic pulse_frame_restart,
-    input logic pulse_row_commit,
-    input mem_map_pkg::fb_y_t commit_y,
+    input logic pulse_line_start,
+    input mem_map_pkg::fb_y_t line_y,
     output logic row_ready,
 
     input mem_map_pkg::fb_x_t px_x,
@@ -33,6 +33,7 @@ module hud_line_buffer #(
 
   typedef enum logic [2:0] {
     SCAN,      // Cycle all sprites in the LUT and check if active. Add to shortlist if so.
+    SCAN_DRAIN, // Wait for delayed RAM response for last LUT.
     IDLE,      // Wait for row_commit from simulator.
     ROW_CLEAR, // Blank all bits in px_opaque_store
     ROW_PICK,  // Choose next row to check for HUD elements.
@@ -71,7 +72,11 @@ module hud_line_buffer #(
   hud_pkg::sprite_inst_entry_t current_sprite;
   assign sprite_read_id = state == SCAN ? scan_i : shortlist[IdxBits'(shortlist_i)];
   assign current_sprite = sprite_entry;
+
+  logic sprite_entry_valid;
   assign sprite_entry_valid = sprite_read_id == current_sprite.id;
+
+  logic scan_rd_q;
   assign lookup_mem_id = current_sprite.mem_id;
 
   logic rows_overlap, visible_on_row;
@@ -79,8 +84,8 @@ module hud_line_buffer #(
 
   // Find out if sprite needs to be rendered on this row, and if so, which part of it.
   always_comb begin
-    row_in_sprite = 32'(commit_y) - 32'(current_sprite.y);
-    rows_overlap = (32'(commit_y) >= 32'(current_sprite.y)) && (32'(commit_y) < 32'(current_sprite.y) + 32'(current_sprite.h));
+    row_in_sprite = 32'(line_y) - 32'(current_sprite.y);
+    rows_overlap = (32'(line_y) >= 32'(current_sprite.y)) && (32'(line_y) < 32'(current_sprite.y) + 32'(current_sprite.h));
     span_x0 = 32'(current_sprite.x);
     span_x1 = (32'(current_sprite.x) + 32'(current_sprite.w) > LineBytes) ? LineBytes : 32'(current_sprite.x) + 32'(current_sprite.w);
     visible_on_row = current_sprite.active && rows_overlap && (span_x0 < LineBytes) && (span_x1 > span_x0);
@@ -133,8 +138,11 @@ module hud_line_buffer #(
       dest_x <= '0;
       high_byte_seen <= 1'b0;
       pixel_hi <= '0;
+      scan_rd_q <= 1'b0;
     end else begin
-      if (pulse_row_commit) begin
+      scan_rd_q <= (state == SCAN) && !pulse_frame_restart;
+
+      if (pulse_line_start) begin
         row_ready <= 1'b0;
         if (state != IDLE) commit_pending <= 1'b1;
       end
@@ -152,27 +160,30 @@ module hud_line_buffer #(
         shortlist_overflow <= 1'b0;
       end else begin
         case (state)
-          SCAN: begin
+          SCAN, SCAN_DRAIN: begin
             // Find active sprites and add them to the shortlist
-            if (current_sprite.active && sprite_entry_valid) begin
+            if (current_sprite.active && scan_rd_q) begin
               if (32'(shortlist_len) < MaxActiveSprites) begin
-                shortlist[IdxBits'(shortlist_len)] <= scan_i;
+                shortlist[IdxBits'(shortlist_len)] <= current_sprite.id[hud_pkg::LutBits-1:0];
                 shortlist_len <= shortlist_len + 1'b1;
               end else begin
                 shortlist_overflow <= 1'b1;
               end
             end
 
-            if (32'(scan_i) == hud_pkg::SpriteLutDepth - 1) begin
+            if (state == SCAN_DRAIN) begin
+              state <= IDLE;
+            end
+            else if (32'(scan_i) == hud_pkg::SpriteLutDepth - 1) begin
               scan_i <= '0;
-              state  <= IDLE;
+              state  <= SCAN_DRAIN;
             end else begin
               scan_i <= scan_i + 1'b1;
             end
           end
 
           IDLE: begin
-            if (pulse_row_commit || commit_pending) begin
+            if (pulse_line_start || commit_pending) begin
               commit_pending <= 1'b0;
               row_ready <= 1'b0;
               state <= ROW_CLEAR;

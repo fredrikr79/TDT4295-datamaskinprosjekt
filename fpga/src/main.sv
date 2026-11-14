@@ -244,6 +244,7 @@ module main #(
   logic fb_hud_opaque;
   color_pkg::hud_color_t fb_hud_color;
   logic fb_hud_row_ready, fb_hud_overflow;
+  logic fb_hud_line_start;
   logic fb_compositor_overrun;
 
   hud_pkg::sprite_mem_id hud_lookup_mem_id;
@@ -266,8 +267,8 @@ module main #(
       .lookup_mem_addr(hud_lookup_mem_addr),
 
       .pulse_frame_restart(sim_pulse_frame_restart),
-      .pulse_row_commit(sim_pulse_row_commit),
-      .commit_y(sim_commit_y),
+      .pulse_line_start(fb_hud_line_start),
+      .line_y(fb_hud_y),
       .row_ready(fb_hud_row_ready),
 
       .px_x(fb_hud_x),
@@ -307,6 +308,7 @@ module main #(
       .hud_opaque(fb_hud_opaque),
       .hud_color(fb_hud_color),
       .hud_row_ready(fb_hud_row_ready),
+      .hud_line_start(fb_hud_line_start),
 
       .fb_sel(fb_sel),
       .frame_written(fb_frame_done),

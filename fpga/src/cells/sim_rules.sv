@@ -1,7 +1,13 @@
 package sim_rules;
 
+  // [TIMING] was (stencil, x, row_index, counter) with a hash built from three chained 32-bit
+  // multiplies. That hash sat between base_q and output_buffers in the simulator and was the
+  // long path. The two random decisions it produced are now passed in as single bits.
+  //   can_move_free : ~1/4 chance, was temporal_noise[7:0] < 64
+  //   diagonal_cheap: ~1/4 chance, was pos_noise[7:0] < 64
   function automatic logic [7:0] explosion_rules(
-      input sim_pkg::neighbourhood_t stencil, input int x, input int row_index, input int counter);
+      input sim_pkg::neighbourhood_t stencil, input logic can_move_free,
+      input logic diagonal_cheap);
 
     int decayed_center;
 
@@ -18,25 +24,7 @@ package sim_rules;
     logic [3:0] blast_resistance = sim_pkg::props(stencil.center[7:4]).blast_resistance;
 
 
-    logic [31:0] temporal_noise;
-    logic [31:0] pos_noise;
-    logic can_move_free;
-
-    pos_noise = 32'(x) * 32'h9E3779B9 ^ 32'(row_index) * 32'h85EBCA6B;
-
-    pos_noise ^= pos_noise >> 16;
-    pos_noise *= 32'h7FEB352D;
-    pos_noise ^= pos_noise >> 15;
-
-    temporal_noise = pos_noise ^ (32'(counter) * 32'hC2B2AE35);
-
-    temporal_noise ^= temporal_noise >> 16;
-    temporal_noise *= 32'h7FEB352D;
-    temporal_noise ^= temporal_noise >> 15;
-
-    can_move_free = temporal_noise[7:0] < 8'd64;
-
-    diagonal_cost = can_move_free ? 0 : (pos_noise[7:0] < 8'd64 ? 2 : 3);
+    diagonal_cost = can_move_free ? 0 : (diagonal_cheap ? 2 : 3);
 
     grid_cost = can_move_free ? 0 : 2;
 
@@ -223,7 +211,9 @@ package sim_rules;
 
   function automatic sim_pkg::fluid_movement_t fluid_rules(
       ref sim_pkg::row_buffer_t output_buffers[2], input sim_pkg::neighbourhood_t stencil,
-      input logic r, input int column, input int counter, input logic is_sending_row);
+      input logic r, input int column, input int counter, input logic is_sending_row,
+      // [TIMING] grid-edge flags, so `column` can be a constant index into a 3-pixel slice
+      input logic at_left_edge, input logic at_right_edge);
     int center_bit_column = column * sim_pkg::BitsPerPixel;
     int left_bit_column = center_bit_column - sim_pkg::BitsPerPixel;
     int right_bit_column = center_bit_column + sim_pkg::BitsPerPixel;
@@ -295,14 +285,14 @@ package sim_rules;
       stencil.center == output_buffers[0][center_bit_column+:sim_pkg::BitsPerPixel];
     logic left_unchanged = 0, right_unchanged = 0;
 
-    if (column > 0) begin
+    if (!at_left_edge) begin
       top_left_unchanged =
         stencil.topLeft == output_buffers[1][left_bit_column+:sim_pkg::BitsPerPixel];
 
       left_unchanged = stencil.left == output_buffers[0][left_bit_column+:sim_pkg::BitsPerPixel];
     end
 
-    if (column < sim_pkg::CellGridWidth - 1) begin
+    if (!at_right_edge) begin
       top_right_unchanged =
         stencil.topRight == output_buffers[1][right_bit_column+:sim_pkg::BitsPerPixel];
 
@@ -319,21 +309,23 @@ package sim_rules;
     if (!top_can_fall && !a_0_n1 && s_0_n1) begin
       // Incoming
       if (r
-          && column < sim_pkg::CellGridWidth - 1
+          && !at_right_edge
           && a_1_n1
           && top_unchanged
           && top_right_unchanged
       )
         res.topRight = 1;
-      else if (!r && column > 0 && a_n1_n1 && top_unchanged && top_left_unchanged) res.topLeft = 1;
+      else if (!r && !at_left_edge && a_n1_n1 && top_unchanged && top_left_unchanged)
+        res.topLeft = 1;
     end
 
     // Bottom row
     if (!center_can_fall && !a_0_0 && s_0_0) begin
       // Incoming
-      if (r && column < sim_pkg::CellGridWidth - 1 && a_1_0 && center_unchanged && right_unchanged)
+      if (r && !at_right_edge && a_1_0 && center_unchanged && right_unchanged)
         res.centerRight = 1;
-      else if (!r && column > 0 && a_n1_0 && center_unchanged && left_unchanged) res.centerLeft = 1;
+      else if (!r && !at_left_edge && a_n1_0 && center_unchanged && left_unchanged)
+        res.centerLeft = 1;
     end
 
     return res;

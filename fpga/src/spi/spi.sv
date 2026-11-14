@@ -177,7 +177,7 @@ module spi #(
       .boot_done(boot_done),
       .ck_ss_s(ck_ss_s),
       .in_empty(in_empty),
-      .out_full(out_full),
+      .out_empty(out_empty),
       .state(state),
       .proc_done(proc_done),
       .error_event(error_event),

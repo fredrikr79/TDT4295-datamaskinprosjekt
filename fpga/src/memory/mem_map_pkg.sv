@@ -23,7 +23,7 @@ package mem_map_pkg;
 
   // Memory pointers //
   localparam int unsigned CellGridMemPointer = 0;
-  localparam int unsigned Fb0MemPointer = 0;
+  localparam int unsigned Fb0MemPointer = CellGridMemPointer + GridCells;
   localparam int unsigned Fb1MemPointer = Fb0MemPointer + FbBytes;
   localparam int unsigned SpritesMemPointer = Fb1MemPointer + FbBytes;
 

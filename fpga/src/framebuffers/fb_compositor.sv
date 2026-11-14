@@ -19,6 +19,7 @@ module fb_compositor #(
     input logic hud_opaque,
     input color_pkg::hud_color_t hud_color,
     input logic hud_row_ready,
+    output logic hud_line_start,
 
     // Fb wires
     input logic fb_sel,
@@ -92,6 +93,7 @@ module fb_compositor #(
   always_ff @(posedge clk) begin
     frame_written <= 1'b0;
     overrun <= 1'b0;
+    hud_line_start <= 1'b0;
 
     if (reset) begin
       row_shift <= '0;
@@ -105,6 +107,8 @@ module fb_compositor #(
       mem_toggle <= 1'b0;
       mem_address <= '0;
       mem_length <= '0;
+      colStride <= '0;
+      rowStride <= '0;
     end else begin
       if (pulse_frame_restart) begin
         if (row_writing_active) restart_pending <= 1'b1;
@@ -124,6 +128,9 @@ module fb_compositor #(
           row_y <= commit_y * sim_pkg::GridScale;
           bytes_requested <= '0;
           bytes_moved <= '0;
+          colStride <= '0;
+          rowStride <= '0;
+          hud_line_start <= 1'b1;
           row_writing_active <= 1'b1;
         end
       end else if (row_writing_active) begin
@@ -136,7 +143,7 @@ module fb_compositor #(
         end
 
         // Initiate next burst
-        if (hud_row_ready && !mem_busy && bytes_moved == bytes_requested
+        if (hud_row_ready && !hud_line_start && !mem_busy && bytes_moved == bytes_requested
             && 32'(bytes_requested) < mem_map_pkg::ScreenWidth) begin
           mem_address <= mem_map_pkg::fb_line_addr(wr_buffer, row_y)
               + memory_pkg::address_t'(bytes_requested);
@@ -154,13 +161,14 @@ module fb_compositor #(
             bytes_requested <= '0;
             bytes_moved <= '0;
             row_shift <= res_copy;
+            hud_line_start <= 1'b1;
           end
           rowStride <= rowStride + 1'b1;
         end
       end
 
       if (advance_row) begin
-        if (32'(rows_written) + 1 >= GridHeight / sim_pkg::GridScale) begin
+        if (32'(rows_written) + 1 >= GridHeight) begin
           rows_written    <= '0;
           restart_pending <= 1'b0;
           frame_written   <= 1'b1;

@@ -1,4 +1,3 @@
-
 // Changes for LUT reduction are tagged [CHANGED] / [REMOVED] / [NEW]. grep "\[CHANGED\]\|\[REMOVED\]\|\[NEW\]"
 module simulator #(
 ) (
@@ -128,28 +127,36 @@ module simulator #(
       // [CHANGED] column built as 8-bit col_t from a constant (core*Stride) + 6-bit base,
       // instead of int arithmetic on a 32-bit simulation_base.
       // [PIPELINE] uses base_q (stage 2) instead of simulation_base
-      automatic col_t col = col_t'(core * Stride) + col_t'(base_q);
-      automatic int current_pixel_column = int'(col);
-      automatic int current_pixel_bit_column = current_pixel_column * Bpp;
+      // [TIMING] the absolute column is no longer needed in stage 2: the rules get a
+      // pre-selected 3-pixel slice and edge flags instead of indexing a whole row.
+      automatic logic at_left_edge = (core == 0) && (base_q == '0);
+      automatic logic at_right_edge = (core == Cores - 1) && (base_q == BaseW'(Stride - 1));
       // [CHANGED] was setup_neighbourhood(current_pixel_column); now takes the core number
       // and reads from that core's window (see setup_neighbourhood below).
       // [PIPELINE] registered neighbourhood from stage 1 (was setup_neighbourhood(core) here)
       automatic sim_pkg::neighbourhood_t neighbourhood = nb_q[core];
       // [REMOVED] left_pixel_bit_column / right_pixel_bit_column (unused)
  
-      // [NEW] Output buffers with everything outside this core's window forced to 0, so the
-      // indexing inside gravity_rules / fluid_rules collapses to a window-sized mux.
-      // ASSUMES those rules only read columns within +-1 of the pixel.
-      automatic sim_pkg::row_buffer_t masked_output_buffers[2] = '{
-          mask_to_core(output_buffers[0], core),
-          mask_to_core(output_buffers[1], core)
+      // [TIMING] was masked_output_buffers (a full-width row indexed by the column).
+      // Now: the left/centre/right pixels of each output buffer are picked with one 3-pixel
+      // slice on base_q (same mux as setup_neighbourhood) and placed at pixels 0/1/2 of a
+      // local buffer. The rules then index it with constants, so there is no second
+      // index decode behind base_q. sim_rules only reads columns -1/0/+1 (checked).
+      automatic sim_pkg::row_buffer_t local_output_buffers[2] = '{
+          sim_pkg::row_buffer_t'(out_slice(output_buffers[0], core)),
+          sim_pkg::row_buffer_t'(out_slice(output_buffers[1], core))
       };
  
       // [REMOVED] noise = sim_pkg::lowbias32(lfsr_gol ^ current_pixel_bit_column)
  
       // [CHANGED] row index passed as int'(narrow row_t)
+      // [TIMING] the two random decisions come from this core's LFSR (each ~1/4 chance)
+      // instead of a three-multiply hash of column/row/frame.
+      // NOTE: the explosion spread pattern is still random but not bit-identical to before.
       automatic logic [7:0] explosion_update = sim_rules::explosion_rules(
-          neighbourhood, current_pixel_column, int'(current_row_index), simulation_counter
+          neighbourhood,
+          noise_lfsr[core][3] & noise_lfsr[core][11],
+          noise_lfsr[core][6] & noise_lfsr[core][14]
       );
       // [CHANGED] refresh flag is gol_refresh (was % GolRefreshDelay), noise is the
       // per-core LFSR bit (was lowbias32 noise[0])
@@ -161,17 +168,18 @@ module simulator #(
       automatic sim_pkg::fluid_movement_t fluid_movement = 'b0000;
  
       if (!is_sending_row && !is_unmatched_boundry_row) begin
-        // [CHANGED] masked_output_buffers instead of output_buffers
-        gravity_movement = sim_rules::gravity_rules(masked_output_buffers, neighbourhood, lfsr[0],
-                                                    current_pixel_bit_column, simulation_counter);
-        // [CHANGED] masked_output_buffers instead of output_buffers
+        // [TIMING] local 3-pixel buffers; centre pixel is pixel 1 (bit column Bpp)
+        gravity_movement = sim_rules::gravity_rules(local_output_buffers, neighbourhood, lfsr[0],
+                                                    Bpp, simulation_counter);
         fluid_movement = sim_rules::fluid_rules(
-          masked_output_buffers,
+          local_output_buffers,
           neighbourhood,
           lfsr[0],
-          current_pixel_column,
+          1,
           simulation_counter,
-          is_sending_row
+          is_sending_row,
+          at_left_edge,
+          at_right_edge
         );
       end
  
@@ -232,16 +240,11 @@ module simulator #(
     return w;
   endfunction
  
-  // [NEW] Same window, but kept at its real position in a full row with everything else 0.
-  function automatic sim_pkg::row_buffer_t mask_to_core(input sim_pkg::row_buffer_t row,
-                                                         input int core);
-    sim_pkg::row_buffer_t m = '0;
-    for (int p = 0; p < WinPx; p++) begin
-      int c;
-      c = core * Stride - 1 + p;
-      if (c >= 0 && c < Width) m[c*Bpp+:Bpp] = row[c*Bpp+:Bpp];
-    end
-    return m;
+  // [TIMING] replaces mask_to_core. Left/centre/right pixels of `row` around this core's
+  // stage-2 pixel (base_q), as one 24-bit slice: {right, centre, left}.
+  function automatic logic [3*Bpp-1:0] out_slice(input sim_pkg::row_buffer_t row, input int core);
+    window_t w = window(row, core);
+    return w[base_q*Bpp+:3*Bpp];
   endfunction
  
   // [CHANGED] Rewritten. Was: setup_neighbourhood(int column), nine separate
@@ -319,4 +322,3 @@ module simulator #(
   endtask
  
 endmodule
- 

@@ -89,14 +89,14 @@ end
 always_ff @(posedge clk) begin
     // Write data
     read_req_id <= sprite_lut_read_id;
-    if(op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE}) begin
+    if(op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE, hud_pkg::LUT_DELETE}) begin
         dynamic_data_mem[sprite_req_body.id] <= dynamic_w_data;
         if(op == hud_pkg::LUT_WRITE) begin
             sprite_id_bitmap[sprite_req_body.id] <= 1'b1;
             static_data_mem[sprite_req_body.id] <= static_w_data;
+        end else if (op == hud_pkg::LUT_DELETE) begin
+            sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
         end
-    end else if (op == hud_pkg::LUT_DELETE) begin
-        sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
     end
 
     // Read data

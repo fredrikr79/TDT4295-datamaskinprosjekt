@@ -142,6 +142,9 @@ static storage_status_t result(UINT st)
     case FX_INVALID_NAME:
     case FX_INVALID_PATH:
     case FX_NOT_A_FILE:
+    case FX_NOT_DIRECTORY:
+    case FX_DIR_NOT_EMPTY:
+    case FX_WRITE_PROTECT:
     case FX_ALREADY_CREATED:
     case FX_ACCESS_ERROR:  return STORAGE_ERROR;     /* our mistake, card fine */
     default:
@@ -268,6 +271,63 @@ storage_status_t storage_delete(const char *path)
 
     UINT st = fx_file_delete(&media, p);
     if (st == FX_SUCCESS) st = fx_media_flush(&media);
+    return result(st);
+}
+
+/* Delete everything in folder path, then the folder. FileX only lists the
+ * default directory, and deleting while listing would confuse its search,
+ * so: find the first entry, set the default back to the root, delete that
+ * one (a folder: the same, one level down), and start over until the
+ * folder is empty. path is a PATH_MAX_LEN buffer, relative to the root. */
+static UINT delete_tree(CHAR *path, unsigned depth, uint32_t *files)
+{
+    static CHAR name[FX_MAX_LONG_NAME_LEN];         /* copied before recursing */
+
+    for (unsigned guard = 0; guard < 100000u; guard++) {
+        UINT attr = 0;
+        UINT st = fx_directory_default_set(&media, path);
+        if (st != FX_SUCCESS) return st;
+        st = fx_directory_first_full_entry_find(&media, name, &attr, FX_NULL,
+                                                FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL);
+        while (st == FX_SUCCESS && (!strcmp((char *)name, ".") || !strcmp((char *)name, "..")))
+            st = fx_directory_next_full_entry_find(&media, name, &attr, FX_NULL,
+                                                   FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL, FX_NULL);
+        fx_directory_default_set(&media, FX_NULL);  /* paths from the root again */
+        if (st == FX_NO_MORE_ENTRIES) break;        /* empty: delete the folder below */
+        if (st != FX_SUCCESS) return st;
+
+        CHAR child[PATH_MAX_LEN];
+        int n = snprintf((char *)child, sizeof child, "%s/%s", (char *)path, (char *)name);
+        if (n <= 0 || n >= (int)sizeof child) return FX_INVALID_NAME;
+        if (attr & FX_DIRECTORY) {
+            if (depth >= STORAGE_DELETE_DEPTH) return FX_DIR_NOT_EMPTY;
+            st = delete_tree(child, depth + 1u, files);
+        } else {
+            st = fx_file_delete(&media, child);
+            if (st == FX_SUCCESS && files) (*files)++;
+        }
+        if (st != FX_SUCCESS) return st;
+    }
+    return fx_directory_delete(&media, path);
+}
+
+storage_status_t storage_delete_dir(const char *dir, uint32_t *files)
+{
+    CHAR p[PATH_MAX_LEN];
+    if (files) *files = 0;
+    storage_status_t s = mount();
+    if (s != STORAGE_OK) return s;
+    while (dir && *dir == '/') dir++;               /* "/save" = "save"    */
+    if (!copy_path(dir, p)) return STORAGE_ERROR;   /* also refuses the root */
+    for (size_t n = strlen((char *)p); n && p[n - 1] == '/'; n--) p[n - 1] = '\0';  /* "save/" = "save" */
+    if (!p[0]) return STORAGE_ERROR;
+
+    UINT st = fx_directory_name_test(&media, p);    /* FX_NOT_FOUND / FX_NOT_DIRECTORY */
+    if (st != FX_SUCCESS) return result(st);
+
+    st = delete_tree(p, 1u, files);
+    UINT fst = fx_media_flush(&media);              /* what was deleted, even after an error */
+    if (st == FX_SUCCESS) st = fst;
     return result(st);
 }
 

@@ -23,9 +23,12 @@
 
 #ifdef _WIN32
 #include <direct.h>
-#define make_dir(p) _mkdir(p)
+#define make_dir(p)   _mkdir(p)
+#define remove_dir(p) _rmdir(p)
 #else
-#define make_dir(p) mkdir((p), 0777)
+#include <unistd.h>
+#define make_dir(p)   mkdir((p), 0777)
+#define remove_dir(p) rmdir(p)
 #endif
 
 #include "storage.h"
@@ -174,6 +177,58 @@ storage_status_t storage_delete(const char *path)
     if (st != STORAGE_OK) return st;
     if (!full_path(path, fp)) return STORAGE_ERROR;
     return remove(fp) == 0 ? STORAGE_OK : from_errno(errno);
+}
+
+#ifndef _MSC_VER
+/* Everything in folder fp (a full path), then the folder itself. */
+static storage_status_t delete_tree(const char *fp, unsigned depth, uint32_t *files)
+{
+    DIR *d = opendir(fp);
+    if (!d) return from_errno(errno);
+    struct dirent *e;
+    storage_status_t st = STORAGE_OK;
+    while (st == STORAGE_OK && (e = readdir(d)) != NULL) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+        char cp[PATH_MAX_LEN];
+        struct stat s;
+        int n = snprintf(cp, sizeof cp, "%s/%s", fp, e->d_name);
+        if (n <= 0 || (size_t)n >= sizeof cp || stat(cp, &s) != 0) { st = STORAGE_ERROR; break; }
+        if (S_ISDIR(s.st_mode)) {
+            st = depth >= STORAGE_DELETE_DEPTH ? STORAGE_ERROR
+                                               : delete_tree(cp, depth + 1u, files);
+        } else if (remove(cp) == 0) {
+            if (files) (*files)++;
+        } else {
+            st = from_errno(errno);
+        }
+    }
+    closedir(d);
+    if (st != STORAGE_OK) return st;
+    return remove_dir(fp) == 0 ? STORAGE_OK : from_errno(errno);
+}
+#endif
+
+storage_status_t storage_delete_dir(const char *dir, uint32_t *files)
+{
+    char fp[PATH_MAX_LEN], rel[PATH_MAX_LEN];
+    if (files) *files = 0;
+    storage_status_t st = mount();
+    if (st != STORAGE_OK) return st;
+    while (dir && *dir == '/') dir++;               /* "/save" = "save"      */
+    if (!dir || !*dir) return STORAGE_ERROR;        /* never the whole card  */
+    int n = snprintf(rel, sizeof rel, "%s", dir);
+    if (n <= 0 || (size_t)n >= sizeof rel) return STORAGE_ERROR;
+    while (n && rel[n - 1] == '/') rel[--n] = '\0'; /* "save/" = "save"     */
+    if (!n || !full_path(rel, fp)) return STORAGE_ERROR;
+
+    struct stat s;
+    if (stat(fp, &s) != 0) return from_errno(errno);
+    if (!S_ISDIR(s.st_mode)) return STORAGE_ERROR;
+#ifdef _MSC_VER
+    return STORAGE_ERROR;                           /* no dirent.h there */
+#else
+    return delete_tree(fp, 1u, files);
+#endif
 }
 
 storage_status_t storage_rename(const char *from, const char *to)

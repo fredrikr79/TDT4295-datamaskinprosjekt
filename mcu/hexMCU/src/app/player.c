@@ -351,7 +351,7 @@ void player_init()
 {
     // Init the player struct
     player_t player = (player_t) {
-        .x = 318, .y = 120,
+        .x = 100, .y = 100,
         .velocity_x = 0, .velocity_y = 0,
         .health = PLAYER_MAX_HEALTH,
         .fly_meter = MAX_FLY_TIME,

@@ -61,8 +61,17 @@ storage_status_t storage_write(const char *path, const void *data, uint32_t len)
  * halfway keeps the pieces written so far. */
 storage_status_t storage_append(const char *path, const void *data, uint32_t len);
 
-/* STORAGE_NOT_FOUND if it wasn't there. */
+/* STORAGE_NOT_FOUND if it wasn't there. A file, or an empty folder. */
 storage_status_t storage_delete(const char *path);
+
+/* Delete folder dir and everything in it, folders inside it too (at most
+ * STORAGE_DELETE_DEPTH deep). *files (may be NULL) = files deleted. The
+ * root ("" or "/") is refused. STORAGE_NOT_FOUND if there's no such folder.
+ * If it stops halfway (an error), what was deleted so far stays deleted. */
+#ifndef STORAGE_DELETE_DEPTH
+#define STORAGE_DELETE_DEPTH 4
+#endif
+storage_status_t storage_delete_dir(const char *dir, uint32_t *files);
 
 /* Rename from -> to, replacing `to` if it exists. For saving safely: write
  * the new version under a temporary name, then rename it over the old one,

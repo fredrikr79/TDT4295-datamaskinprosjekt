@@ -805,7 +805,9 @@ static void cmd_button(int argc, char **argv)
 }
 
 /* sd                status: mounted?, size, free, the last thing that happened
- * sd ls [<folder>]  what's in a folder (the root if none) */
+ * sd ls [<folder>]  what's in a folder (the root if none)
+ * sd del <file>     delete a file
+ * sd del <folder>/  delete a folder and everything in it (sd del save/) */
 static void print_bytes(const char *what, uint64_t b)
 {
     if (b >= 1024ull * 1024 * 1024)
@@ -835,8 +837,31 @@ static void cmd_sd(int argc, char **argv)
             log_raw("%u %s in '%s'\r\n", n, n == 1 ? "entry" : "entries", *dir ? dir : "/");
         return;
     }
+    if (argc == 3 && !strcmp(argv[1], "del")) {
+        const char *path = argv[2];
+        size_t n = strlen(path);
+        storage_status_t st;
+        if (n && path[n - 1] == '/') {              /* a folder: everything in it */
+            uint32_t files = 0;
+            st = storage_delete_dir(path, &files);
+            if (st == STORAGE_OK)
+                log_raw("deleted '%s' (%lu file%s)\r\n", path, (unsigned long)files,
+                        files == 1 ? "" : "s");
+            else
+                log_raw("sd del '%s': %s (%lu file%s deleted)\r\n", path, storage_status_str(st),
+                        (unsigned long)files, files == 1 ? "" : "s");
+            return;
+        }
+        st = storage_delete(path);
+        if (st == STORAGE_OK)
+            log_raw("deleted '%s'\r\n", path);
+        else
+            log_raw("sd del '%s': %s%s\r\n", path, storage_status_str(st),
+                    st == STORAGE_ERROR ? " (a folder? end it with /: sd del save/)" : "");
+        return;
+    }
     if (argc != 1) {
-        log_raw("usage: sd [ls [<folder>]]\r\n");
+        log_raw("usage: sd [ls [<folder>] | del <file> | del <folder>/]\r\n");
         return;
     }
     storage_info_t in;
@@ -934,7 +959,7 @@ static const cli_cmd_t cmds[] = {
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]  (w h: screen px)" },
     { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
     { "button",  cmd_button,   "button [watch]      the board button now / watch it for 15 s" },
-    { "sd",      cmd_sd,       "sd [ls [<folder>]]  SD card status (mounts now if it can) / list a folder" },
+    { "sd",      cmd_sd,       "sd [ls [<folder>] | del <file> | del <folder>/]  SD card status / list / delete" },
     { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },

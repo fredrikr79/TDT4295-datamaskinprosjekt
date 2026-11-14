@@ -78,11 +78,12 @@ module write_sprite #(
           MEM_GET_MSG_LENGTH_BOTTOM: begin
             total_bytes[7:0] <= in_fifo;
             // Latched before the first burst
-            sprite_base_addr <= mem_addr;
-            state <= MEM_INIT_REQ;
             if(in_empty) begin
               error_valid <= 1'b1;
               error_code <= MISSING_PARAMETER_ERROR;
+            end else begin 
+              sprite_base_addr <= mem_addr;
+              state <= MEM_INIT_REQ;
             end
           end
           MEM_INIT_REQ: begin

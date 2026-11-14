@@ -85,11 +85,12 @@ module write_cons #(
             state <= MEM_GET_MSG_LENGTH_BOTTOM;
           end
           MEM_GET_MSG_LENGTH_BOTTOM: begin
-            total_bytes[7:0] <= in_fifo;
-            state <= MEM_GET_MEM_ADDR;
             if(in_empty) begin
               error_valid <= 1'b1;
               error_code <= MISSING_PARAMETER_ERROR;
+            end else begin
+              total_bytes[7:0] <= in_fifo;
+              state <= MEM_GET_MEM_ADDR;
             end
           end
           MEM_GET_MEM_ADDR: begin

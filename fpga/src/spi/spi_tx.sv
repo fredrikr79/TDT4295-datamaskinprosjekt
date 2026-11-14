@@ -99,10 +99,18 @@ module spi_tx #(
     else tx_event_sync <= {tx_event_sync[1:0], tx_event};
   end
 
-
+  reg dout_valid = 1'b0;
   reg [1:0] loaded = 2'd0;
-  wire preload = rd_window && (loaded != 2'd2) && !out_empty;
+
+  wire can_load = !out_empty || dout_valid;
+  wire preload = rd_window && (loaded != 2'd2) && can_load;
   wire advance = rd_window && (loaded == 2'd2) && tx_event_trigger;
+  wire pop_for_tx = (preload || advance) && !out_empty;
+
+  always @(posedge clk) begin
+    if (reset_s || !rd_window)     dout_valid <= 1'b0;
+    else if (preload || advance)   dout_valid <= pop_for_tx;
+  end
 
   always @(posedge clk) begin
     if (reset_s) begin
@@ -127,7 +135,7 @@ module spi_tx #(
   end
 
   // MCU READ CONDITIONS
-  assign out_r_en = (preload || advance || flush) && ~out_empty;
+  assign out_r_en = pop_for_tx || (flush && ~out_empty);
 
   // OCTO_SPI
   assign octo_spi = drive ? tx_buf[tx_event] : 8'hzz;

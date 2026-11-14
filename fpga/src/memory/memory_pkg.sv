@@ -74,12 +74,12 @@ package memory_pkg;
     memory_pkg::message_length_t latency_count;
     latency_count = message_length_t'(2  * (double_latency ? 2 * LatencyCount : LatencyCount));
 
-    return amount_of_latency_ticks >= latency_count - 1'b1;
+    return amount_of_latency_ticks >= latency_count + 1'b1;
   endfunction
   function automatic logic transaction_is_finished(input message_length_t amount_of_rws,
                                                    input transaction_e transaction,
                                                    input message_length_t optional_length);
-    return amount_of_rws == get_rw_length(transaction, optional_length) - 1;
+    return amount_of_rws >= get_rw_length(transaction, optional_length) - 1;
   endfunction
 
   localparam bit FixedLatency = 1'b1;

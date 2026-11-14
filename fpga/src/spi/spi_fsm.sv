@@ -114,7 +114,7 @@ module spi_fsm #(
           end
 
           ST_FAILED: begin
-            if (!out_empty) begin
+            if (out_empty) begin
               // FAILED process description sets the opcode
               // to a designated failed procedure in spi_processor
               state <= ST_BUSY;

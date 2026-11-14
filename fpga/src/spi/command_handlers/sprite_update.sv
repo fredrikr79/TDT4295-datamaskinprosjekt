@@ -85,11 +85,12 @@ always_ff @(posedge clk) begin
                     state <= GET_Y_BOTTOM;
                 end
                 GET_Y_BOTTOM: begin
-                    param_y[7:0] <= in_fifo;
-                    state <= EXECUTE;
                     if(in_empty) begin
                         error_valid <= 1'b1;
                         error_code <= MISSING_PARAMETER_ERROR;
+                    end else begin
+                        param_y[7:0] <= in_fifo;
+                        state <= EXECUTE;
                     end
                 end
                 EXECUTE: begin

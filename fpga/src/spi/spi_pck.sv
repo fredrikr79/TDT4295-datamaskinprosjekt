@@ -2,7 +2,7 @@ package spi_pck;
 
   // FSM STATES
   typedef enum bit [7:0] {
-    ST_BOOT    = 8'b00000100,
+    ST_BOOT    = 8'b00000111,
     ST_READY   = 8'b00001010,
     ST_RX      = 8'b00010111,
     ST_DECODE  = 8'b00011011,

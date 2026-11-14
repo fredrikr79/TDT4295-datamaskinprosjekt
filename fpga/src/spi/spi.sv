@@ -232,7 +232,7 @@ module spi #(
       .clk(clk),
       .state(state),
       .in_fifo(in_fifo),
-      .out_full(out_full),
+      .out_empty(out_empty),
       .in_empty(in_empty),
       .reset_s(reset_s),
       .proc_w_en(proc_w_en),

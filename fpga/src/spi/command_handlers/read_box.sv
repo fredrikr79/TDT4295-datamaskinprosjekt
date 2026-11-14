@@ -110,13 +110,13 @@ module read_box #(
             state <= GET_HEIGHT_BOTTOM;
           end
           GET_HEIGHT_BOTTOM: begin
-            rows[7:0] <= in_fifo;
-            state <= GET_MEM_ADDR;
-
             // IF empty at this point, too few parameters we're supplied.
             if(in_empty) begin
               error_valid <= 1'b1;
               error_code <= MISSING_PARAMETER_ERROR;
+            end else begin
+              rows[7:0] <= in_fifo;
+              state <= GET_MEM_ADDR;
             end
           end
           GET_MEM_ADDR: begin

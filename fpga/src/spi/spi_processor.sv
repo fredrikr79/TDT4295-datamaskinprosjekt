@@ -3,7 +3,7 @@ module spi_processor #(
 ) (
     input spi_pck::state_e state,
     input logic [7:0] in_fifo, mem_out,
-    input logic out_full,
+    input logic out_empty,
     in_empty,
     reset_s,
     clk,

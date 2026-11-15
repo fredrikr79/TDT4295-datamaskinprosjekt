@@ -1,3 +1,4 @@
+
 // Changes for LUT reduction are tagged [CHANGED] / [REMOVED] / [NEW]. grep "\[CHANGED\]\|\[REMOVED\]\|\[NEW\]"
 module simulator #(
 ) (
@@ -55,6 +56,11 @@ module simulator #(
   logic [BaseW-1:0] base_r = '0;
   logic valid_r = 1'b0;
   logic last_r = 1'b0;
+
+  // [WRITE STAGE] write slots from the always_comb block near the end of the file:
+  // [core][buffer][slot], slot 0 = column-1, 1 = this column, 2 = column+1.
+  logic wr_en[Cores][2][3];
+  logic [Bpp-1:0] wr_val[Cores][2][3];
  
   // [CHANGED] was "int gol_refresh_counter = 1" + "gol_refresh_counter % GolRefreshDelay == 0"
   // (a 32-bit modulo). Now a 7-bit counter wrapping at GolRefreshDelay. Starts at 1 like the
@@ -151,58 +157,28 @@ module simulator #(
     // ---- Stage 3 below works on base_r / nb_r / valid_r ----
  
  
-    for (int core = 0; core < Cores; core++) begin : process_lane
-      // [CHANGED] column built as 8-bit col_t from a constant (core*Stride) + 6-bit base,
-      // instead of int arithmetic on a 32-bit simulation_base.
-      // [PIPELINE] uses base_r (stage 2) instead of simulation_base
-      // [TIMING] the absolute column is no longer needed in stage 2: the rules get a
-      // pre-selected 3-pixel slice and edge flags instead of indexing a whole row.
-      automatic logic at_left_edge = (core == 0) && (base_r == '0);
-      automatic logic at_right_edge = (core == Cores - 1) && (base_r == BaseW'(Stride - 1));
-      // [CHANGED] was setup_neighbourhood(current_pixel_column); now takes the core number
-      // and reads from that core's window (see setup_neighbourhood below).
-      // [PIPELINE] registered neighbourhood from stage 1 (was setup_neighbourhood(core) here)
-      automatic sim_pkg::neighbourhood_t neighbourhood = nb_r[core];
-      // [REMOVED] left_pixel_bit_column / right_pixel_bit_column (unused)
- 
-      // [SYNTH FIX 2] The left/centre/right pixels of each output buffer around this pixel,
-      // as plain 24-bit values {right, centre, left}. Was an unpacked array local passed to
-      // the rules by `ref`; synthesis did not build that the way simulation runs it.
-      automatic logic [3*Bpp-1:0] out_upper = out_slice(output_buffers[1], core);
-      automatic logic [3*Bpp-1:0] out_lower = out_slice(output_buffers[0], core);
- 
-      // [REMOVED] noise = sim_pkg::lowbias32(lfsr_gol ^ current_pixel_bit_column)
- 
-      // [CHANGED] row index passed as int'(narrow row_t)
-      // [PIPELINE 2] rule results registered in stage 2
-      automatic logic [7:0] explosion_update = explosion_r[core];
-      automatic logic [7:0] gol_update = gol_r[core];
- 
-      automatic sim_pkg::gravity_movement_t gravity_movement = sim_pkg::DownNone;
-      automatic sim_pkg::fluid_movement_t fluid_movement = 'b0000;
- 
-      if (!is_sending_row && !is_unmatched_boundry_row) begin
-        gravity_movement = sim_rules::gravity_rules(out_upper, out_lower, neighbourhood, lfsr[0]);
-        fluid_movement = sim_rules::fluid_rules(
-          out_upper, out_lower, neighbourhood, lfsr[0], is_sending_row, at_left_edge, at_right_edge
-        );
-      end
- 
-      // Update Rules
-      // [CHANGED] "if (!is_row_running) continue;" -> "if (is_row_running) begin ... end"
-      // [CHANGED] direct output_buffers[..][current_pixel_bit_column +: 8] <= ... writes now go
-      // through write_px(), and the movement tasks take the core number instead of the column.
-      // [PIPELINE] gated by valid_r (stage 2) instead of is_row_running
-      if (valid_r) begin
-        if (explosion_update != 8'hFF) write_px(is_sending_row, core, 0, explosion_update);
-        else if (gol_update != 8'hFF) write_px(is_sending_row, core, 0, gol_update);
-        else if (gravity_movement != sim_pkg::DownNone)
-          apply_gravity_movement(gravity_movement, neighbourhood, core);
-        else if (!sim_pkg::no_movement(fluid_movement))
-          apply_fluid_movement(fluid_movement, neighbourhood, core);
+    // [WRITE STAGE] Apply the write slots worked out in the always_comb block below.
+    // Each output pixel can only be written from three places: its own column (offset 0),
+    // the column to its left writing +1, or the column to its right writing -1. Those are
+    // fixed for each column, so this is three small compares per pixel instead of the
+    // previous 16 write calls x 40 positions per core.
+    if (valid_r) begin
+      for (int b = 0; b < 2; b++) begin
+        for (int c = 0; c < Width; c++) begin
+          if (base_r == BaseW'(c % Stride) && wr_en[c/Stride][b][1])
+            output_buffers[b][c*Bpp+:Bpp] <= wr_val[c/Stride][b][1];
+          if (c > 0) begin
+            if (base_r == BaseW'((c - 1) % Stride) && wr_en[(c-1)/Stride][b][2])
+              output_buffers[b][c*Bpp+:Bpp] <= wr_val[(c-1)/Stride][b][2];
+          end
+          if (c < Width - 1) begin
+            if (base_r == BaseW'((c + 1) % Stride) && wr_en[(c+1)/Stride][b][0])
+              output_buffers[b][c*Bpp+:Bpp] <= wr_val[(c+1)/Stride][b][0];
+          end
+        end
       end
     end
- 
+
     // advancement logic
     // [PIPELINE] end-of-row work now happens when stage 2 finishes the last pixel.
     // simulation_base / is_row_running are advanced by stage 1 above.
@@ -277,53 +253,104 @@ module simulator #(
     return n;
   endfunction
  
-  // [NEW] Write one pixel at (this core's current column + offset). Every target index is a
-  // constant, selected by a 6-bit compare on simulation_base, instead of a 32-bit index decode.
-  task automatic write_px(input logic buf_sel, input int core, input int offset,
-                          input logic [Bpp-1:0] value);
-    for (int p = 0; p < Stride; p++) begin
-      int c;
-      c = core * Stride + p + offset;
-      // [PIPELINE] compares base_r (stage 2) instead of simulation_base
-      if (base_r == BaseW'(p) && c >= 0 && c < Width)
-        output_buffers[buf_sel][c*Bpp+:Bpp] <= value;
+  // [WRITE STAGE] Per-core decision for the pixel in stage 3, as write slots.
+  //   wr_en / wr_val [core][buffer][slot], slot 0 = column-1, 1 = this column, 2 = column+1.
+  // Priority is unchanged: explosion, GoL, gravity, fluid. The rows are named by role first
+  // ("mine" = the row being processed, output buffer is_sending_row; "other" = the other
+  // output buffer) and mapped onto the two physical buffers at the end.
+  always_comb begin
+    for (int core = 0; core < Cores; core++) begin
+      logic at_left_edge, at_right_edge;
+      sim_pkg::neighbourhood_t nb;
+      logic [3*Bpp-1:0] out_upper, out_lower;
+      sim_pkg::gravity_movement_t gravity_movement;
+      sim_pkg::fluid_movement_t fluid_movement;
+      logic mine_en[3], other_en[3];
+      logic [Bpp-1:0] mine_val[3], other_val[3];
+
+      at_left_edge = (core == 0) && (base_r == '0);
+      at_right_edge = (core == Cores - 1) && (base_r == BaseW'(Stride - 1));
+      nb = nb_r[core];
+      out_upper = out_slice(output_buffers[1], core);
+      out_lower = out_slice(output_buffers[0], core);
+
+      gravity_movement = sim_pkg::DownNone;
+      fluid_movement = '0;
+      if (!is_sending_row && !is_unmatched_boundry_row) begin
+        gravity_movement = sim_rules::gravity_rules(out_upper, out_lower, nb, lfsr[0]);
+        fluid_movement = sim_rules::fluid_rules(
+            out_upper, out_lower, nb, lfsr[0], is_sending_row, at_left_edge, at_right_edge
+        );
+      end
+
+      for (int k = 0; k < 3; k++) begin
+        mine_en[k] = 1'b0;
+        other_en[k] = 1'b0;
+        mine_val[k] = '0;
+        other_val[k] = '0;
+      end
+
+      if (explosion_r[core] != 8'hFF) begin
+        mine_en[1] = 1'b1;
+        mine_val[1] = explosion_r[core];
+      end else if (gol_r[core] != 8'hFF) begin
+        mine_en[1] = 1'b1;
+        mine_val[1] = gol_r[core];
+      end else if (gravity_movement == sim_pkg::DownRight) begin
+        mine_en[1] = 1'b1;
+        mine_val[1] = nb.topLeft;
+        other_en[0] = 1'b1;
+        other_val[0] = nb.center;
+      end else if (gravity_movement == sim_pkg::Down) begin
+        other_en[1] = 1'b1;
+        other_val[1] = nb.center;
+        mine_en[1] = 1'b1;
+        mine_val[1] = nb.top;
+      end else if (gravity_movement == sim_pkg::DownLeft) begin
+        mine_en[1] = 1'b1;
+        mine_val[1] = nb.topRight;
+        other_en[2] = 1'b1;
+        other_val[2] = nb.center;
+      end else begin
+        // fluid: a top-row move and a centre-row move can both happen
+        if (fluid_movement.topLeft) begin
+          other_en[0] = 1'b1;
+          other_val[0] = nb.top;
+          other_en[1] = 1'b1;
+          other_val[1] = nb.topLeft;
+        end else if (fluid_movement.topRight) begin
+          other_en[2] = 1'b1;
+          other_val[2] = nb.top;
+          other_en[1] = 1'b1;
+          other_val[1] = nb.topRight;
+        end
+        if (fluid_movement.centerLeft) begin
+          mine_en[0] = 1'b1;
+          mine_val[0] = nb.center;
+          mine_en[1] = 1'b1;
+          mine_val[1] = nb.left;
+        end else if (fluid_movement.centerRight) begin
+          mine_en[2] = 1'b1;
+          mine_val[2] = nb.center;
+          mine_en[1] = 1'b1;
+          mine_val[1] = nb.right;
+        end
+      end
+
+      // role -> physical buffer: "mine" is output buffer is_sending_row
+      for (int b = 0; b < 2; b++) begin
+        for (int k = 0; k < 3; k++) begin
+          if (is_sending_row == 1'(b)) begin
+            wr_en[core][b][k] = mine_en[k];
+            wr_val[core][b][k] = mine_val[k];
+          end else begin
+            wr_en[core][b][k] = other_en[k];
+            wr_val[core][b][k] = other_val[k];
+          end
+        end
+      end
     end
-  endtask
- 
-  // [CHANGED] takes core instead of pixel_column; each
-  // output_buffers[x][bit_column +: 8] <= v  became  write_px(x, core, offset, v)
-  // with offset 0 = centre, -1 = left, +1 = right. Same buffers, same values as before.
-  task automatic apply_gravity_movement(sim_pkg::gravity_movement_t gravity_movement,
-                                        sim_pkg::neighbourhood_t neighbourhood, int core);
-    if (gravity_movement == sim_pkg::DownRight) begin
-      write_px(is_sending_row, core, 0, neighbourhood.topLeft);
-      write_px(!is_sending_row, core, -1, neighbourhood.center);
-    end else if (gravity_movement == sim_pkg::Down) begin
-      write_px(!is_sending_row, core, 0, neighbourhood.center);
-      write_px(is_sending_row, core, 0, neighbourhood.top);
-    end else if (gravity_movement == sim_pkg::DownLeft) begin
-      write_px(is_sending_row, core, 0, neighbourhood.topRight);
-      write_px(!is_sending_row, core, 1, neighbourhood.center);
-    end
-  endtask
- 
-  // [CHANGED] same conversion as apply_gravity_movement
-  task automatic apply_fluid_movement(sim_pkg::fluid_movement_t fluid_movement,
-                                      sim_pkg::neighbourhood_t neighbourhood, int core);
-    if (fluid_movement.topLeft) begin
-      write_px(!is_sending_row, core, -1, neighbourhood.top);
-      write_px(!is_sending_row, core, 0, neighbourhood.topLeft);
-    end else if (fluid_movement.topRight) begin
-      write_px(!is_sending_row, core, 1, neighbourhood.top);
-      write_px(!is_sending_row, core, 0, neighbourhood.topRight);
-    end
-    if (fluid_movement.centerLeft) begin
-      write_px(is_sending_row, core, -1, neighbourhood.center);
-      write_px(is_sending_row, core, 0, neighbourhood.left);
-    end else if (fluid_movement.centerRight) begin
-      write_px(is_sending_row, core, 1, neighbourhood.center);
-      write_px(is_sending_row, core, 0, neighbourhood.right);
-    end
-  endtask
- 
+  end
+
 endmodule
+ 

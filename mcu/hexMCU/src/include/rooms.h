@@ -35,6 +35,7 @@ void progress_online_room(struct online_room *room, uint8_t *new_ids, uint16_t i
 bool save_online_room(struct online_room *room);
 
 bool delete_save(int x, int y);
+void delete_all_saves();
 
 /* ---- moving the current room to / from the FPGA ---------------------------
  *   room_load_start(x, y)   read the room's file; STOP_SIM, send it row by

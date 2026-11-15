@@ -494,6 +494,18 @@ void game_change_room(int to_x, int to_y)
     save_start();
 }
 
+// Delete all saved rooms and start over
+void game_reset()
+{
+    if (state != S_RUN) return;
+    menu_reset();
+    delete_all_saves();
+    room_x = FIRST_ROOM_X;
+    room_y = FIRST_ROOM_Y;
+    player_set_default(&player);
+    load_start();
+}
+
 /* ---- the handshake is done: same session -> resume, new -> reload ------ */
 static void connected(void)
 {

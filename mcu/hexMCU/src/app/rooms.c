@@ -368,6 +368,24 @@ bool delete_save(int x, int y)
   return true;
 }
 
+static void delete_listed_save(
+  void *ctx, const char *name, uint32_t size, bool is_dir
+)
+{
+  char filename[NAME_LEN] = {0};
+  snprintf(filename, NAME_LEN, "save/%s", name);
+  storage_status_t status = storage_delete(filename);
+  if (status != STORAGE_OK && status != STORAGE_NOT_FOUND)
+  {
+    LOG_ERR("deleting listed save %s: %s", name, storage_status_str(status));
+  }
+}
+
+void delete_all_saves()
+{
+  storage_list("save", delete_listed_save, NULL);
+}
+
 /* ---- moving a room to / from the FPGA ------------------------------------
  *   load:  STOP_SIM -> WRITE_CONS row 0 .. ROOM_Y-1 -> START_SIM
  *   save:  STOP_SIM -> READ_CONS  row 0 .. ROOM_Y-1 -> write the file

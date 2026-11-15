@@ -77,11 +77,13 @@ void damage_player(player_t *player, uint16_t amount)
     ticks_since_last_damage = PLAYER_DAMAGE_TO_HEAL_DELAY;
 
     // TODO: Check if dead
-    // if (player->health == 0) reset_game()
+    if (player->health == 0) game_reset();
 }
 
 void heal_player(player_t *player, uint16_t amount)
 {
+    if (player->health == 0) return;
+
     if (player->health + amount < PLAYER_MAX_HEALTH)
         player->health += amount;
     else player->health = PLAYER_MAX_HEALTH;
@@ -377,18 +379,28 @@ void start_jump()
     jump_next_frame = true;
 }
 
+void player_set_default(player_t *player)
+{
+    player->x = 78;
+    player->y = 30;
+
+    player->velocity_x = 0;
+    player->velocity_y = 0;
+
+    player->fly_meter = MAX_FLY_TIME;
+
+    player->health = PLAYER_MAX_HEALTH;
+    player->breath_meter = PLAYER_MAX_BREATH;
+    player->burn_timer = 0;
+
+    player->still_in_portal = 0;
+}
+
 void player_init()
 {
     // Init the player struct
-    player_t player = (player_t) {
-        .x = 78, .y = 30,
-        .velocity_x = 0, .velocity_y = 0,
-        .health = PLAYER_MAX_HEALTH,
-        .fly_meter = MAX_FLY_TIME,
-        .breath_meter = PLAYER_MAX_BREATH,
-        .burn_timer = 0,
-        .still_in_portal = 0
-    };
+    player_t player = (player_t) {};
+    player_set_default(&player);
     set_player(player);
     sprite_follow(&player);
 

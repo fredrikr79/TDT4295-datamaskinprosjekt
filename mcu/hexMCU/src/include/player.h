@@ -77,6 +77,7 @@ void move_stop();
 void start_jump();
 
 void player_init();
+void player_set_default(player_t *player);
 
 /* The player's sprite (the picture is assets.player). player_sprite_init()
  * once, after assets_init(); update_player() and player_init() then keep

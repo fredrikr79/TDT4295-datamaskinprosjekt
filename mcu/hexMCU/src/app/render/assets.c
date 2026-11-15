@@ -1,5 +1,7 @@
 /* assets.c - the game's images (see assets.h). Add new ones here. */
 
+#include "sprite.h"
+#include <stdint.h>
 #define LOG_TAG "assets"
 
 #include "assets.h"
@@ -95,6 +97,10 @@ void assets_init(void)
 
     /* generated */
     assets.player = sprite_img_fill(PLAYER_SIZE_X, PLAYER_SIZE_Y, player_px, NULL);
+
+    /* Health */
+    assets.health     = sprite_img_solid(4, 200, RGB565(255, 0, 0));
+    assets.health_inv = sprite_img_solid(sprite_img_w(assets.health), sprite_img_h(assets.health), RGB565(0, 255, 0));
 
     /* texts: one image per text */
     assets.title     = text("Hei verden! Lagre spill? æøå ÆØÅ");

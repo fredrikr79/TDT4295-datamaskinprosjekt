@@ -67,7 +67,7 @@ function(hexmcu_stm32u5_setup target)
     )
     target_include_directories(${target} PRIVATE
         ${TINYUSB_INCLUDES}
-        ${HEXMCU_ROOT}/src/port/stm32/usb                      # tusb_config.h, usb_backend.h, hid_mouse.h
+        ${HEXMCU_ROOT}/src/port/stm32/usb                      # tusb_config.h, hid_mouse.h (usb_backend.h is in src/include/)
     )
     # TinyUSB fixes in usb_backend_tinyusb.c, instead of patching third_party/:
     #   hcd_setup_send  hub descriptor request (hub.c)

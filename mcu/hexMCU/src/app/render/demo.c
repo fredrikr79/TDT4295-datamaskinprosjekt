@@ -22,6 +22,19 @@
  *           row, START_SIM (to look at, nothing to check)
  *   clear   STOP_SIM, the whole grid air, START_SIM
  *   all     echo, info, cons, box, sprite in a row
+ *   swap    not a test: a switch. On, the cell bytes of cons, box, scene and
+ *           clear go out with their two nibbles swapped (the material in the
+ *           LOW 4 bits), and what's read back is swapped back before it's
+ *           checked. For finding out which nibble the FPGA takes as the
+ *           material.
+ *
+ *   detailed  not a test either: a switch for the detailed printout. On,
+ *           every grid command (WRITE/READ_CONS, WRITE/READ_BOX,
+ *           START/STOP_SIM) is logged as it's sent, OK or not: its header
+ *           fields, then the bytes in the order they go on the wire
+ *           (opcode | X Y | alt | payload), MSB first, and the first payload
+ *           bytes. A read that comes back OK logs its first bytes too, as
+ *           they came (before any swap). Off at start (DEMO_WIRE 1: on).
  *
  * A check that fails also logs the whole command as hex, what was expected
  * above what came back, 16 bytes a line, with ^^ under the bytes that
@@ -64,6 +77,110 @@
 #ifndef DEMO_DUMP
 #define DEMO_DUMP        1
 #endif
+
+/* "demo detailed" at start: 1 = on (see the top). */
+#ifndef DEMO_WIRE
+#define DEMO_WIRE        0
+#endif
+#define WIRE_BYTES       8u         /* payload / answer bytes shown          */
+
+static bool swap_nibbles;           /* "demo swap": material in the low 4 bits */
+static bool detailed = DEMO_WIRE;   /* "demo detailed": log every grid command */
+
+static uint8_t nibble_swap(uint8_t b) { return (uint8_t)((b << 4) | (b >> 4)); }
+
+static void swap_buf(uint8_t *b, uint32_t n)
+{
+    for (uint32_t i = 0; i < n; i++) b[i] = nibble_swap(b[i]);
+}
+
+static bool is_grid_op(uint8_t op)
+{
+    return op == WRITE_CONS_OPCODE || op == READ_CONS_OPCODE ||
+           op == WRITE_BOX_OPCODE  || op == READ_BOX_OPCODE  ||
+           op == START_SIM_OPCODE  || op == STOP_SIM_OPCODE;
+}
+
+static const char *grid_op_name(uint8_t op)
+{
+    switch (op) {
+    case WRITE_CONS_OPCODE: return "WRITE_CONS";
+    case READ_CONS_OPCODE:  return "READ_CONS";
+    case WRITE_BOX_OPCODE:  return "WRITE_BOX";
+    case READ_BOX_OPCODE:   return "READ_BOX";
+    case START_SIM_OPCODE:  return "START_SIM";
+    case STOP_SIM_OPCODE:   return "STOP_SIM";
+    default:                return "op";
+    }
+}
+
+/* " xx xx xx" for up to WIRE_BYTES of b, with "..." if there's more */
+static int hex_bytes(char *out, size_t size, const uint8_t *b, uint32_t n)
+{
+    int k = 0;
+    for (uint32_t i = 0; i < n && i < WIRE_BYTES && (size_t)k < size; i++)
+        k += snprintf(out + k, size - (size_t)k, " %02X", b[i]);
+    if (n > WIRE_BYTES && (size_t)k < size) k += snprintf(out + k, size - (size_t)k, " ...");
+    return k;
+}
+
+/* A grid command as it goes out:
+ *   > WRITE_BOX x=2 y=2 w=8 h=8 len=64 | wire: 50 | 00 02 00 02 | 00 08 00 08 | 20 20 31 31 ...
+ * The wire part is the byte order OCTOSPI sends, MSB first: opcode, then
+ * X, Y (address phase), then N or W, H (alternate bytes), then the payload. */
+static void wire_log_cmd(const fpga_cmd_t *c)
+{
+    const transport_hdr_t *h = &c->hdr;
+    char line[176];
+    int k;
+
+    if (!detailed || !is_grid_op(h->opcode)) return;
+    k = snprintf(line, sizeof line, "  > %s", grid_op_name(h->opcode));
+    if (h->fields & TRANSPORT_F_XY)
+        k += snprintf(line + k, sizeof line - (size_t)k, " x=%u y=%u", h->x, h->y);
+    if (h->fields & TRANSPORT_F_ALT32)
+        k += snprintf(line + k, sizeof line - (size_t)k, " w=%u h=%u",
+                      (unsigned)(h->alt >> 16), (unsigned)(h->alt & 0xFFFFu));
+    else if (h->fields & TRANSPORT_F_ALT16)
+        k += snprintf(line + k, sizeof line - (size_t)k, " n=%u", (unsigned)(h->alt & 0xFFFFu));
+    if (h->len) k += snprintf(line + k, sizeof line - (size_t)k, " len=%u", h->len);
+    if (c->rx_len) k += snprintf(line + k, sizeof line - (size_t)k, " answer=%u", c->rx_len);
+
+    k += snprintf(line + k, sizeof line - (size_t)k, " | wire: %02X", h->opcode);
+    if (h->fields & TRANSPORT_F_XY)
+        k += snprintf(line + k, sizeof line - (size_t)k, " | %02X %02X %02X %02X",
+                      h->x >> 8, h->x & 0xFFu, h->y >> 8, h->y & 0xFFu);
+    if (h->fields & TRANSPORT_F_ALT32)
+        k += snprintf(line + k, sizeof line - (size_t)k, " | %02X %02X %02X %02X",
+                      (unsigned)(h->alt >> 24) & 0xFFu, (unsigned)(h->alt >> 16) & 0xFFu,
+                      (unsigned)(h->alt >> 8) & 0xFFu, (unsigned)h->alt & 0xFFu);
+    else if (h->fields & TRANSPORT_F_ALT16)
+        k += snprintf(line + k, sizeof line - (size_t)k, " | %02X %02X",
+                      (unsigned)(h->alt >> 8) & 0xFFu, (unsigned)h->alt & 0xFFu);
+    if (h->len && c->tx && (size_t)k < sizeof line) {
+        k += snprintf(line + k, sizeof line - (size_t)k, " |");
+        hex_bytes(line + k, sizeof line - (size_t)k, c->tx, h->len);
+    }
+    LOG_INFO("%s", line);
+
+    /* the first cell, read both ways, for the nibble question */
+    if (h->len && c->tx && (h->opcode == WRITE_CONS_OPCODE || h->opcode == WRITE_BOX_OPCODE))
+        LOG_INFO("    first byte 0x%02X: high nibble %u, low nibble %u%s", c->tx[0],
+                 c->tx[0] >> 4, c->tx[0] & 0x0Fu,
+                 swap_nibbles ? " (swap on: the material is the LOW nibble)" : "");
+}
+
+/* A read that came back OK: its first bytes, exactly as they arrived. */
+static void wire_log_answer(const fpga_cmd_t *c)
+{
+    char line[96];
+    if (!detailed || !c->rx || !c->rx_len ||
+        (c->hdr.opcode != READ_CONS_OPCODE && c->hdr.opcode != READ_BOX_OPCODE)) return;
+    int k = snprintf(line, sizeof line, "  < %s answer, %u bytes:", grid_op_name(c->hdr.opcode),
+                     c->rx_len);
+    hex_bytes(line + k, sizeof line - (size_t)k, c->rx, c->rx_len);
+    LOG_INFO("%s", line);
+}
 
 static uint8_t tx[BUF_BYTES], rx[BUF_BYTES];
 static uint8_t want[BUF_BYTES];     /* what a read should give, for the dump */
@@ -225,6 +342,9 @@ static void cmd_done(const fpga_cmd_t *c, fpga_err_t err)
     d.cmds++;
     if (op == STOP_SIM_OPCODE)  d.sim_stopped = true;
     if (op == START_SIM_OPCODE) d.sim_stopped = false;
+    wire_log_answer(c);                     /* as it came, before any swap */
+    if (swap_nibbles && c->rx && (op == READ_CONS_OPCODE || op == READ_BOX_OPCODE))
+        swap_buf(c->rx, c->rx_len);         /* back to material-high for the check */
     if (d.t->check) d.t->check(d.i, c);
     d.i++;
     d.ph = PH_STEP;
@@ -235,7 +355,7 @@ static void submit(fpga_cmd_t *c, phase_t ok_phase)
     c->done = cmd_done;
     c->ctx  = (void *)(uintptr_t)d.gen;
     fpga_status_t st = fpga_submit(c);
-    if (st == FPGA_OK)    { d.ph = ok_phase; return; }
+    if (st == FPGA_OK)    { wire_log_cmd(c); d.ph = ok_phase; return; }
     if (st == FPGA_EFULL) return;                      /* try again next poll */
     LOG_WARN("  step %u (op 0x%02X): not sent, %s", d.i, c->hdr.opcode, fpga_status_str(st));
     d.broken = true;
@@ -319,7 +439,7 @@ static void dump(bool failed, const uint8_t *exp, const uint8_t *got, uint32_t b
 
     for (uint32_t off = 0; off < bytes; off += DUMP_PER_LINE) {
         uint32_t end = off + DUMP_PER_LINE < bytes ? off + DUMP_PER_LINE : bytes;
-        char head[24], a[4 * DUMP_PER_LINE + 8], b[sizeof a], m[sizeof a];
+        char head[32], a[4 * DUMP_PER_LINE + 8], b[sizeof a], m[sizeof a];
         int na = 0, nb = 0, nm = 0;
         bool diff = false;
 
@@ -383,6 +503,15 @@ static uint16_t fill_cells(uint8_t *buf, uint32_t n, uint16_t x0, uint16_t y0,
         sim_put(buf, k, p(x, y));
     }
     return (uint16_t)bytes;
+}
+
+/* fill_cells() for a buffer that goes OUT: nibbles swapped with "demo swap". */
+static uint16_t fill_tx(uint8_t *buf, uint32_t n, uint16_t x0, uint16_t y0,
+                        uint16_t box_w, pattern_fn p)
+{
+    uint16_t bytes = fill_cells(buf, n, x0, y0, box_w, p);
+    if (swap_nibbles) swap_buf(buf, bytes);
+    return bytes;
 }
 
 /* Compare n cells read back with pattern p, by material (the low 4 bits
@@ -529,7 +658,7 @@ static step_t cons_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
     switch (i) {
     case 0: *c = fpga_cmd_sim_run(false); return STEP_CMD;
     case 1: case 3: case 6:
-        *c = fpga_cmd_write_cons(x, y, tx, fill_cells(tx, n, x, y, 0, pat_cons));
+        *c = fpga_cmd_write_cons(x, y, tx, fill_tx(tx, n, x, y, 0, pat_cons));
         return STEP_CMD;
     case 2: case 4: case 5: case 7:
         *c = fpga_cmd_read_cons(x, y, rx, (uint16_t)fpga_sim_bytes(n));
@@ -648,7 +777,7 @@ static step_t box_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
     switch (op) {
     case BOX_WRITE:
         *c = fpga_cmd_write_box(fpga_box(x, y, w, h), tx,
-                                fill_cells(tx, (uint32_t)w * h, x, y, w, pat_box));
+                                fill_tx(tx, (uint32_t)w * h, x, y, w, pat_box));
         break;
     case BOX_READ:
         *c = fpga_cmd_read_box(fpga_box(x, y, w, h), rx,
@@ -897,7 +1026,7 @@ static step_t grid_step(unsigned i, fpga_cmd_t *c, pattern_fn p)
         uint32_t j = i - 1u, y = j / per_row, x = (j % per_row) * piece;
         uint32_t n = w - x < piece ? w - x : piece;
         *c = fpga_cmd_write_cons((uint16_t)x, (uint16_t)y, tx,
-                                 fill_cells(tx, n, (uint16_t)x, (uint16_t)y, 0, p));
+                                 fill_tx(tx, n, (uint16_t)x, (uint16_t)y, 0, p));
         return STEP_CMD;
     }
     if (i == total + 1u) { *c = fpga_cmd_sim_run(true); return STEP_CMD; }
@@ -925,6 +1054,18 @@ static const test_t *const all[]   = { &t_echo, &t_info, &t_cons, &t_box, &t_spr
 
 bool demo_start(const char *name)
 {
+    if (strcmp(name, "detailed") == 0) {        /* a switch, not a test */
+        detailed = !detailed;
+        LOG_INFO("detailed %s: grid commands %s logged with their header and wire bytes",
+                 detailed ? "on" : "off", detailed ? "are" : "aren't");
+        return true;
+    }
+    if (strcmp(name, "swap") == 0) {            /* a switch, not a test */
+        swap_nibbles = !swap_nibbles;
+        LOG_INFO("swap %s: cell bytes go out with the material in the %s 4 bits", 
+                 swap_nibbles ? "on" : "off", swap_nibbles ? "LOW" : "high");
+        return true;
+    }
     if (d.t) {
         LOG_WARN("'%s' is still running ('demo stop' stops it)", d.t->name);
         return true;
@@ -957,7 +1098,11 @@ void demo_list(void)
 {
     log_raw("demo <test>, the FPGA to itself while it runs:\r\n");
     for (unsigned k = 0; k < NTESTS; k++)
-        log_raw("  %-7s %s\r\n", tests[k]->name, tests[k]->help);
-    log_raw("  %-7s %s\r\n", "all", "echo, info, cons, box, sprite");
-    log_raw("  %-7s %s\r\n", "stop", "stop the one running");
+        log_raw("  %-8s %s\r\n", tests[k]->name, tests[k]->help);
+    log_raw("  %-8s %s\r\n", "all", "echo, info, cons, box, sprite");
+    log_raw("  %-8s %s (now %s)\r\n", "swap", "switch: cell bytes with the material in the LOW nibble",
+            swap_nibbles ? "on" : "off");
+    log_raw("  %-8s %s (now %s)\r\n", "detailed", "switch: log every grid command's header and wire bytes",
+            detailed ? "on" : "off");
+    log_raw("  %-8s %s\r\n", "stop", "stop the one running");
 }

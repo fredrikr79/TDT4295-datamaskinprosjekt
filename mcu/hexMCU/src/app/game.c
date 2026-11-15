@@ -271,6 +271,8 @@ static void pad_pointer(const input_t *in, int32_t *dx, int32_t *dy)
 static sprite_t     *cursor;
 static sprite_t     *title;
 static sprite_ani_t *spinner;       /* only if sprites/spinner.spr is on the card */
+static sprite_t     *health;
+static sprite_t     *health_inv;
 
 static int32_t cursor_w(void) { return sprite_img_w(assets.cursor); }
 static int32_t cursor_h(void) { return sprite_img_h(assets.cursor); }
@@ -357,8 +359,27 @@ static void sprites_setup(void)
 
     menu_init(scr->width, scr->height);    /* before the cursor: drawn under it */
     draw_init(scr->width, scr->height);
+
+    /* Health */
+    health = sprite_new(assets.health, scr->width-sprite_img_w(assets.health), scr->height - sprite_img_h(assets.health), true);
+    health_inv = sprite_new(assets.health_inv, scr->width-sprite_img_w(assets.health), scr->height - sprite_img_h(assets.health), true);
+    
     cursor = sprite_new(assets.cursor, 0, 0, true);
 }
+
+uint32_t count = 0;
+uint32_t bob_the_counter;
+void health_frame(uint32_t n) {
+    count += n;
+    count %= 25/25;
+    if(count == 0){
+        const fpga_info_t *scr = fpga_link_info();
+        bob_the_counter += 1;
+        bob_the_counter %= sprite_img_h(assets.health)/2;
+        sprite_move(health_inv, scr->width-sprite_img_w(assets.health), scr->height - sprite_img_h(assets.health)+bob_the_counter*2);
+    }
+}
+
 
 /* Per-room game state: from load_start(), once per room. */
 static void room_enter(void)
@@ -414,6 +435,7 @@ static void run_frame(uint32_t n)
 
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);   /* sprite_poll sends it */
     sprite_frame(n);            /* animations step */
+    health_frame(n);
 }
 
 static void run_poll(void)

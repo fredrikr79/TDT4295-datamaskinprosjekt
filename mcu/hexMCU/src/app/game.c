@@ -47,6 +47,7 @@ static const char *const state_names[] = { "probe", "save", "load", "run", "hold
 
 #define FPGA_RESET_PULSE_MS 10u     /* the FPGA's reset pin held low this long */
 static uint32_t fpga_reset_until;
+static bool     fpga_reprogram;     /* this S_FPGA_RESET pulses PROGRAM_B, not RESET */
 
 
 
@@ -573,22 +574,39 @@ void game_set_loading(bool on)
     go(S_PROBE);
 }
 
-/* ---- resets (console: "reset", "reset fpga", "reset mcu") ---------------
+/* ---- resets (console: "reset", "reset fpga", "reset mcu", and with -b) ---
  * FPGA: everything queued is dropped, the reset pin is held low for
  * FPGA_RESET_PULSE_MS, and then it's a new FPGA: everything on it is
  * forgotten and the handshake starts over (with loading off: back to HOLD).
  * MCU: a full restart, as from power-up. Both: the FPGA's reset pulse, then
- * the MCU restart. */
-void game_reset_fpga(void)
+ * the MCU restart.
+ * -b ("reprogram") does the same with PROGRAM_B instead of the reset pin:
+ * the FPGA wipes its design and loads it from its flash again. That takes a
+ * while; the handshake waits for DONE, as at power-up. */
+static void fpga_pulse(bool program, bool hold)
 {
-    LOG_WARN("resetting the FPGA (reset pin low for %u ms)", FPGA_RESET_PULSE_MS);
+    if (program) plat_fpga_program(hold);
+    else         plat_fpga_reset(hold);
+}
+
+static void fpga_reset_start(bool program)
+{
+    if (program)
+        LOG_WARN("reprogramming the FPGA (PROGRAM_B low for %u ms): it loads its design "
+                 "from flash again", FPGA_RESET_PULSE_MS);
+    else
+        LOG_WARN("resetting the FPGA (reset pin low for %u ms)", FPGA_RESET_PULSE_MS);
     if (demo_busy()) demo_stop();
     if (state == S_PROBE) probe_stop();
     fpga_abort_all();                   /* callbacks run now (CANCELLED) */
-    plat_fpga_reset(true);
+    fpga_reprogram = program;
+    fpga_pulse(program, true);
     fpga_reset_until = plat_millis() + FPGA_RESET_PULSE_MS;
     go(S_FPGA_RESET);
 }
+
+void game_reset_fpga(void)     { fpga_reset_start(false); }
+void game_reprogram_fpga(void) { fpga_reset_start(true); }
 
 void game_reset_mcu(void)
 {
@@ -596,22 +614,25 @@ void game_reset_mcu(void)
     plat_mcu_reset();                   /* doesn't return */
 }
 
-void game_reset_all(void)
+static void reset_all(bool program)
 {
-    LOG_WARN("resetting the FPGA and the MCU");
+    LOG_WARN("%s the FPGA and resetting the MCU", program ? "reprogramming" : "resetting");
     fpga_abort_all();
-    plat_fpga_reset(true);
+    fpga_pulse(program, true);
     uint32_t t0 = plat_millis();
     while (plat_millis() - t0 < FPGA_RESET_PULSE_MS) { }   /* the MCU restarts anyway */
-    plat_fpga_reset(false);
+    fpga_pulse(program, false);
     plat_mcu_reset();
 }
+
+void game_reset_all(void)     { reset_all(false); }
+void game_reprogram_all(void) { reset_all(true); }
 
 /* The reset pulse is over: a new FPGA, nothing of ours on it. */
 static void fpga_reset_done(void)
 {
-    plat_fpga_reset(false);
-    LOG_INFO("FPGA reset released: starting over");
+    fpga_pulse(fpga_reprogram, false);
+    LOG_INFO("FPGA %s released: starting over", fpga_reprogram ? "PROGRAM_B" : "reset");
     sprite_forget();                    /* its memory is gone: send it all again */
     have_session = false;               /* -> connected() loads everything */
     resume_to    = S_LOAD;

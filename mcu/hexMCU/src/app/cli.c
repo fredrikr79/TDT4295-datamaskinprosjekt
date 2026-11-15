@@ -876,12 +876,30 @@ static void cmd_sd(int argc, char **argv)
         log_raw("  error: %s\r\n", storage_status_str(st));
 }
 
+/* reset [-b] [fpga | mcu]   no argument: both. -b: the FPGA through PROGRAM_B
+ * (it loads its design from flash again) instead of its reset pin. */
 static void cmd_reset(int argc, char **argv)
 {
-    if (argc == 1)                          game_reset_all();
-    else if (argc == 2 && !strcmp(argv[1], "fpga")) game_reset_fpga();
-    else if (argc == 2 && !strcmp(argv[1], "mcu"))  game_reset_mcu();
-    else log_raw("usage: reset [fpga | mcu]   (no argument: both)\r\n");
+    bool b = false;
+    const char *what = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-b")) b = true;
+        else if (!what) what = argv[i];
+        else what = "";                         /* too many: usage below */
+    }
+    if (!what) {
+        if (b) game_reprogram_all();
+        else   game_reset_all();
+    } else if (!strcmp(what, "fpga")) {
+        if (b) game_reprogram_fpga();
+        else   game_reset_fpga();
+    } else if (!strcmp(what, "mcu")) {
+        if (b) log_raw("-b only affects the FPGA: nothing done ('reset mcu' resets the MCU)\r\n");
+        else   game_reset_mcu();
+    } else {
+        log_raw("usage: reset [-b] [fpga | mcu]   (no argument: both; -b: the FPGA "
+                "through PROGRAM_B, it loads its design again)\r\n");
+    }
 }
 
 static void cmd_loading(int argc, char **argv)
@@ -960,7 +978,7 @@ static const cli_cmd_t cmds[] = {
     { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
     { "button",  cmd_button,   "button [watch]      the board button now / watch it for 15 s" },
     { "sd",      cmd_sd,       "sd [ls [<folder>] | del <file> | del <folder>/]  SD card status / list / delete" },
-    { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
+    { "reset",   cmd_reset,    "reset [-b] [fpga|mcu]  reset both / the FPGA (reset pin; -b: PROGRAM_B, reloads its design) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },

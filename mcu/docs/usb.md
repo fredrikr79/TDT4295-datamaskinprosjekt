@@ -156,7 +156,7 @@ share one key state; one keyboard plus one mouse is the expected setup.
   host.
 - `usb_backend_poll()`, every loop: `usb_port_poll()` (VBUS), `tuh_task()` (the
   callbacks below run in here), then the control requests, the watchdog, the
-  report safety net and the hub log, in that order.
+  dead-device check, the report safety net and the hub log, in that order.
 
 **A device appears** (`tuh_hid_mount_cb`, per HID interface):
 
@@ -199,6 +199,19 @@ breaks:
   aborted and asked again, logged, and the first two times `usb_debug_dump()`
   logs the state. `-DUSB_KBD_WATCHDOG=0` only logs it, to look at the stuck
   state in the debugger.
+- **Dead devices: power cycle.** Sometimes the slow devices behind a hub get
+  no report through at all (every poll ends in NYET), restarting doesn't
+  help, and only a replug brings them back. A watched device (a keyboard with
+  the watchdog on, or a controller) silent for `USB_DEAD_MS` (3 s, so one
+  watchdog restart has been tried) gets VBUS turned off and on through
+  `usb_port_power_cycle()`. Everything on the port unplugs and enumerates
+  again, about 4 s without input. At most `USB_REPLUG_MAX` (3) times in a row;
+  a report from a watched device starts the count over, and after that it
+  gives up and logs it until a real replug. A mouse can't be watched (it's
+  silent while it isn't moved), but so far a stuck mouse has been stuck
+  together with the keyboard. Ports without a VBUS switch (the Nucleo, the
+  N6, which doesn't have the function: a weak stand-in returns false) only
+  log that it needs a replug by hand.
 - **`tuh_hid_report_failed_cb`:** a failed transfer (a glitch on a low-speed
   device behind a hub) isn't a report, so the next one is asked for here.
 - **`hid_keep_polling()`:** any device with no request outstanding gets one,
@@ -288,6 +301,8 @@ Everything TinyUSB doesn't do itself. CubeMX must **not** generate the USB init
   on, from start-up too. EN has no pull-down on the board, so it floats while
   the MCU is in reset or being flashed and VBUS may be half on; the second of
   off gives the hub and its devices a clean power-on reset afterwards.
+  `usb_port_power_cycle()` turns it off on request (the backend's dead-device
+  check); it comes on again the same way, after `VBUS_MIN_OFF_MS`.
 
 - **Attach detection** (`USB_USE_UCPD=1`, U595 only; `stm32u5.cmake` sets it
   from `HEXMCU_USB_USE_UCPD`, default 1): UCPD1 on PA15/PB15 shows Rp on both

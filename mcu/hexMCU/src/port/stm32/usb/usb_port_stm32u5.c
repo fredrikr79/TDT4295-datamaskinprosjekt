@@ -313,6 +313,23 @@ void usb_port_init(void)
 #endif
 }
 
+/* ---- power cycle: the "replug" usb_backend_tinyusb.c asks for ----------------
+ * VBUS off now; usb_port_poll() turns it on again once it has been off for
+ * VBUS_MIN_OFF_MS, as after any other off (if a device is still attached). */
+bool usb_port_power_cycle(void)
+{
+#if HAVE_VBUS_SWITCH
+    if (vb != VB_ON) return false;
+    vbus_set(false);
+    vb        = VB_OFF;
+    off_since = plat_millis();
+    LOG_WARN("VBUS off for %u ms: power-cycling the USB devices", (unsigned)VBUS_MIN_OFF_MS);
+    return true;
+#else
+    return false;
+#endif
+}
+
 /* ---- poll: VBUS state machine ----------------------------------------------
  *   OFF   -> ON     sink seen on CC for ATTACH_DEBOUNCE_MS (or no CC detection),
  *                   and VBUS has been off for VBUS_MIN_OFF_MS (start-up included)

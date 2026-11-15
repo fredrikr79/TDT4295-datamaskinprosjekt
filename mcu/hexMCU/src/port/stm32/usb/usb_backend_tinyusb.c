@@ -61,6 +61,8 @@ static struct {
     uint32_t          last_report;  /* plat_millis() of the last report                      */
     uint32_t          reports;      /* how many so far                                       */
     uint32_t          restarts;     /* how often the watchdog had to restart it              */
+    uint32_t          alive_at;     /* mount, Set Idle, or the last report: not moved by the
+                                       watchdog (last_report is), for the dead check          */
     enum { IDLE_NONE, IDLE_TO_SEND, IDLE_SENT, IDLE_ON, IDLE_REFUSED } idle;
     enum { PROTO_BOOT, PROTO_TO_SEND, PROTO_SENT, PROTO_REPORT } proto;  /* mice */
     enum { PAD_INIT_NONE, PAD_INIT_CALIB, PAD_INIT_CALIB_SENT,
@@ -89,7 +91,31 @@ static void hid_keep_polling(void);
 static void hid_control_poll(void);
 static void ds4_init_step(int i);
 static void kbd_watchdog(void);
+static void dead_check(void);
 void usb_debug_dump(void);
+
+/* ---- dead devices: power-cycle them ----------------------------------------------
+ * Sometimes the slow (low-speed) devices behind a hub never get a single
+ * report through: every poll ends in NYET, restarting the transfer doesn't
+ * help, and only a replug (the hub losing power) brings them back. So: a
+ * device that should report all the time (a keyboard with the watchdog on,
+ * a controller) that has had no report for USB_DEAD_MS, despite the
+ * watchdog, gets VBUS turned off and on (usb_port_power_cycle()). Every
+ * device on the port is unplugged and enumerated again: ~4 s without input.
+ * A mouse can't be checked (it's silent while it isn't moved), but the
+ * stuck ones seen so far were stuck together with the keyboard.
+ * At most USB_REPLUG_MAX times in a row; a report from any such device
+ * starts the count over. Then it gives up and says so, until a real replug. */
+#ifndef USB_DEAD_MS
+#define USB_DEAD_MS     3000u   /* two watchdog periods: one restart has been tried */
+#endif
+#ifndef USB_REPLUG_MAX
+#define USB_REPLUG_MAX  3u
+#endif
+static uint8_t replugs;         /* power cycles since a watched device last reported */
+
+/* Stand-in for ports without usb_port_power_cycle() (usb_port.h). */
+__attribute__((weak)) bool usb_port_power_cycle(void) { return false; }
 
 /* ---- TinyUSB fix: Get Hub Descriptor ------------------------------------------
  * TinyUSB's hub driver (hub.c, config_get_hub_descriptor) sends Get Hub
@@ -194,6 +220,7 @@ void usb_backend_poll(void)
     tuh_task();                 /* the callbacks below run from in here */
     hid_control_poll();
     kbd_watchdog();
+    dead_check();
     hid_keep_polling();
     hubs_poll();
 }
@@ -208,6 +235,7 @@ static void set_idle_done(tuh_xfer_t *xfer)
     if (xfer->result == XFER_RESULT_SUCCESS) {
         hid[i].idle = IDLE_ON;
         hid[i].last_report = plat_millis();   /* the watchdog's clock starts now */
+        hid[i].alive_at    = hid[i].last_report;
         LOG_INFO("hid %u.%u: repeats its report every %u ms (watchdog on)",
                  hid[i].addr, hid[i].inst, (unsigned)KBD_IDLE_MS);
     } else {
@@ -303,6 +331,46 @@ static void kbd_watchdog(void)
         tuh_hid_receive_abort(hid[i].addr, hid[i].inst);
 #endif
         hid[i].last_report = now;         /* give the new request a full period */
+    }
+}
+
+/* A watched device (see "dead devices" above) silent for USB_DEAD_MS: VBUS off and on. */
+static bool watched(int i)
+{
+    return hid[i].used && (hid[i].idle == IDLE_ON || hid[i].kind == USB_GAMEPAD);
+}
+
+static void dead_check(void)
+{
+    uint32_t now = plat_millis();
+    for (int i = 0; i < MAX_HID; i++) {
+        if (!watched(i) || now - hid[i].alive_at < USB_DEAD_MS) continue;
+
+        if (replugs >= USB_REPLUG_MAX) {
+            if (replugs == USB_REPLUG_MAX) {
+                replugs++;                      /* say it once */
+                LOG_ERR("hid %u.%u: still no reports after %u power cycles: giving up "
+                        "(unplug it and plug it in again)",
+                        hid[i].addr, hid[i].inst, (unsigned)USB_REPLUG_MAX);
+            }
+            return;
+        }
+        LOG_WARN("hid %u.%u: no report for %lu ms, the watchdog didn't help: "
+                 "power-cycling the USB port (%u of %u)",
+                 hid[i].addr, hid[i].inst, (unsigned long)(now - hid[i].alive_at),
+                 (unsigned)replugs + 1u, (unsigned)USB_REPLUG_MAX);
+        usb_debug_dump();                       /* the stuck state, for later */
+        if (!usb_port_power_cycle()) {
+            LOG_WARN("no VBUS switch here (or VBUS isn't on): can't power-cycle, "
+                     "replug it by hand");
+            replugs = USB_REPLUG_MAX + 1u;      /* don't ask again */
+            return;
+        }
+        replugs++;
+        /* the devices unmount once the hub loses power; until then, don't
+         * count them as dead again */
+        for (int k = 0; k < MAX_HID; k++) hid[k].alive_at = now;
+        return;
     }
 }
 
@@ -580,6 +648,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
     hid[slot].inst = instance;
     hid[slot].kind = kind;
     hid[slot].last_report = plat_millis();
+    hid[slot].alive_at    = hid[slot].last_report;
     hid[slot].idle = (kind == USB_KEYBOARD) ? IDLE_TO_SEND : IDLE_NONE;
     hid[slot].pad  = (uint8_t)pad;
     hid[slot].pad_init = (kind == USB_GAMEPAD) ? PAD_INIT_CALIB : PAD_INIT_NONE;
@@ -629,7 +698,12 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
     if (slot < 0) return;
 
     hid[slot].last_report = plat_millis();
+    hid[slot].alive_at    = hid[slot].last_report;
     hid[slot].reports++;
+    if (replugs && watched(slot)) {             /* it works again */
+        LOG_INFO("hid %u.%u: reports coming in again", dev_addr, instance);
+        replugs = 0;
+    }
 
     switch (hid[slot].kind) {
     case USB_KEYBOARD:

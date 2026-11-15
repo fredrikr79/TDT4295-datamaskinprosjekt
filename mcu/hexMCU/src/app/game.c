@@ -19,6 +19,7 @@
 #include "cli.h"
 #include "menu.h"
 #include "draw.h"
+#include "hud.h"
 
 /* tuning */
 #define FIRST_ROOM_X -3
@@ -145,15 +146,17 @@ static void r_go(run_state_t s)
 {
     if (s == run_state) return;
     LOG_INFO("%s -> %s", run_state_names[run_state], run_state_names[s]);
-    if (run_state == RS_DRAW) {         /* leaving drawing: the player is back */
+    if (run_state == RS_DRAW) {         /* leaving drawing: the player and HUD are back */
         draw_leave();
         player_show(true);
+        hud_visible(true);
     }
     run_state = s;
     if (s == RS_MENU) menu_open();
     else              menu_close();
-    if (s == RS_DRAW) {                 /* drawing: no player, no player controls */
+    if (s == RS_DRAW) {                 /* drawing: no player, no player controls, no HUD */
         player_show(false);
+        hud_visible(false);
         draw_enter();
     }
 }
@@ -268,12 +271,8 @@ static void pad_pointer(const input_t *in, int32_t *dx, int32_t *dy)
     frac_x %= 127;
     frac_y %= 127;
 }
-/* HUD: the cursor, a test sentence and a demo animation (sprite.h) */
+/* The cursor, shown in every mode. The in-game HUD is hud.c's. */
 static sprite_t     *cursor;
-static sprite_t     *title;
-static sprite_ani_t *spinner;       /* only if sprites/spinner.spr is on the card */
-static sprite_t     *health;
-static sprite_t     *health_inv;
 
 static int32_t cursor_w(void) { return sprite_img_w(assets.cursor); }
 static int32_t cursor_h(void) { return sprite_img_h(assets.cursor); }
@@ -350,35 +349,12 @@ static void sprites_setup(void)
     const fpga_info_t *scr = fpga_link_info();
     player_sprite_init(100, 100);   /* the player's picture, until it first moves */
 
-    /* test: a sentence centred near the top */
-    int32_t w = sprite_img_w(assets.title);
-    int32_t x = w < scr->width ? (scr->width - w) / 2 : 0;
-    title = sprite_new(assets.title, (int16_t)x, 16, true);
-
-    /* demo: an animation from the card, top-left, ticks 6: about 4 frames a second */
-    spinner = sprite_ani_file("sprites/spinner.spr", 6, 8, 8, true);
-
-    menu_init(scr->width, scr->height);    /* before the cursor: drawn under it */
+    /* before the cursor: drawn under it */
+    hud_init(scr->width, scr->height);     /* the bars, the test sentence, the animation */
+    menu_init(scr->width, scr->height);
     draw_init(scr->width, scr->height);
 
-    /* Health */
-    health = sprite_new(assets.health, scr->width-sprite_img_w(assets.health), scr->height - sprite_img_h(assets.health), true);
-    health_inv = sprite_new(assets.health_inv, scr->width-sprite_img_w(assets.health), scr->height - sprite_img_h(assets.health), true);
-    
     cursor = sprite_new(assets.cursor, 0, 0, true);
-}
-
-uint32_t count = 0;
-uint32_t bob_the_counter;
-void health_frame(uint32_t n) {
-    count += n;
-    count %= 25/25;
-    if(count == 0){
-        const fpga_info_t *scr = fpga_link_info();
-        bob_the_counter += 1;
-        bob_the_counter %= sprite_img_h(assets.health)/2;
-        sprite_move(health_inv, scr->width-sprite_img_w(assets.health), scr->height - sprite_img_h(assets.health)+bob_the_counter*2);
-    }
 }
 
 
@@ -420,6 +396,10 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
     }
 
     update_player(&player, cmd->rx, velocity_box);  /* moves its sprite too */
+#if !HUD_DEMO
+    health_bar_set(player.health * 100u / PLAYER_MAX_HEALTH);
+    fuel_bar_set(player.fly_meter * 100u / MAX_FLY_TIME);
+#endif
 }
 
 /* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
@@ -436,7 +416,7 @@ static void run_frame(uint32_t n)
 
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);   /* sprite_poll sends it */
     sprite_frame(n);            /* animations step */
-    health_frame(n);
+    hud_frame(n);               /* HUD_DEMO: the bars slide */
 }
 
 static void run_poll(void)

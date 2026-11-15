@@ -66,9 +66,12 @@ static struct {
     /* HUD, bottom right: "Paused" / "Running", on a panel each */
     sprite_t *sim_panel[2], *sim_text[2];   /* [0] paused, [1] running */
 
-    /* the brush outline, per size: top, bottom, left, right. In screen
-     * pixels around the cells the brush fills, so size 1 is a 4x4 frame. */
-    sprite_t *outline[DRAW_SIZES_MAX][4];
+    /* the brush outline, per size: top, bottom, left, right, two pieces
+     * each (see outline_at()). In screen pixels around the cells the brush
+     * fills, so size 1 is a 4x4 frame. */
+    sprite_t *outline[DRAW_SIZES_MAX][4][2];
+    uint16_t  outline_len[DRAW_SIZES_MAX];  /* pixels, one piece */
+    uint16_t  sw, sh;                       /* the screen, pixels */
 } d = { .mat = MAT_SAND, .cur_size = 2 };
 
 /* Every byte of a solid box is the same, so one buffer per material holds
@@ -92,6 +95,8 @@ void draw_init(uint16_t screen_w, uint16_t screen_h)
 {
     if (d.made) return;
     d.made = true;
+    d.sw = screen_w;
+    d.sh = screen_h;
     d.gw = (uint16_t)(screen_w / FPGA_SIM_SCALE);   /* = fpga_link_info()->sim_w */
     d.gh = (uint16_t)(screen_h / FPGA_SIM_SCALE);
     d.nsizes = draw_sizes(d.size);
@@ -137,16 +142,18 @@ void draw_init(uint16_t screen_w, uint16_t screen_h)
                                     (int16_t)(spy + PAD), false);
     }
 
-    /* outlines: two thin images per size, shared by the opposite sides.
-     * Even one cell is FPGA_SIM_SCALE pixels, so every size has a hole. */
+    /* outlines: per size, a line half the brush long (rounded up to whole
+     * cells), across and down, shared by all eight pieces. Two pieces
+     * overlapping make a side of any length from one piece to the whole
+     * brush, which is what a box cut by the screen's edge needs. */
     for (unsigned i = 0; i < d.nsizes; i++) {
-        uint16_t s = (uint16_t)fpga_cell_to_px(d.size[i]);      /* pixels */
-        sprite_img_t *h = sprite_img_solid(s, 1, COL_OUTLINE);
-        sprite_img_t *v = sprite_img_solid(1, (uint16_t)(s - 2u), COL_OUTLINE);
-        d.outline[i][0] = sprite_new(h, 0, 0, false);
-        d.outline[i][1] = sprite_new(h, 0, 0, false);
-        d.outline[i][2] = sprite_new(v, 0, 0, false);
-        d.outline[i][3] = sprite_new(v, 0, 0, false);
+        uint16_t len = (uint16_t)fpga_cell_to_px((d.size[i] + 1u) / 2u);   /* pixels */
+        sprite_img_t *across = sprite_img_solid(len, 1, COL_OUTLINE);
+        sprite_img_t *down   = sprite_img_solid(1, len, COL_OUTLINE);
+        d.outline_len[i] = len;
+        for (unsigned k = 0; k < 4; k++)
+            for (unsigned j = 0; j < 2; j++)
+                d.outline[i][k][j] = sprite_new(k < 2 ? across : down, 0, 0, false);
     }
     LOG_INFO("grid %ux%u cells, brush sizes 1 .. %u cells", d.gw, d.gh, d.size[d.nsizes - 1u]);
 }
@@ -162,31 +169,62 @@ static void hud_show(bool on)
     for (unsigned m = 0; m < MAT_COUNT; m++) sprite_show(d.mat_name[m], on && m == d.mat);
     for (unsigned i = 0; i < d.nsizes; i++) {
         sprite_show(d.size_name[i], on && i == d.cur_size);
-        for (unsigned k = 0; k < 4; k++) sprite_show(d.outline[i][k], false);
+        for (unsigned k = 0; k < 4; k++)
+            for (unsigned j = 0; j < 2; j++) sprite_show(d.outline[i][k][j], false);
     }
 }
 
-/* The brush's box in cells: size x size, centred on the cell under screen
- * pixel (px, py). Not cut to the grid yet. */
-static void brush_box(int32_t px, int32_t py, int32_t *x0, int32_t *y0)
+/* The brush's box in cells, x0 <= x < x1, y0 <= y < y1: size x size,
+ * centred on the cell under screen pixel (px, py), cut to the grid. So
+ * near an edge it is smaller: what place() writes and the outline shows.
+ * false: nothing of it is on the grid. */
+static bool brush_box(int32_t px, int32_t py,
+                      int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
 {
     int32_t s = d.size[d.cur_size];
     *x0 = fpga_px_to_cell(px) - s / 2;
     *y0 = fpga_px_to_cell(py) - s / 2;
+    *x1 = *x0 + s;
+    *y1 = *y0 + s;
+    if (*x0 < 0) *x0 = 0;
+    if (*y0 < 0) *y0 = 0;
+    if (*x1 > d.gw) *x1 = d.gw;
+    if (*y1 > d.gh) *y1 = d.gh;
+    return *x1 > *x0 && *y1 > *y0;
 }
 
-/* The outline of the current size around the box that would be placed:
- * cell (cx0, cy0) is its top-left, drawn in screen pixels. */
-static void outline_at(int32_t cx0, int32_t cy0)
+static int32_t min32(int32_t a, int32_t b) { return a < b ? a : b; }
+
+/* The outline around the brush's box (cells, cut to the grid), in screen
+ * pixels. Every piece is placed wholly on the screen: the FPGA mustn't get
+ * a sprite that hangs off it (it may wrap around or write past the HUD
+ * layer). A side is two pieces of one length, one from each end, so they
+ * overlap in the middle; that gives any length from one piece up to two.
+ * The box cut by an edge is never shorter than one piece (the cursor's
+ * cell is on the grid, so at least half the brush is), only if the grid
+ * is smaller than the brush; then there is no outline. */
+static void outline_at(bool any, int32_t cx0, int32_t cy0, int32_t cx1, int32_t cy1)
 {
-    int32_t x = fpga_cell_to_px(cx0), y = fpga_cell_to_px(cy0);
+    int32_t x0 = fpga_cell_to_px(cx0), y0 = fpga_cell_to_px(cy0);
+    int32_t x1 = min32(fpga_cell_to_px(cx1), d.sw);     /* past the box, pixels */
+    int32_t y1 = min32(fpga_cell_to_px(cy1), d.sh);
     for (unsigned i = 0; i < d.nsizes; i++) {
-        int32_t s = fpga_cell_to_px(d.size[i]);             /* pixels */
-        bool on = d.active && i == d.cur_size;
-        sprite_set(d.outline[i][0], (int16_t)x, (int16_t)y, on);
-        sprite_set(d.outline[i][1], (int16_t)x, (int16_t)(y + s - 1), on);
-        sprite_set(d.outline[i][2], (int16_t)x, (int16_t)(y + 1), on);
-        sprite_set(d.outline[i][3], (int16_t)(x + s - 1), (int16_t)(y + 1), on);
+        int32_t l = d.outline_len[i];
+        bool on = d.active && any && i == d.cur_size && x1 - x0 >= l && y1 - y0 >= l;
+        if (!on) {
+            for (unsigned k = 0; k < 4; k++)
+                for (unsigned j = 0; j < 2; j++) sprite_show(d.outline[i][k][j], false);
+            continue;
+        }
+        const int16_t at[4][2][2] = {                   /* [side][piece] = { x, y } */
+            { { x0,     y0     }, { x1 - l, y0     } },     /* top    */
+            { { x0,     y1 - 1 }, { x1 - l, y1 - 1 } },     /* bottom */
+            { { x0,     y0     }, { x0,     y1 - l } },     /* left   */
+            { { x1 - 1, y0     }, { x1 - 1, y1 - l } },     /* right  */
+        };
+        for (unsigned k = 0; k < 4; k++)
+            for (unsigned j = 0; j < 2; j++)
+                sprite_set(d.outline[i][k][j], at[k][j][0], at[k][j][1], true);
     }
 }
 
@@ -225,14 +263,8 @@ static void placed(const fpga_cmd_t *c, fpga_err_t err)
 static void place(uint8_t m, int32_t px, int32_t py)
 {
     if (d.in_flight >= MAX_IN_FLIGHT) return;       /* the queue is busy: next frame */
-    int32_t s = d.size[d.cur_size], x0, y0;
-    brush_box(px, py, &x0, &y0);
-    int32_t x1 = x0 + s, y1 = y0 + s;
-    if (x0 < 0) x0 = 0;
-    if (y0 < 0) y0 = 0;
-    if (x1 > d.gw) x1 = d.gw;
-    if (y1 > d.gh) y1 = d.gh;
-    if (x1 <= x0 || y1 <= y0) return;
+    int32_t x0, y0, x1, y1;
+    if (!brush_box(px, py, &x0, &y0, &x1, &y1)) return;
 
     uint16_t w = (uint16_t)(x1 - x0), h = (uint16_t)(y1 - y0);
     fpga_cmd_t c = fpga_cmd_write_box(fpga_box((uint16_t)x0, (uint16_t)y0, w, h), fill[m],
@@ -298,10 +330,11 @@ draw_event_t draw_frame(const input_t *in, int32_t cx, int32_t cy)
     if (any_pad_pressed(in, PAD_DOWN)) grow--;
     if (grow) set_size((int)d.cur_size + grow);
 
-    /* the outline follows the cursor, jumping a whole cell at a time */
-    int32_t bx, by;
-    brush_box(cx, cy, &bx, &by);
-    outline_at(bx, by);
+    /* the outline follows the cursor, jumping a whole cell at a time, and
+     * shrinks with the box at the screen's edges */
+    int32_t bx0, by0, bx1, by1;
+    bool any = brush_box(cx, cy, &bx0, &by0, &bx1, &by1);
+    outline_at(any, bx0, by0, bx1, by1);
 
     /* place / erase while held */
     bool erase = mouse_held(in, MOUSE_RIGHT) || any_pad_held(in, PAD_EAST | PAD_L2);

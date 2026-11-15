@@ -277,12 +277,17 @@ Everything TinyUSB doesn't do itself. CubeMX must **not** generate the USB init
   state machine in `usb_port_poll()`:
 
   ```
-  OFF ──(device attached, 150 ms debounce)──► ON ──(detached, 15 ms)──► OFF
+  OFF ──(device attached, 150 ms debounce, and off ≥ 1 s)──► ON ──(detached, 15 ms)──► OFF
                                               │
                                      /FLT low (overcurrent)
                                               ▼
                                             FAULT ──(1 s)──► OFF
   ```
+
+  VBUS always stays off for at least `VBUS_MIN_OFF_MS` (1 s) before it comes
+  on, from start-up too. EN has no pull-down on the board, so it floats while
+  the MCU is in reset or being flashed and VBUS may be half on; the second of
+  off gives the hub and its devices a clean power-on reset afterwards.
 
 - **Attach detection** (`USB_USE_UCPD=1`, U595 only; `stm32u5.cmake` sets it
   from `HEXMCU_USB_USE_UCPD`, default 1): UCPD1 on PA15/PB15 shows Rp on both

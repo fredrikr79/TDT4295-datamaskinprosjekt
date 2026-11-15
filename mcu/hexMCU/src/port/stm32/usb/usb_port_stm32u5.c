@@ -116,6 +116,17 @@
 #define DETACH_DEBOUNCE_MS  15u     /* USB-C tPDDebounce: 10-20 ms   */
 #define FAULT_RETRY_MS      1000u   /* VBUS off this long after overcurrent */
 
+/* VBUS stays off at least this long every time it goes off, start-up
+ * included, before it may come on again. EN has no pull-down on our board,
+ * so it floats while the MCU is in reset or being flashed, and VBUS may be
+ * half on then. Without this, VBUS would come on ~180 ms after start: too
+ * short for the hub's 5 V to drain, so the hub (and a mouse behind it) may
+ * not get a clean power-on reset and come up confused. Measure how long
+ * VBUS takes to fall with a scope, and set this above that. */
+#ifndef VBUS_MIN_OFF_MS
+#define VBUS_MIN_OFF_MS     1000u
+#endif
+
 /* ---- interrupt -------------------------------------------------------------
  * The startup file's handlers are weak aliases of Default_Handler, so this
  * one replaces it. TinyUSB enables the IRQ in the NVIC itself (in tusb_init). */
@@ -201,6 +212,7 @@ static enum { VB_OFF, VB_ON, VB_FAULT } vb;
 static bool     cc_seen;        /* last sink_attached() reading */
 static uint32_t cc_since;       /* ...and since when            */
 static uint32_t fault_at;
+static uint32_t off_since;      /* VBUS went off (or start-up): VBUS_MIN_OFF_MS */
 #endif
 
 /* ---- HS PHY clock ------------------------------------------------------------
@@ -292,15 +304,18 @@ void usb_port_init(void)
     HAL_GPIO_Init(USB_VBUS_FLT_GPIO_Port, &g);
 
     vbus_set(false);
-    vb       = VB_OFF;
-    cc_seen  = sink_attached();
-    cc_since = plat_millis();
-    LOG_INFO("VBUS switch, %s", USB_USE_UCPD ? "on when a device attaches" : "always on");
+    vb        = VB_OFF;
+    cc_seen   = sink_attached();
+    cc_since  = plat_millis();
+    off_since = cc_since;       /* off from start-up: the first turn-on waits too */
+    LOG_INFO("VBUS switch, %s (off for at least %u ms first)",
+             USB_USE_UCPD ? "on when a device attaches" : "always on", (unsigned)VBUS_MIN_OFF_MS);
 #endif
 }
 
 /* ---- poll: VBUS state machine ----------------------------------------------
- *   OFF   -> ON     sink seen on CC for ATTACH_DEBOUNCE_MS (or no CC detection)
+ *   OFF   -> ON     sink seen on CC for ATTACH_DEBOUNCE_MS (or no CC detection),
+ *                   and VBUS has been off for VBUS_MIN_OFF_MS (start-up included)
  *   ON    -> OFF    CC open for DETACH_DEBOUNCE_MS
  *   ON    -> FAULT  /FLT low: overcurrent or overheating
  *   FAULT -> OFF    after FAULT_RETRY_MS */
@@ -311,8 +326,9 @@ void usb_port_poll(void)
 
     if (vb == VB_ON && vbus_fault()) {
         vbus_set(false);        /* also clears /FLT */
-        vb       = VB_FAULT;
-        fault_at = now;
+        vb        = VB_FAULT;
+        fault_at  = now;
+        off_since = now;
         LOG_WARN("VBUS overcurrent: off for %u ms", (unsigned)FAULT_RETRY_MS);
         return;
     }
@@ -328,13 +344,15 @@ void usb_port_poll(void)
     }
     uint32_t stable = now - cc_since;
 
-    if (vb == VB_OFF && sink && stable >= ATTACH_DEBOUNCE_MS) {
+    if (vb == VB_OFF && sink && stable >= ATTACH_DEBOUNCE_MS &&
+        now - off_since >= VBUS_MIN_OFF_MS) {
         vbus_set(true);
         vb = VB_ON;
         LOG_INFO("VBUS on");
     } else if (vb == VB_ON && !sink && stable >= DETACH_DEBOUNCE_MS) {
         vbus_set(false);
-        vb = VB_OFF;
+        vb        = VB_OFF;
+        off_since = now;
         LOG_INFO("device removed, VBUS off");
     }
 #endif

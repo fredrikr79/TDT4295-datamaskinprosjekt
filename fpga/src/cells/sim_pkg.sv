@@ -116,6 +116,44 @@ package sim_pkg;
     return p;
   endfunction
 
+  // One accessor per material property. Use these in synthesizable code instead of
+  // props(m).<field>: the result is held in a variable first, then the field is read.
+  function automatic logic mat_falls(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.falls;
+  endfunction
+
+  function automatic logic mat_spreads(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.spreads;
+  endfunction
+
+  function automatic logic mat_solid(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.solid;
+  endfunction
+
+  function automatic logic mat_displaceable(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.displaceable;
+  endfunction
+
+  function automatic logic [3:0] mat_density(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return 4'(p.density);
+  endfunction
+
+  function automatic logic [3:0] mat_blast_resistance(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.blast_resistance;
+  endfunction
+
   // Credits to https://nullprogram.com/blog/2018/07/31/
   function automatic logic [31:0] lowbias32(input logic [31:0] seed);
     logic [31:0] random_value;

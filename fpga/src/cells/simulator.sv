@@ -44,6 +44,17 @@ module simulator #(
   logic [BaseW-1:0] base_q = '0;
   logic valid_q = 1'b0;  // stage 2 has a pixel to process
   logic last_q = 1'b0;  // ...and it is the last pixel of the row
+
+  // [PIPELINE 2] Second register stage. The explosion and GoL rules only look at the
+  // registered neighbourhood, never at output_buffers, so they are computed here and
+  // registered. Gravity, fluid and the writes run one cycle later from the *_r copies.
+  // Results are unchanged; a row takes Stride+2 cycles.
+  sim_pkg::neighbourhood_t nb_r[Cores];
+  logic [7:0] explosion_r[Cores];
+  logic [7:0] gol_r[Cores];
+  logic [BaseW-1:0] base_r = '0;
+  logic valid_r = 1'b0;
+  logic last_r = 1'b0;
  
   // [CHANGED] was "int gol_refresh_counter = 1" + "gol_refresh_counter % GolRefreshDelay == 0"
   // (a 32-bit modulo). Now a 7-bit counter wrapping at GolRefreshDelay. Starts at 1 like the
@@ -112,74 +123,68 @@ module simulator #(
       end
     end
  
-    // ---- [PIPELINE] Stage 2 below works on base_q / nb_q / valid_q ----
- 
-    // [NEW] step the per-core noise LFSRs
-    // [PIPELINE] stepped with stage 2 (was is_row_running)
+    // ---- [PIPELINE 2] Stage 2: explosion and GoL rules from the registered neighbourhood ----
+    valid_r <= valid_q;
+    last_r  <= last_q;
+    base_r  <= base_q;
+    for (int core = 0; core < Cores; core++) begin
+      nb_r[core] <= nb_q[core];
+      // The two random decisions come from this core's LFSR (each ~1/4 chance).
+      explosion_r[core] <= sim_rules::explosion_rules(
+          nb_q[core],
+          noise_lfsr[core][3] & noise_lfsr[core][11],
+          noise_lfsr[core][6] & noise_lfsr[core][14]
+      );
+      gol_r[core] <= sim_rules::gol_rules(
+          nb_q[core], simulation_counter, gol_refresh, noise_lfsr[core][0]
+      );
+    end
+
+    // Step the per-core noise LFSRs once per pixel.
     if (valid_q)
       for (int c = 0; c < Cores; c++)
         noise_lfsr[c] <= {
           noise_lfsr[c][14:0],
           noise_lfsr[c][15] ^ noise_lfsr[c][13] ^ noise_lfsr[c][12] ^ noise_lfsr[c][10]
         };
+
+    // ---- Stage 3 below works on base_r / nb_r / valid_r ----
+ 
  
     for (int core = 0; core < Cores; core++) begin : process_lane
       // [CHANGED] column built as 8-bit col_t from a constant (core*Stride) + 6-bit base,
       // instead of int arithmetic on a 32-bit simulation_base.
-      // [PIPELINE] uses base_q (stage 2) instead of simulation_base
+      // [PIPELINE] uses base_r (stage 2) instead of simulation_base
       // [TIMING] the absolute column is no longer needed in stage 2: the rules get a
       // pre-selected 3-pixel slice and edge flags instead of indexing a whole row.
-      automatic logic at_left_edge = (core == 0) && (base_q == '0);
-      automatic logic at_right_edge = (core == Cores - 1) && (base_q == BaseW'(Stride - 1));
+      automatic logic at_left_edge = (core == 0) && (base_r == '0);
+      automatic logic at_right_edge = (core == Cores - 1) && (base_r == BaseW'(Stride - 1));
       // [CHANGED] was setup_neighbourhood(current_pixel_column); now takes the core number
       // and reads from that core's window (see setup_neighbourhood below).
       // [PIPELINE] registered neighbourhood from stage 1 (was setup_neighbourhood(core) here)
-      automatic sim_pkg::neighbourhood_t neighbourhood = nb_q[core];
+      automatic sim_pkg::neighbourhood_t neighbourhood = nb_r[core];
       // [REMOVED] left_pixel_bit_column / right_pixel_bit_column (unused)
  
-      // [TIMING] was masked_output_buffers (a full-width row indexed by the column).
-      // Now: the left/centre/right pixels of each output buffer are picked with one 3-pixel
-      // slice on base_q (same mux as setup_neighbourhood) and placed at pixels 0/1/2 of a
-      // local buffer. The rules then index it with constants, so there is no second
-      // index decode behind base_q. sim_rules only reads columns -1/0/+1 (checked).
-      automatic sim_pkg::row_buffer_t local_output_buffers[2] = '{
-          sim_pkg::row_buffer_t'(out_slice(output_buffers[0], core)),
-          sim_pkg::row_buffer_t'(out_slice(output_buffers[1], core))
-      };
+      // [SYNTH FIX 2] The left/centre/right pixels of each output buffer around this pixel,
+      // as plain 24-bit values {right, centre, left}. Was an unpacked array local passed to
+      // the rules by `ref`; synthesis did not build that the way simulation runs it.
+      automatic logic [3*Bpp-1:0] out_upper = out_slice(output_buffers[1], core);
+      automatic logic [3*Bpp-1:0] out_lower = out_slice(output_buffers[0], core);
  
       // [REMOVED] noise = sim_pkg::lowbias32(lfsr_gol ^ current_pixel_bit_column)
  
       // [CHANGED] row index passed as int'(narrow row_t)
-      // [TIMING] the two random decisions come from this core's LFSR (each ~1/4 chance)
-      // instead of a three-multiply hash of column/row/frame.
-      // NOTE: the explosion spread pattern is still random but not bit-identical to before.
-      automatic logic [7:0] explosion_update = sim_rules::explosion_rules(
-          neighbourhood,
-          noise_lfsr[core][3] & noise_lfsr[core][11],
-          noise_lfsr[core][6] & noise_lfsr[core][14]
-      );
-      // [CHANGED] refresh flag is gol_refresh (was % GolRefreshDelay), noise is the
-      // per-core LFSR bit (was lowbias32 noise[0])
-      automatic logic [7:0] gol_update = sim_rules::gol_rules(
-          neighbourhood, simulation_counter, gol_refresh, noise_lfsr[core][0]
-      );
+      // [PIPELINE 2] rule results registered in stage 2
+      automatic logic [7:0] explosion_update = explosion_r[core];
+      automatic logic [7:0] gol_update = gol_r[core];
  
       automatic sim_pkg::gravity_movement_t gravity_movement = sim_pkg::DownNone;
       automatic sim_pkg::fluid_movement_t fluid_movement = 'b0000;
  
       if (!is_sending_row && !is_unmatched_boundry_row) begin
-        // [TIMING] local 3-pixel buffers; centre pixel is pixel 1 (bit column Bpp)
-        gravity_movement = sim_rules::gravity_rules(local_output_buffers, neighbourhood, lfsr[0],
-                                                    Bpp, simulation_counter);
+        gravity_movement = sim_rules::gravity_rules(out_upper, out_lower, neighbourhood, lfsr[0]);
         fluid_movement = sim_rules::fluid_rules(
-          local_output_buffers,
-          neighbourhood,
-          lfsr[0],
-          1,
-          simulation_counter,
-          is_sending_row,
-          at_left_edge,
-          at_right_edge
+          out_upper, out_lower, neighbourhood, lfsr[0], is_sending_row, at_left_edge, at_right_edge
         );
       end
  
@@ -187,8 +192,8 @@ module simulator #(
       // [CHANGED] "if (!is_row_running) continue;" -> "if (is_row_running) begin ... end"
       // [CHANGED] direct output_buffers[..][current_pixel_bit_column +: 8] <= ... writes now go
       // through write_px(), and the movement tasks take the core number instead of the column.
-      // [PIPELINE] gated by valid_q (stage 2) instead of is_row_running
-      if (valid_q) begin
+      // [PIPELINE] gated by valid_r (stage 2) instead of is_row_running
+      if (valid_r) begin
         if (explosion_update != 8'hFF) write_px(is_sending_row, core, 0, explosion_update);
         else if (gol_update != 8'hFF) write_px(is_sending_row, core, 0, gol_update);
         else if (gravity_movement != sim_pkg::DownNone)
@@ -202,7 +207,7 @@ module simulator #(
     // [PIPELINE] end-of-row work now happens when stage 2 finishes the last pixel.
     // simulation_base / is_row_running are advanced by stage 1 above.
     begin
-      if (valid_q && last_q) begin
+      if (valid_r && last_r) begin
         pulse_row_done  <= 1'b1;
  
         if (!is_sending_row || is_unmatched_boundry_row) begin
@@ -241,10 +246,10 @@ module simulator #(
   endfunction
  
   // [TIMING] replaces mask_to_core. Left/centre/right pixels of `row` around this core's
-  // stage-2 pixel (base_q), as one 24-bit slice: {right, centre, left}.
+  // stage-2 pixel (base_r), as one 24-bit slice: {right, centre, left}.
   function automatic logic [3*Bpp-1:0] out_slice(input sim_pkg::row_buffer_t row, input int core);
     window_t w = window(row, core);
-    return w[base_q*Bpp+:3*Bpp];
+    return w[base_r*Bpp+:3*Bpp];
   endfunction
  
   // [CHANGED] Rewritten. Was: setup_neighbourhood(int column), nine separate
@@ -279,8 +284,8 @@ module simulator #(
     for (int p = 0; p < Stride; p++) begin
       int c;
       c = core * Stride + p + offset;
-      // [PIPELINE] compares base_q (stage 2) instead of simulation_base
-      if (base_q == BaseW'(p) && c >= 0 && c < Width)
+      // [PIPELINE] compares base_r (stage 2) instead of simulation_base
+      if (base_r == BaseW'(p) && c >= 0 && c < Width)
         output_buffers[buf_sel][c*Bpp+:Bpp] <= value;
     end
   endtask

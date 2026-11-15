@@ -33,6 +33,7 @@ module memory #(
   typedef logic [ClientIdBits-1:0] client_id_t;
 
   logic initializer_finished, controller_busy, controller_data_on_cable;
+  logic controller_data_on_cable_comb;  // [STROBE] original strobe, initializer only
   logic [7:0] controller_read_data, initializer_write_data, controller_write_data;
   memory_pkg::transaction_e controller_next_transaction, initializer_next_transaction;
   memory_pkg::address_t controller_address, initializer_address;
@@ -149,6 +150,7 @@ module memory #(
       .busy(controller_busy),
       .run_clock(run_clock),
       .data_on_cable(controller_data_on_cable),
+      .data_on_cable_comb(controller_data_on_cable_comb),
       .read_data(controller_read_data),
       .reset_n,
       .dq,
@@ -162,7 +164,7 @@ module memory #(
       .reset,
       .enable,
       .controller_busy,
-      .controller_data_on_cable,
+      .controller_data_on_cable(controller_data_on_cable_comb),  // [STROBE]
       .finished(initializer_finished),
       .controller_toggle(initializer_toggle),
       .next_transaction(initializer_next_transaction),

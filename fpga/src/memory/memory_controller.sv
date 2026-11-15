@@ -14,6 +14,8 @@ module memory_controller (
     // Info to fpga
     output logic busy,
     data_on_cable,
+    // [STROBE] the original combinational strobe, for the initializer only (two loads)
+    output logic data_on_cable_comb,
     output logic [7:0] read_data,
     output logic run_clock,
 
@@ -47,12 +49,18 @@ module memory_controller (
   assign reset_n = ~reset;
 
   memory_pkg::state_e current_state, previous_state;
+  memory_pkg::message_length_t bytes_this_state;  // moved up: used by the strobe logic
   assign busy = current_state != memory_pkg::IDLE;
 
   // Ensure samplig happens @ negedge
   logic [7:0] delayed_dq;
   always @(posedge clk) delayed_dq <= dq_in;
-  always @(negedge clk) read_data <= delayed_dq;
+  // [STROBE] read_data used to be the falling-edge register itself, which gave every
+  // client only half a cycle to use it. It is now re-registered on the rising edge, and
+  // the read strobe is delayed by the same one cycle so the two stay aligned.
+  logic [7:0] read_data_n;
+  always @(negedge clk) read_data_n <= delayed_dq;
+  always_ff @(posedge clk) read_data <= read_data_n;
 
   // Keep track of clk where reading occured
   logic [7:0] read_alignment_buff = '0;
@@ -61,11 +69,40 @@ module memory_controller (
 
   // Delay reads by ReadDataDelay cycles.
   // This way data_on_cable is only issued when the data is actually present.
-  assign data_on_cable =
+  assign data_on_cable_comb =
     read_alignment_buff[memory_pkg::ReadDataDelay - 1] ||
     current_state == memory_pkg::WRITING;
 
-  memory_pkg::message_length_t bytes_this_state;
+  // [STROBE] Client strobe, driven from rising-edge registers so the thousands of row-buffer
+  // and shift-register enables it fans out to get a full clock cycle (they had half).
+  //
+  // Read:  the old strobe re-registered, one cycle later, together with read_data above.
+  // Write: must arrive in the SAME cycles as before, because the client has to present the
+  //        next byte before the controller's next falling edge. So it is started one rising
+  //        edge ahead (on the last latency tick) and counted out for `length` cycles.
+  logic rd_strobe_q;
+  memory_pkg::message_length_t wr_left;
+  logic wr_start;
+  // True on the rising edge just before the falling edge that enters WRITING. Uses the same
+  // latency test as mem_txn_write, looking one tick ahead of the counter.
+  assign wr_start = (current_state == memory_pkg::WAITING_ON_LATENCY)
+      && (current_transaction == memory_pkg::WRITE)
+      && (wr_left == '0)
+      && memory_pkg::waiting_is_finished(bytes_this_state + 1'b1, double_latency);
+
+  always_ff @(posedge clk) begin
+    if (reset) begin
+      rd_strobe_q <= 1'b0;
+      wr_left <= '0;
+    end else begin
+      rd_strobe_q <= read_alignment_buff[memory_pkg::ReadDataDelay - 1];
+      if (wr_start) wr_left <= current_length;
+      else if (wr_left != '0) wr_left <= wr_left - 1'b1;
+    end
+  end
+
+  assign data_on_cable = rd_strobe_q || (wr_left != '0);
+
 
   always_comb begin
     case (current_state)

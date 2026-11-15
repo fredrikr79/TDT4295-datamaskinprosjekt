@@ -138,7 +138,7 @@ always_ff @(posedge clk) begin
             end
             EXECUTE: begin
                 sprite_req_body <= {
-                    1'b1,
+                    param_active,
                     param_id,
                     param_mem_id,
                     param_x,

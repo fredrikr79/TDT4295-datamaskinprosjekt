@@ -1,108 +1,78 @@
 package sim_rules;
 
-  // [TIMING] was (stencil, x, row_index, counter) with a hash built from three chained 32-bit
-  // multiplies. That hash sat between base_q and output_buffers in the simulator and was the
-  // long path. The two random decisions it produced are now passed in as single bits.
-  //   can_move_free : ~1/4 chance, was temporal_noise[7:0] < 64
-  //   diagonal_cheap: ~1/4 chance, was pos_noise[7:0] < 64
+  // [SYNTH FIX 3] Material properties are read through sim_pkg::mat_<property>(material)
+  // instead of sim_pkg::props(material).<property>. Selecting a field straight off a function
+  // call result was synthesized with undriven fields (Synth 8-3848), so "falls", "spreads",
+  // "displaceable" and "solid" all read as 0 in hardware and nothing moved.
+
+  // [TIMING 2] Explosion rule rewritten for speed. Same result as before, but:
+  //  - 6-bit signed arithmetic instead of 32-bit int (every compare was a 32-bit carry chain)
+  //  - the eight neighbour candidates are computed side by side and reduced with a max tree,
+  //    instead of eight compare-and-update steps one after another.
+  // The old form was ~38 ns of logic between nb_q and output_buffers on a 10 ns clock.
+  //   can_move_free : ~1/4 chance, makes diagonal steps lossless
+  //   diagonal_cheap: ~1/4 chance, diagonal cost 2 instead of 3
+  typedef logic signed [5:0] force_t;  // range needed: -6 .. 15
+
+  // Strength a neighbour hands to this cell; 0 (no effect) if it is not an explosion.
+  function automatic force_t explo_candidate(input logic [7:0] neighbour, input logic [1:0] cost,
+                                             input logic [3:0] resistance);
+    force_t strength;
+    strength = force_t'({2'b00, neighbour[3:0]}) - force_t'({4'b0000, cost})
+             - force_t'({2'b00, resistance});
+    return (neighbour[7:4] == sim_pkg::MatExplo) ? strength : 6'sd0;  // single return
+  endfunction
+
+  function automatic force_t force_max2(input force_t a, input force_t b);
+    return (a > b) ? a : b;
+  endfunction
+
   function automatic logic [7:0] explosion_rules(
       input sim_pkg::neighbourhood_t stencil, input logic can_move_free,
       input logic diagonal_cheap);
 
-    int decayed_center;
+    logic [3:0] blast_resistance = sim_pkg::mat_blast_resistance(stencil.center[7:4]);
+    logic center_is_explo = (stencil.center[7:4] == sim_pkg::MatExplo);
+    logic [1:0] diagonal_cost = can_move_free ? 2'd0 : (diagonal_cheap ? 2'd2 : 2'd3);
 
-    int center = stencil.center[7:4] == sim_pkg::MatExplo ? int'(stencil.center[3:0]) : 0;
+    // Straight neighbours always cost 2; diagonals cost diagonal_cost.
+    force_t c_top = explo_candidate(stencil.top, 2'd2, blast_resistance);
+    force_t c_left = explo_candidate(stencil.left, 2'd2, blast_resistance);
+    force_t c_right = explo_candidate(stencil.right, 2'd2, blast_resistance);
+    force_t c_bottom = explo_candidate(stencil.bottom, 2'd2, blast_resistance);
+    force_t c_tl = explo_candidate(stencil.topLeft, diagonal_cost, blast_resistance);
+    force_t c_tr = explo_candidate(stencil.topRight, diagonal_cost, blast_resistance);
+    force_t c_bl = explo_candidate(stencil.bottomLeft, diagonal_cost, blast_resistance);
+    force_t c_br = explo_candidate(stencil.bottomRight, diagonal_cost, blast_resistance);
 
-    int diagonal_cost;
-    int grid_cost;
-    int proposed_val;
+    // Own strength decays by one each pass.
+    force_t c_center = (center_is_explo && stencil.center[3:0] != 4'd0)
+        ? force_t'({2'b00, stencil.center[3:0]}) - 6'sd1 : 6'sd0;
 
-    logic is_exploding;
-    int full_force;
-    int force_max = 32'd0;
-    logic [3:0] force_strength = 4'd0;
-    logic [3:0] blast_resistance = sim_pkg::props(stencil.center[7:4]).blast_resistance;
+    // Max tree, three levels deep plus the centre.
+    force_t m_a = force_max2(force_max2(c_top, c_left), force_max2(c_right, c_bottom));
+    force_t m_b = force_max2(force_max2(c_tl, c_tr), force_max2(c_bl, c_br));
+    force_t full_force = force_max2(force_max2(m_a, m_b), c_center);
 
-
-    diagonal_cost = can_move_free ? 0 : (diagonal_cheap ? 2 : 3);
-
-    grid_cost = can_move_free ? 0 : 2;
-
-    // Treat neighbourhood propegation differently to mimic a real explosion
-    if (stencil.top[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.top[3:0]) - 2 - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-    if (stencil.left[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.left[3:0]) - 2 - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-    if (stencil.right[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.right[3:0]) - 2 - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-    if (stencil.bottom[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.bottom[3:0]) - 2 - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-
-    if (stencil.topLeft[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.topLeft[3:0]) - diagonal_cost - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-    if (stencil.topRight[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.topRight[3:0]) - diagonal_cost - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-    if (stencil.bottomLeft[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.bottomLeft[3:0]) - diagonal_cost - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-    if (stencil.bottomRight[7:4] == sim_pkg::MatExplo) begin
-      proposed_val = int'(stencil.bottomRight[3:0]) - diagonal_cost - int'(blast_resistance);
-      if (proposed_val > force_max) begin
-        force_max = proposed_val;
-      end
-    end
-
-    decayed_center = center > 0 ? center - 1 : 0;
-
-    full_force = force_max > decayed_center ? force_max : decayed_center;
-
-    is_exploding =
+    logic is_exploding =
+        center_is_explo ||
         stencil.topLeft[7:4]     == sim_pkg::MatExplo ||
         stencil.top[7:4]         == sim_pkg::MatExplo ||
         stencil.topRight[7:4]    == sim_pkg::MatExplo ||
         stencil.left[7:4]        == sim_pkg::MatExplo ||
-        stencil.center[7:4]      == sim_pkg::MatExplo ||
         stencil.right[7:4]       == sim_pkg::MatExplo ||
         stencil.bottomLeft[7:4]  == sim_pkg::MatExplo ||
         stencil.bottom[7:4]      == sim_pkg::MatExplo ||
         stencil.bottomRight[7:4] == sim_pkg::MatExplo;
 
-    if (is_exploding) begin
-      if (full_force > 0) begin
-        force_strength = 4'(full_force);
-        return {sim_pkg::MatExplo, force_strength};
-      end else if (stencil.center[7:4] == sim_pkg::MatExplo) begin
-        return {sim_pkg::MatAir, 4'd0};
-      end
-    end
-    return 8'hFF;
+    // [SYNTH FIX] One result variable and one return. The earlier form returned from inside
+    // nested ifs and fell through to a final return; the synthesized netlist did not match
+    // simulation for that pattern (every non-exploding cell came out as air).
+    logic [7:0] result;
+    result = 8'hFF;  // no change
+    if (is_exploding && full_force > 6'sd0) result = {sim_pkg::MatExplo, full_force[3:0]};
+    else if (is_exploding && center_is_explo) result = {sim_pkg::MatAir, 4'd0};
+    return result;
   endfunction
 
   function automatic logic [7:0] gol_rules(input sim_pkg::neighbourhood_t stencil,
@@ -121,69 +91,54 @@ package sim_rules;
 
     logic center_is_alive = stencil.center[7:4] == sim_pkg::MatGOL && stencil.center[3];
 
-    if (sim_pkg::props(
-            stencil.center[7:4]
-        ).solid && !sim_pkg::props(
-            stencil.center[7:4]
-        ).spreads && (neighbour_count == 4'd3 || neighbour_count == 4'd2 && center_is_alive)) begin
-      return {sim_pkg::MatGOL, refresh ? refresh_state : 1'b1, 3'b000};
-    end else if (stencil.center[7:4] == sim_pkg::MatGOL) begin
-      return {sim_pkg::MatGOL, refresh ? refresh_state : 1'b0, 3'b000};
-    end else begin
-      return 'hFF;
-    end
+    // [SYNTH FIX] single result variable, single return
+    logic can_live = sim_pkg::mat_solid(stencil.center[7:4])
+        && !sim_pkg::mat_spreads(stencil.center[7:4])
+        && (neighbour_count == 4'd3 || (neighbour_count == 4'd2 && center_is_alive));
+    logic [7:0] result;
+    result = 8'hFF;  // no change
+    if (can_live) result = {sim_pkg::MatGOL, refresh ? refresh_state : 1'b1, 3'b000};
+    else if (stencil.center[7:4] == sim_pkg::MatGOL)
+      result = {sim_pkg::MatGOL, refresh ? refresh_state : 1'b0, 3'b000};
+    return result;
   endfunction
+  // [SYNTH FIX 2] The output-row pixels are passed in as two plain 24-bit values,
+  // {right, centre, left}: out_upper from output buffer 1, out_lower from output buffer 0.
+  // Was: the whole buffer array passed by `ref` and indexed inside the function, which
+  // synthesis did not build the way simulation runs it (nothing ever moved).
   function automatic sim_pkg::gravity_movement_t gravity_rules(
-      ref sim_pkg::row_buffer_t output_buffers[2], input sim_pkg::neighbourhood_t stencil,
-      input logic r, input int curr, input int counter);
+      input logic [23:0] out_upper, input logic [23:0] out_lower,
+      input sim_pkg::neighbourhood_t stencil, input logic r);
 
-    int center_density = sim_pkg::props(stencil.center[7:4]).density;
+    logic [3:0] center_density = sim_pkg::mat_density(stencil.center[7:4]);
 
-    logic m_n1_n1 = sim_pkg::props(stencil.topLeft[7:4]).displaceable;
-    logic m_n1_0 = sim_pkg::props(stencil.left[7:4]).displaceable;
-    logic m_n1_1 = sim_pkg::props(stencil.bottomLeft[7:4]).displaceable;
-    logic m_0_n1 = sim_pkg::props(stencil.top[7:4]).displaceable;
-    logic m_0_0 = sim_pkg::props(stencil.center[7:4]).displaceable;
-    logic m_0_1 = sim_pkg::props(stencil.bottom[7:4]).displaceable;
-    logic m_1_n1 = sim_pkg::props(stencil.topRight[7:4]).displaceable;
-    logic m_1_0 = sim_pkg::props(stencil.right[7:4]).displaceable;
-    logic m_1_1 = sim_pkg::props(stencil.bottomRight[7:4]).displaceable;
+    logic m_n1_n1 = sim_pkg::mat_displaceable(stencil.topLeft[7:4]);
+    logic m_n1_0 = sim_pkg::mat_displaceable(stencil.left[7:4]);
+    logic m_n1_1 = sim_pkg::mat_displaceable(stencil.bottomLeft[7:4]);
+    logic m_0_n1 = sim_pkg::mat_displaceable(stencil.top[7:4]);
+    logic m_0_0 = sim_pkg::mat_displaceable(stencil.center[7:4]);
+    logic m_0_1 = sim_pkg::mat_displaceable(stencil.bottom[7:4]);
+    logic m_1_n1 = sim_pkg::mat_displaceable(stencil.topRight[7:4]);
+    logic m_1_0 = sim_pkg::mat_displaceable(stencil.right[7:4]);
+    logic m_1_1 = sim_pkg::mat_displaceable(stencil.bottomRight[7:4]);
 
-    logic d_n1_n1 = sim_pkg::props(stencil.topLeft[7:4]).density > center_density;
-    logic d_0_n1 = sim_pkg::props(stencil.top[7:4]).density > center_density;
-    logic d_1_n1 = sim_pkg::props(stencil.topRight[7:4]).density > center_density;
-    logic d_n1_1 = sim_pkg::props(stencil.bottomLeft[7:4]).density < center_density;
-    logic d_0_1 = sim_pkg::props(stencil.bottom[7:4]).density < center_density;
-    logic d_1_1 = sim_pkg::props(stencil.bottomRight[7:4]).density < center_density;
+    logic d_n1_n1 = sim_pkg::mat_density(stencil.topLeft[7:4]) > center_density;
+    logic d_0_n1 = sim_pkg::mat_density(stencil.top[7:4]) > center_density;
+    logic d_1_n1 = sim_pkg::mat_density(stencil.topRight[7:4]) > center_density;
+    logic d_n1_1 = sim_pkg::mat_density(stencil.bottomLeft[7:4]) < center_density;
+    logic d_0_1 = sim_pkg::mat_density(stencil.bottom[7:4]) < center_density;
+    logic d_1_1 = sim_pkg::mat_density(stencil.bottomRight[7:4]) < center_density;
 
     logic unchanged_n1_n1 =
-        stencil.topLeft == output_buffers[1][curr - sim_pkg::BitsPerPixel +: sim_pkg::BitsPerPixel];
-    logic unchanged_0_n1 = stencil.top == output_buffers[1][curr+:sim_pkg::BitsPerPixel];
-    logic unchanged_1_n1 =
-        stencil.topRight
-        == output_buffers[1][curr + sim_pkg::BitsPerPixel +: sim_pkg::BitsPerPixel];
-    logic unchanged_0_0 = stencil.center == output_buffers[0][curr+:sim_pkg::BitsPerPixel];
+        stencil.topLeft == out_upper[7:0];
+    logic unchanged_0_n1 = stencil.top == out_upper[15:8];
+    logic unchanged_1_n1 = stencil.topRight == out_upper[23:16];
+    logic unchanged_0_0 = stencil.center == out_lower[15:8];
 
-    logic d_topLeft_lte_left = sim_pkg::props(
-        stencil.topLeft[7:4]
-    ).density <= sim_pkg::props(
-        stencil.left[7:4]
-    ).density;
-    logic d_topRight_lte_right = sim_pkg::props(
-        stencil.topRight[7:4]
-    ).density <= sim_pkg::props(
-        stencil.right[7:4]
-    ).density;
-    logic d_left_lte_bottomLeft = sim_pkg::props(
-        stencil.left[7:4]
-    ).density <= sim_pkg::props(
-        stencil.bottomLeft[7:4]
-    ).density;
-    logic d_right_lte_bottomRight = sim_pkg::props(
-        stencil.right[7:4]
-    ).density <= sim_pkg::props(
-        stencil.bottomRight[7:4]
-    ).density;
+    logic d_topLeft_lte_left = sim_pkg::mat_density(stencil.topLeft[7:4]) <= sim_pkg::mat_density(stencil.left[7:4]);
+    logic d_topRight_lte_right = sim_pkg::mat_density(stencil.topRight[7:4]) <= sim_pkg::mat_density(stencil.right[7:4]);
+    logic d_left_lte_bottomLeft = sim_pkg::mat_density(stencil.left[7:4]) <= sim_pkg::mat_density(stencil.bottomLeft[7:4]);
+    logic d_right_lte_bottomRight = sim_pkg::mat_density(stencil.right[7:4]) <= sim_pkg::mat_density(stencil.bottomRight[7:4]);
 
     logic moveDown = unchanged_0_n1 && unchanged_0_0 && m_0_n1 && d_0_n1;
 
@@ -201,22 +156,23 @@ package sim_rules;
         d_1_n1 &&
         (!m_1_0 || d_topRight_lte_right);
 
-    if (m_0_0)  // Center pixel decides movement timings
-      if (moveDown) return sim_pkg::Down;
-      else if (moveRight) return sim_pkg::DownRight;
-      else if (moveLeft) return sim_pkg::DownLeft;
-    return sim_pkg::DownNone;
+    // [SYNTH FIX] single result variable, single return
+    sim_pkg::gravity_movement_t result;
+    result = sim_pkg::DownNone;
+    if (m_0_0) begin  // Center pixel decides movement timings
+      if (moveDown) result = sim_pkg::Down;
+      else if (moveRight) result = sim_pkg::DownRight;
+      else if (moveLeft) result = sim_pkg::DownLeft;
+    end
+    return result;
   endfunction
 
 
+  // [SYNTH FIX 2] same change as gravity_rules: plain 24-bit {right, centre, left} inputs.
   function automatic sim_pkg::fluid_movement_t fluid_rules(
-      ref sim_pkg::row_buffer_t output_buffers[2], input sim_pkg::neighbourhood_t stencil,
-      input logic r, input int column, input int counter, input logic is_sending_row,
-      // [TIMING] grid-edge flags, so `column` can be a constant index into a 3-pixel slice
+      input logic [23:0] out_upper, input logic [23:0] out_lower,
+      input sim_pkg::neighbourhood_t stencil, input logic r, input logic is_sending_row,
       input logic at_left_edge, input logic at_right_edge);
-    int center_bit_column = column * sim_pkg::BitsPerPixel;
-    int left_bit_column = center_bit_column - sim_pkg::BitsPerPixel;
-    int right_bit_column = center_bit_column + sim_pkg::BitsPerPixel;
     // Relies on the fact that every gravity rule has been evaluated prior.
 
     logic a_0_n1 = stencil.top[7:4] == sim_pkg::MatAir;
@@ -226,87 +182,45 @@ package sim_rules;
     logic a_n1_0 = stencil.left[7:4] == sim_pkg::MatAir;
     logic a_1_0 = stencil.right[7:4] == sim_pkg::MatAir;
 
-    logic s_0_n1 = sim_pkg::props(stencil.top[7:4]).spreads;
-    logic s_0_0 = sim_pkg::props(stencil.center[7:4]).spreads;
+    logic s_0_n1 = sim_pkg::mat_spreads(stencil.top[7:4]);
+    logic s_0_0 = sim_pkg::mat_spreads(stencil.center[7:4]);
 
-    logic top_can_fall = sim_pkg::props(
-        stencil.center[7:4]
-    ).displaceable && (sim_pkg::props(
-        stencil.top[7:4]
-    ).falls && (sim_pkg::props(
-        stencil.top[7:4]
-    ).density > sim_pkg::props(
-        stencil.center[7:4]
-    ).density) || sim_pkg::props(
-        stencil.topLeft[7:4]
-    ).falls && (sim_pkg::props(
-        stencil.topLeft[7:4]
-    ).density > sim_pkg::props(
-        stencil.center[7:4]
-    ).density) || sim_pkg::props(
-        stencil.topRight[7:4]
-    ).falls && (sim_pkg::props(
-        stencil.topRight[7:4]
-    ).density > sim_pkg::props(
-        stencil.center[7:4]
-    ).density));
+    logic top_can_fall = sim_pkg::mat_displaceable(stencil.center[7:4]) && (sim_pkg::mat_falls(stencil.top[7:4]) && (sim_pkg::mat_density(stencil.top[7:4]) > sim_pkg::mat_density(stencil.center[7:4])) || sim_pkg::mat_falls(stencil.topLeft[7:4]) && (sim_pkg::mat_density(stencil.topLeft[7:4]) > sim_pkg::mat_density(stencil.center[7:4])) || sim_pkg::mat_falls(stencil.topRight[7:4]) && (sim_pkg::mat_density(stencil.topRight[7:4]) > sim_pkg::mat_density(stencil.center[7:4])));
 
-    logic center_can_fall = sim_pkg::props(
-        stencil.bottom[7:4]
-    ).displaceable && (sim_pkg::props(
-        stencil.center[7:4]
-    ).falls && (sim_pkg::props(
-        stencil.center[7:4]
-    ).density > sim_pkg::props(
-        stencil.bottom[7:4]
-    ).density) || sim_pkg::props(
-        stencil.left[7:4]
-    ).falls && (sim_pkg::props(
-        stencil.left[7:4]
-    ).density > sim_pkg::props(
-        stencil.bottom[7:4]
-    ).density) || sim_pkg::props(
-        stencil.right[7:4]
-    ).falls && (sim_pkg::props(
-        stencil.right[7:4]
-    ).density > sim_pkg::props(
-        stencil.bottom[7:4]
-    ).density));
+    logic center_can_fall = sim_pkg::mat_displaceable(stencil.bottom[7:4]) && (sim_pkg::mat_falls(stencil.center[7:4]) && (sim_pkg::mat_density(stencil.center[7:4]) > sim_pkg::mat_density(stencil.bottom[7:4])) || sim_pkg::mat_falls(stencil.left[7:4]) && (sim_pkg::mat_density(stencil.left[7:4]) > sim_pkg::mat_density(stencil.bottom[7:4])) || sim_pkg::mat_falls(stencil.right[7:4]) && (sim_pkg::mat_density(stencil.right[7:4]) > sim_pkg::mat_density(stencil.bottom[7:4])));
 
     sim_pkg::fluid_movement_t res = 'b0000;
 
 
 
     logic top_unchanged =
-      stencil.top == output_buffers[1][center_bit_column+:sim_pkg::BitsPerPixel];
+      stencil.top == out_upper[15:8];
     logic top_left_unchanged = 0, top_right_unchanged = 0;
 
     logic center_unchanged =
-      stencil.center == output_buffers[0][center_bit_column+:sim_pkg::BitsPerPixel];
+      stencil.center == out_lower[15:8];
     logic left_unchanged = 0, right_unchanged = 0;
 
     if (!at_left_edge) begin
       top_left_unchanged =
-        stencil.topLeft == output_buffers[1][left_bit_column+:sim_pkg::BitsPerPixel];
+        stencil.topLeft == out_upper[7:0];
 
-      left_unchanged = stencil.left == output_buffers[0][left_bit_column+:sim_pkg::BitsPerPixel];
+      left_unchanged = stencil.left == out_lower[7:0];
     end
 
     if (!at_right_edge) begin
       top_right_unchanged =
-        stencil.topRight == output_buffers[1][right_bit_column+:sim_pkg::BitsPerPixel];
+        stencil.topRight == out_upper[23:16];
 
-      right_unchanged = stencil.right == output_buffers[0][right_bit_column+:sim_pkg::BitsPerPixel];
+      right_unchanged = stencil.right == out_lower[23:16];
     end
 
     // If we're a not a sending row, we know our sending row can't
     // issue a transaction. So we can evaluate both rows safely.
-    if (is_sending_row) begin
-      return res;
-    end
+    // [SYNTH FIX] was an early "return res;" for sending rows; now gated, single return.
 
     // Top row
-    if (!top_can_fall && !a_0_n1 && s_0_n1) begin
+    if (!is_sending_row && !top_can_fall && !a_0_n1 && s_0_n1) begin
       // Incoming
       if (r
           && !at_right_edge
@@ -320,7 +234,7 @@ package sim_rules;
     end
 
     // Bottom row
-    if (!center_can_fall && !a_0_0 && s_0_0) begin
+    if (!is_sending_row && !center_can_fall && !a_0_0 && s_0_0) begin
       // Incoming
       if (r && !at_right_edge && a_1_0 && center_unchanged && right_unchanged)
         res.centerRight = 1;

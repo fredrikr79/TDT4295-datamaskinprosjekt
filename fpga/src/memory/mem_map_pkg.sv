@@ -16,9 +16,9 @@ package mem_map_pkg;
   localparam int unsigned DeviceBytes = 2 * DieBytes;  // Max capacity of SRAM
 
   // Memory parameters
-  parameter int unsigned GridMemLocationStart = 32'd0;
-  parameter int unsigned BytesPerGridPixel = 1;
-  parameter int unsigned BytesPerScreenPixel = 2;
+  localparam int unsigned GridMemLocationStart = 32'd0;
+  localparam int unsigned BytesPerGridPixel = 1;
+  localparam int unsigned BytesPerScreenPixel = 2;
 
   // Framebuffers
   localparam int unsigned FbBytes = ScreenCells * BytesPerScreenPixel;  // 230,400

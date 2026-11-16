@@ -122,11 +122,17 @@
 #define READ_BOX_OPCODE         0x60u
 #define WRITE_SPRITE_OPCODE     0x70u
 
-/* Frames a second: the FPGA pulses SYNC once per finished frame. The game
- * steps on SYNC (or on a timer at this rate while there is none). */
-#ifndef FPGA_FRAME_HZ
-#define FPGA_FRAME_HZ           25u
+/* The FPGA pulses SYNC once per screen frame. Its video runs 640x480 @ 60 Hz
+ * VGA timing (800 x 525 pixel clocks a frame) on a 25 MHz clock instead of
+ * the standard 25.175 MHz: 420000 / 25 MHz = 16.8 ms a frame, 59.52 Hz
+ * (Bad Apple measured 59.5). The game times nothing by it: SYNC says when
+ * to draw, and is the FPGA's heartbeat (game.c). The fake FPGA and the
+ * emulator window run at this rate too. */
+#ifndef FPGA_FRAME_US
+#define FPGA_FRAME_US           16800u
 #endif
+/* Rounded (60), for logs. */
+#define FPGA_FRAME_HZ           ((1000000u + FPGA_FRAME_US / 2u) / FPGA_FRAME_US)
 
 /* The first memID the FPGA hands out (the real FPGA starts at 0). */
 #ifndef FPGA_MEMID_FIRST

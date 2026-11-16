@@ -174,13 +174,13 @@ It models only the wires; what the FPGA does is `fake_fpga.c`.
 | Sprite memory | 2 MB, append-only; 1023 memIDs from `FPGA_MEMID_FIRST` (0, like the real FPGA), each WRITE_SPRITE takes one |
 | Sprite instances | 1024 (spriteIDs 0–1023), in screen pixels; redrawn into the HUD layer every frame in ID order, 0xF81F see-through |
 | READY | 200 µs after each command |
-| SYNC | 25 times a second (`FPGA_FRAME_HZ`), whatever the MCU does |
+| SYNC | every 16.8 ms, 59.5 Hz (`FPGA_FRAME_US`), whatever the MCU does |
 | NACK | unknown ID, wrong parameter count, out of memIDs…: ACK low, FIFOs emptied, error code in the answer FIFO |
 | Session | a random 32-bit ID, new on each `fake_fpga_reset()` |
 
 Choices marked `PROTOCOL` in the source are guesses where the spec isn't settled.
 
-`display_host.c` holds the two layers as plain 640 × 360 arrays. At 25 Hz it
+`display_host.c` holds the two layers as plain 640 × 360 arrays. At 59.5 Hz it
 combines them (a HUD pixel wins unless it's 0xF81F) and shows the result in the
 SDL window, scaled up 2×. Keyboard and mouse events in that window belong to the
 [SDL input backend](usb.md); the display only handles quit (closing the window,

@@ -40,7 +40,7 @@ sprite_set(cur, x, y, true);                      /* all three at once */
 sprite_delete(cur);                               /* handle invalid after this */
 
 /* the game loop: */
-sprite_frame(n);                                  /* each game frame: animations step */
+sprite_frame();                                   /* each game frame: animations step */
 if (!sprite_poll()) resync();                     /* each poll: sends what's needed */
 
 /* error handling: */
@@ -216,22 +216,24 @@ deleted as soon as the create finishes.
 
 ## Animations
 
-- **`sprite_ani_new(frames[], n, ticks, x, y, visible)`** makes one sprite per
+- **`sprite_ani_new(frames[], n, ms, x, y, visible)`** makes one sprite per
   frame (up to `SPRITE_ANI_FRAMES` = 16), all at the same spot, with only frame 0
   visible. All frames should be the same size.
-- **`sprite_ani_file(path, ticks, …)`** reads the frame count from the file
+- **`sprite_ani_file(path, ms, …)`** reads the frame count from the file
   header, registers `sprite_img_file(path, i)` for each frame, then calls
   `sprite_ani_new`.
 
-**`sprite_frame(n)`**, once per game frame, for each playing animation:
-- `count += n`, then `steps = count / ticks`, `count %= ticks`.
-- Using `n` keeps the speed right when several frames pass at once.
+**`sprite_frame()`**, once per game frame, for each playing animation:
+- `count += dt`, the real time since the last call (`plat_millis()`), then
+  `steps = count / ms`, `count %= ms`.
+- Real time keeps the speed the same at any frame rate, and when frames are
+  late. The first call, and the one after a pause such as a load, counts at
+  most 100 ms, so an animation doesn't jump ahead.
 - If a step is due, `ani_to(new_frame)` hides the current sprite and calls
   `sprite_set(new sprite, ani x, ani y, visible)`.
 
-`ticks` is game frames per animation frame. Game frames follow the FPGA's SYNC,
-25 a second (`FPGA_FRAME_HZ`) on both the board and the fake FPGA, so
-`ticks = 5` gives 5 animation frames a second and `ticks = 2` about 12.
+`ms` is how long each animation frame is shown: `ms = 200` gives 5 frames a
+second, `ms = 80` about 12.
 
 `sprite_ani_move` moves only the visible frame. A hidden frame gets its position
 when it's next shown, in that same `sprite_set`. So **a move costs one update and

@@ -291,10 +291,12 @@ The highest level that can be shown is set at build time with
 | `info` | Ask the FPGA for screen size (and the grid it gives), N and session |
 | `readrdy` | READY pin, ACK, and the command queue right now |
 | `sd`, `sd ls [folder]` | SD card status (mounts it if it can), and what's on it |
+| `sd del <file>`, `sd del <folder>/` | Delete a file, or a folder and everything in it: `sd del save/` clears all saved rooms |
 | `led list`, `led show <state>`, `led cycle`, `led r` … `led auto` | Test the status LED, no FPGA needed |
 | `led pins` | The LED pins read back from the GPIO registers: mode, what is driven, what the pin reads |
 | `button`, `button watch` | The board button now / watch it for 15 s and say whether pin and interrupt work |
 | `reset fpga` / `reset mcu` / `reset` | Reset the FPGA (reset pin), the MCU, or both |
+| `reset -b fpga` / `reset -b` | The same with PROGRAM_B: the FPGA wipes its design and loads it from flash again (the handshake waits for DONE); without `fpga`, the MCU is reset after |
 | `abort` | Drop every queued FPGA command |
 
 ---
@@ -371,7 +373,8 @@ cmake --build build/host
   `sd/sprites/`. No folder behaves like no card.
 - **Tasks** (*Terminal → Run Task*): `build host`.
 - **The link:** modelled at 20 MHz × 8 lanes, with a READY 200 µs after each
-  command and SYNC at 25 Hz. A share of transfers can be made to fail on
+  command and SYNC every 16.8 ms (59.5 Hz, like the real FPGA's VGA timing on
+  a 25 MHz clock). A share of transfers can be made to fail on
   purpose, to test the resync.
 - **The picture:** like the real FPGA, a 640x360 screen with the simulation
   grid at 160x90 cells, each cell shown as a 4x4 block (`FPGA_SIM_SCALE` in

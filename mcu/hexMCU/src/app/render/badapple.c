@@ -382,9 +382,10 @@ static void finish(const char *why)
     uint32_t ms = plat_millis() - ba.sync_t0;
     uint64_t n  = (uint32_t)(frame_sync_count() - ba.sync_c0);
     if (ba.sent && ms >= 1000u)                     /* got as far as playing */
-        LOG_INFO("FPGA frame SYNC: %lu.%lu Hz (expected %u)%s",
+        LOG_INFO("FPGA frame SYNC: %lu.%lu Hz (expected %lu.%lu)%s",
                  (unsigned long)(n * 1000u / ms), (unsigned long)(n * 10000u / ms % 10u),
-                 (unsigned)FPGA_FRAME_HZ,
+                 (unsigned long)(1000000u / FPGA_FRAME_US),
+                 (unsigned long)(10000000u / FPGA_FRAME_US % 10u),
                  BA_WAIT_SYNC && ba.sync_missed_all ? ", some frames went without one" : "");
 }
 

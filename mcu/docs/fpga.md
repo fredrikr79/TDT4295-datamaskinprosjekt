@@ -16,7 +16,7 @@ console.
 
 Every command is one byte stream: the opcode, the parameters in spec order, then
 any payload. Multi-byte fields go MSB first. The full spec is
-[`../mcu_fpga_spi_api.md`](../../documentation/SPI/mcu_fpga_spi_api.md).
+[`../../documentation/SPI/mcu_fpga_spi_api.md`](../../documentation/SPI/mcu_fpga_spi_api.md).
 
 | Command | Op | Parameters | Payload | Answer | Builder |
 |---|---|---|---|---|---|
@@ -154,6 +154,14 @@ commands may depend on the failed one. So:
 2. **Every command queued behind it** gets `FPGA_ERR_CANCELLED`, which means
    "never ran". Commands that those callbacks submit while this happens are kept.
 3. The owner (the game) resyncs.
+
+The game also resyncs when the FPGA's heartbeat stops: SYNC comes every
+screen frame (16.8 ms, `FPGA_FRAME_US`), so no SYNC for 200 ms
+(`FRAME_SYNC_HEARTBEAT_MS`) while loading, saving or playing means the FPGA
+is gone. The check is `frame_sync_alive()` in `frame_sync.c`, which also has
+the rest of the game's timing; `game.c` decides when it matters.
+`-DFRAME_SYNC_HEARTBEAT=0` turns it off, for an FPGA that doesn't send SYNC
+yet.
 
 `fpga_abort_all()` does the same on purpose: the running command gets
 `FPGA_ERR_ABORTED` (its transfer is killed) and the rest get `CANCELLED`. All

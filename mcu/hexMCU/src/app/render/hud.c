@@ -6,6 +6,7 @@
 #include "sprite.h"
 #include "assets.h"
 #include "log.h"
+#include "platform.h"                       /* plat_millis(): HUD_DEMO */
 
 /* ---- look ------------------------------------------------------------------ */
 #define BAR_W        6      /* pixels                                        */
@@ -67,8 +68,8 @@ void hud_init(uint16_t screen_w, uint16_t screen_h)
     int32_t x = w < screen_w ? (screen_w - w) / 2 : 0;
     h.title = sprite_new(assets.title, (int16_t)x, TITLE_Y, true);
 
-    /* demo: an animation from the card, top-left, ticks 6: about 4 frames a second */
-    h.spinner = sprite_ani_file("sprites/spinner.spr", 6, 8, 8, true);
+    /* demo: an animation from the card, top-left, 4 frames a second */
+    h.spinner = sprite_ani_file("sprites/spinner.spr", 250, 8, 8, true);
 
     /* the bars: health against the right edge, fuel to its left. Empty
      * bars first, so the fills are drawn on top of them. */
@@ -100,17 +101,21 @@ void hud_visible(bool on)
 void health_bar_set(unsigned percent) { bar_set(&h.health, percent); }
 void fuel_bar_set(unsigned percent)   { bar_set(&h.fuel, percent); }
 
-/* HUD_DEMO: both bars run 100 -> 0 -> 100 every 4 s (100 frames at
- * 25 Hz), fuel a quarter of the way behind health. */
-void hud_frame(uint32_t n)
+/* HUD_DEMO: both bars run 100 -> 0 -> 100 every 4 s (real time), fuel a
+ * second behind health. */
+#define DEMO_PERIOD_MS 4000u
+
+static unsigned demo_level(uint32_t t)          /* 100 -> 0 -> 100 over a period */
+{
+    uint32_t half = DEMO_PERIOD_MS / 2u, p = t % DEMO_PERIOD_MS;
+    return p < half ? 100u - 100u * p / half : 100u * (p - half) / half;
+}
+
+void hud_frame(void)
 {
 #if HUD_DEMO
-    static uint32_t t;
-    t += n;
-    uint32_t a = t % 100u, b = (t + 25u) % 100u;
-    health_bar_set(a < 50u ? 100u - 2u * a : 2u * (a - 50u));
-    fuel_bar_set(b < 50u ? 100u - 2u * b : 2u * (b - 50u));
-#else
-    (void)n;
+    uint32_t t = plat_millis();
+    health_bar_set(demo_level(t));
+    fuel_bar_set(demo_level(t + DEMO_PERIOD_MS - 1000u));
 #endif
 }

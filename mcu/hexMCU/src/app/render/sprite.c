@@ -36,6 +36,7 @@
 #include "storage.h"
 #include "log.h"
 #include "platform.h"
+#include "frame_sync.h"                 /* frame_elapsed_ms() */
 
 /* Sprite file: "SP", W, H, frames (16 bits, MSB first), then the frames'
  * pixels one after the other, RGB565 MSB first (tools/png2spr.py). */
@@ -81,8 +82,9 @@ struct sprite {
 
 struct sprite_ani {
     bool      used, visible, playing;
-    uint8_t   n, cur, ticks;
-    uint32_t  count;                /* game frames into the current frame      */
+    uint8_t   n, cur;
+    uint16_t  ms;                   /* each frame is shown this long           */
+    uint32_t  count;                /* ms into the current frame               */
     int16_t   x, y;
     sprite_t *frame[SPRITE_ANI_FRAMES];
 };
@@ -465,9 +467,9 @@ sprite_img_t *sprite_image(const sprite_t *s) { return s ? s->img : NULL; }
 /* Make an animation: one sprite per frame, all at x, y, only frame 0
  * visible. Takes at most SPRITE_ANI_FRAMES frames; all should be the same
  * size (a warning if not). If a frame's sprite can't be made, the ones
- * already made are deleted and it returns NULL. ticks = game frames each
+ * already made are deleted and it returns NULL. ms = how long each
  * animation frame is shown (0 counts as 1). */
-sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t ticks,
+sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint16_t ms,
                              int16_t x, int16_t y, bool visible)
 {
     if (!frames || n == 0) return NULL;
@@ -490,7 +492,7 @@ sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t tic
         return NULL;
     }
     *a = (sprite_ani_t){ .visible = visible, .playing = true, .n = n,
-                         .ticks = ticks ? ticks : 1, .x = x, .y = y };
+                         .ms = ms ? ms : 1, .x = x, .y = y };
     for (uint8_t i = 0; i < n; i++) {
         a->frame[i] = sprite_new(frames[i], x, y, visible && i == 0);
         if (!a->frame[i]) {
@@ -504,7 +506,7 @@ sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t tic
 
 /* Make an animation from every frame of a sprite file: reads how many
  * frames it has, registers an image per frame, then sprite_ani_new(). */
-sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_t y,
+sprite_ani_t *sprite_ani_file(const char *path, uint16_t ms, int16_t x, int16_t y,
                               bool visible)
 {
     sprite_img_t *frames[SPRITE_ANI_FRAMES];
@@ -516,7 +518,7 @@ sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_
     }
     for (uint16_t i = 0; i < n; i++)
         if (!(frames[i] = sprite_img_file(path, i))) return NULL;
-    return sprite_ani_new(frames, (uint8_t)n, ticks, x, y, visible);
+    return sprite_ani_new(frames, (uint8_t)n, ms, x, y, visible);
 }
 
 /* Switch an animation to frame f: hide the sprite shown now, then show
@@ -553,7 +555,7 @@ void sprite_ani_show(sprite_ani_t *a, bool visible)
 /* Pause (it stays on its frame) or play again. */
 void sprite_ani_play(sprite_ani_t *a, bool playing) { if (a) a->playing = playing; }
 /* How many game frames each animation frame is shown (0 counts as 1). */
-void sprite_ani_speed(sprite_ani_t *a, uint8_t ticks) { if (a) a->ticks = ticks ? ticks : 1; }
+void sprite_ani_speed(sprite_ani_t *a, uint16_t ms) { if (a) a->ms = ms ? ms : 1; }
 
 /* Jump to a frame (wraps around), and start counting its time from now. */
 void sprite_ani_goto(sprite_ani_t *a, uint8_t frame)
@@ -572,18 +574,24 @@ void sprite_ani_delete(sprite_ani_t *a)
     a->used = false;
 }
 
-/* Step the animations. Call once per game frame with n = SYNCs since the
- * last call. Each animation counts game frames; every `ticks` of them it
- * moves on a frame. Counting n (not 1) keeps the speed right when the game
- * falls behind and several FPGA frames go by at once. */
-void sprite_frame(uint32_t n)
+/* Step the animations. Call once per game frame. Each animation counts the
+ * real time since the last call; every `ms` of it, it moves on a frame. So
+ * the speed is the same at any frame rate, and when frames are late. The
+ * first call (and one after a while without, such as a load) counts at
+ * most ANI_MAX_GAP_MS, so an animation doesn't jump ahead. */
+#define ANI_MAX_GAP_MS 100u
+
+void sprite_frame(void)
 {
+    static uint32_t last;
+    uint32_t dt = frame_elapsed_ms(&last, ANI_MAX_GAP_MS);
+
     for (unsigned i = 0; i < SPRITE_ANI_MAX; i++) {
         sprite_ani_t *a = &anis[i];
-        if (!a->used || !a->playing || a->n < 2 || n == 0) continue;
-        a->count += n;
-        uint32_t steps = a->count / a->ticks;
-        a->count %= a->ticks;
+        if (!a->used || !a->playing || a->n < 2 || dt == 0) continue;
+        a->count += dt;
+        uint32_t steps = a->count / a->ms;
+        a->count %= a->ms;
         if (steps) ani_to(a, (uint8_t)((a->cur + steps) % a->n));
     }
 }

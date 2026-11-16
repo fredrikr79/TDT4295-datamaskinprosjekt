@@ -27,14 +27,15 @@
  * and size are fixed. Many sprites can share one image.
  *
  * An ANIMATION is a sprite per frame, all made up front; only the current
- * frame is shown, and sprite_frame() steps it every `ticks` game frames.
+ * frame is shown, and sprite_frame() moves it on every `ms` milliseconds
+ * (real time: the same speed at any frame rate).
  *
  *   sprite_init();                              once, before anything else
  *   sprite_img_t *img = sprite_img_file("sprites/cursor.spr", 0);
  *   sprite_t *cur = sprite_new(img, x, y, true);
  *   ...
  *   sprite_move(cur, x, y);                     whenever, as often as you like
- *   every game frame:  sprite_frame(n);
+ *   every game frame:  sprite_frame();
  *   every poll:        if (!sprite_poll()) -> resync
  *   on resync, after fpga_abort_all():  sprite_lost();
  *   new FPGA session:                   sprite_forget();
@@ -128,24 +129,23 @@ sprite_img_t *sprite_image(const sprite_t *s);
 /* ---- animations ----------------------------------------------------------------- */
 typedef struct sprite_ani sprite_ani_t;
 
-/* n frames (at most SPRITE_ANI_FRAMES), each shown for `ticks` game frames
- * (game frames follow SYNC, 25 a second: ticks 5 = 5 frames a second).
- * All frames must be the same size. */
-sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t ticks,
+/* n frames (at most SPRITE_ANI_FRAMES), each shown for `ms` milliseconds
+ * (ms 200 = 5 frames a second). All frames must be the same size. */
+sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint16_t ms,
                              int16_t x, int16_t y, bool visible);
 /* Every frame of a sprite file. */
-sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_t y,
+sprite_ani_t *sprite_ani_file(const char *path, uint16_t ms, int16_t x, int16_t y,
                               bool visible);
 void sprite_ani_move(sprite_ani_t *a, int16_t x, int16_t y);
 void sprite_ani_show(sprite_ani_t *a, bool visible);
 void sprite_ani_play(sprite_ani_t *a, bool playing);   /* paused: stays on its frame */
-void sprite_ani_speed(sprite_ani_t *a, uint8_t ticks);
+void sprite_ani_speed(sprite_ani_t *a, uint16_t ms);
 void sprite_ani_goto(sprite_ani_t *a, uint8_t frame);
 void sprite_ani_delete(sprite_ani_t *a);
 
 /* ---- driving it ------------------------------------------------------------------ */
 void sprite_init(void);                 /* empty everything; once at start */
-void sprite_frame(uint32_t n);          /* each game frame; n = SYNCs since last */
+void sprite_frame(void);                /* each game frame: animations, by real time */
 bool sprite_poll(void);                 /* each poll; false: a command failed -> resync */
 void sprite_lost(void);                 /* after fpga_abort_all() */
 void sprite_forget(void);               /* new FPGA session: send everything again */

@@ -21,7 +21,7 @@
  *   health_bar_set(75);       0 = empty .. 100 = full (more counts as 100)
  *   fuel_bar_set(30);
  *   hud_visible(false);       while drawing; true to show it again
- *   hud_frame(n);             once per game frame (the HUD_DEMO slide) */
+ *   hud_frame();              once per game frame (the HUD_DEMO slide) */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -34,7 +34,7 @@
 
 void hud_init(uint16_t screen_w, uint16_t screen_h);
 void hud_visible(bool on);
-void hud_frame(uint32_t n);
+void hud_frame(void);
 
 void health_bar_set(unsigned percent);
 void fuel_bar_set(unsigned percent);

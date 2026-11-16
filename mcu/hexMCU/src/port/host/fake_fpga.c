@@ -37,7 +37,7 @@
  *     can't be done (unknown ID, wrong parameter count, out of memIDs...)
  *     answers NACK on the ACK line, flushes the FIFOs and puts the one-byte
  *     error code in the answer FIFO, like the real FPGA.
- *   - SYNC is pulsed FRAME_HZ times a second, every frame, whatever the
+ *   - SYNC is pulsed every FPGA_FRAME_US (16.8 ms, 59.5 Hz), whatever the
  *     MCU does -- like the real FPGA finishing a frame for VGA.
  *   - Screen size, N and the session id live only here; the MCU side
  *     learns them with INFO, like it will from the real FPGA.
@@ -72,8 +72,7 @@ _Static_assert(FAKE_W % FPGA_SIM_SCALE == 0 && FAKE_H % FPGA_SIM_SCALE == 0,
 #define OUT_FIFO      1024u         /* answer FIFO                         */
 #define PIXEL_BYTES   2u            /* RGB565, MSB first                   */
 #define READY_US      200           /* command -> READY pulse              */
-#define FRAME_HZ      FPGA_FRAME_HZ /* SYNC pulses: one per finished frame (fpga.h) */
-#define FRAME_NS      (1000000000ull / FRAME_HZ)
+#define FRAME_NS      ((uint64_t)FPGA_FRAME_US * 1000u)  /* SYNC: one per frame (fpga.h) */
 
 /* The real FPGA has 16 MB; memIDs run out long before 2 MB is used
  * (1023 uploads of at most N-3 bytes). */
@@ -543,7 +542,7 @@ void fake_fpga_reset(void)
 
     LOG_INFO("fake fpga: screen %ux%u, grid %ux%u cells of %ux%u px, N=%u, "
              "session 0x%08lX, %u KB sprite memory, %u images, %u sprites, ready %d us, "
-             "sync %u Hz", FAKE_W, FAKE_H, GRID_W, GRID_H, FPGA_SIM_SCALE, FPGA_SIM_SCALE,
+             "sync every %u us", FAKE_W, FAKE_H, GRID_W, GRID_H, FPGA_SIM_SCALE, FPGA_SIM_SCALE,
              MAX_CMD, (unsigned long)ff.session, SPRITE_MEM / 1024u,
-             MAX_IMAGES - 1u, MAX_SPRITES, READY_US, FRAME_HZ);
+             MAX_IMAGES - 1u, MAX_SPRITES, READY_US, (unsigned)FPGA_FRAME_US);
 }

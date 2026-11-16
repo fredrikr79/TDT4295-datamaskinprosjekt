@@ -85,7 +85,10 @@ static void handle_movement_keys(input_t in);
 
 static void go(state_t s)
 {
-    if (s != state) LOG_INFO("%s -> %s", state_names[state], state_names[s]);
+    if (s != state) {
+        LOG_INFO("%s -> %s", state_names[state], state_names[s]);
+        frame_sync_heartbeat_reset();   /* a new state gets the full time (frame_sync.h) */
+    }
     state = s;
     if (s == S_RUN) run_enter();
 }
@@ -129,6 +132,7 @@ static void load_resume(void)
 /* RUN: the game itself  */
 static struct {
     uint32_t sync_seen;         /* SYNC count we last started a frame at */
+    uint32_t last_ms;           /* when the last frame ran (the stick cursor) */
     int32_t  cx, cy;            /* cursor position, follows the mouse    */
     input_t  keys;              /* this frame's input (taken once per frame) */
 } run;
@@ -239,13 +243,16 @@ static bool escape_pressed(const input_t *in)
 /* ---- the cursor from a controller -------------------------------------------
  * The right stick moves it (faster the further it's pushed), and a finger
  * on the touchpad drags it: a swipe across the whole pad crosses the whole
- * screen. Added to the mouse's movement. */
-#define CURSOR_STICK_PX   12    /* pixels per frame at full tilt */
+ * screen. Added to the mouse's movement (which needs nothing like this: a
+ * mouse count is a pixel, however often frames come).
+ * The stick's speed is per second of real time, so it's the same at any
+ * frame rate: 714 px/s is the 12 px a frame it had at the FPGA's 59.5 Hz. */
+#define CURSOR_STICK_PX_S 714   /* pixels per second at full tilt */
 #define CURSOR_DEADZONE   16
 
-static void pad_pointer(const input_t *in, int32_t *dx, int32_t *dy)
+static void pad_pointer(const input_t *in, uint32_t dt_ms, int32_t *dx, int32_t *dy)
 {
-    static int32_t frac_x, frac_y;                  /* sub-pixel stick movement */
+    static int32_t frac_x, frac_y;      /* sub-pixel stick movement, x 127000 */
     static bool    was_down[INPUT_PADS];
     static uint16_t last_x[INPUT_PADS], last_y[INPUT_PADS];
     const fpga_info_t *scr = fpga_link_info();
@@ -254,8 +261,8 @@ static void pad_pointer(const input_t *in, int32_t *dx, int32_t *dy)
         const pad_t *pad = &in->pad[p];
         if (!pad->connected) { was_down[p] = false; continue; }
 
-        frac_x += pad_deadzone(pad->rx, CURSOR_DEADZONE) * CURSOR_STICK_PX;
-        frac_y += pad_deadzone(pad->ry, CURSOR_DEADZONE) * CURSOR_STICK_PX;
+        frac_x += pad_deadzone(pad->rx, CURSOR_DEADZONE) * CURSOR_STICK_PX_S * (int32_t)dt_ms;
+        frac_y += pad_deadzone(pad->ry, CURSOR_DEADZONE) * CURSOR_STICK_PX_S * (int32_t)dt_ms;
 
         const pad_touch_t *t = &pad->touch[0];
         if (t->down && was_down[p]) {
@@ -266,10 +273,10 @@ static void pad_pointer(const input_t *in, int32_t *dx, int32_t *dy)
         last_x[p] = t->x;
         last_y[p] = t->y;
     }
-    *dx += frac_x / 127;
-    *dy += frac_y / 127;
-    frac_x %= 127;
-    frac_y %= 127;
+    *dx += frac_x / 127000;             /* full tilt is 127, a second 1000 ms */
+    *dy += frac_y / 127000;
+    frac_x %= 127000;
+    frac_y %= 127000;
 }
 /* The cursor, shown in every mode. The in-game HUD is hud.c's. */
 static sprite_t     *cursor;
@@ -282,56 +289,82 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
-/* ---- frames: the FPGA's SYNC, or a timer while there is none -------------
- * RUN steps once per SYNC (FPGA_FRAME_HZ, 25 Hz). If no SYNC has come for
- * SYNC_LOST_MS, frames come from a FRAME_MS timer instead, so the game
- * still runs while the FPGA doesn't send SYNC (yet). Logged each time it
- * switches. */
-#define SYNC_LOST_MS 200u
-#define FRAME_MS     (1000u / FPGA_FRAME_HZ)    /* 40 ms at 25 Hz, like SYNC */
+/* ---- timing (frame_sync.h) -----------------------------------------------------
+ * RUN does a frame (input, cursor, sprites) per new SYNC; several at once
+ * (we fell behind) is still one frame. While the game uses the FPGA (LOAD,
+ * SAVE, RUN), a SYNC that stops is the FPGA gone: resync. Nothing is timed
+ * by counting SYNCs: the player, the stick cursor and the animations go by
+ * real time, so they play the same at any frame rate. */
+
+/* ---- the player: fixed steps on real time ------------------------------------
+ * The player steps PHYS_HZ times a second of real time, whatever the FPGA's
+ * frame rate (frame_steps_take()). At 59.5 Hz that's one step a frame, and
+ * one more every two seconds or so. player.c's numbers (speeds, gravity,
+ * timers) are per step, so at 60 they play as they did stepping once per
+ * SYNC on the real FPGA.
+ * A step is a READ_BOX of the cells around the player (velocity_box), then
+ * update_player() in its callback, which sets the next box. Only one is
+ * out at a time: the next owed step's read goes out from the callback, so
+ * a step always reads the box the last one asked for. At most
+ * PHYS_MAX_OWED owed: after a stall the player doesn't race to catch up.
+ * Time only counts while playing (not in the menu, drawing or loading). */
+#ifndef PHYS_HZ
+#define PHYS_HZ        60u
+#endif
+#define PHYS_MAX_OWED  3u
 
 static struct {
-    uint32_t last_sync_ms;      /* when a SYNC was last seen           */
-    uint32_t next_frame_ms;     /* timer mode: when the next frame is due */
-    bool     timer;             /* frames from the timer right now     */
-} frames;
+    frame_steps_t clock;        /* PHYS_HZ steps a second of real time */
+    uint8_t       owed;         /* steps due, not done                 */
+    bool          reading;      /* a step's READ_BOX is out            */
+} phys;
 
-/* Frames to run now: SYNCs since last time, or timer ticks without SYNC. */
-static uint32_t frames_due(void)
+/* Time so far doesn't count (an in-flight read still finishes). */
+static void phys_reset(void)
 {
-    uint32_t now = plat_millis();
-    uint32_t n = frame_sync_take(&run.sync_seen);
-    if (n) {
-        frames.last_sync_ms = now;
-        if (frames.timer) {
-            frames.timer = false;
-            LOG_INFO("frame SYNC from the FPGA: frames follow it again");
-        }
-        return n;
+    frame_steps_start(&phys.clock, PHYS_HZ);
+    phys.owed = 0;
+}
+
+static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err);
+
+/* The next owed step's READ_BOX, if none is out. A full queue: next frame. */
+static void phys_read(void)
+{
+    if (phys.reading || phys.owed == 0) return;
+    fpga_cmd_t c = fpga_cmd_read_box(velocity_box.box, box, velocity_box.length);
+    c.done = update_player_callback;
+    fpga_status_t st = fpga_submit(&c);
+    if (st == FPGA_OK)    { phys.reading = true; return; }
+    if (st == FPGA_EFULL) return;
+    static bool told;           /* a bad box: once, not 60 times a second */
+    if (!told) {
+        told = true;
+        LOG_WARN("player READ_BOX not sent: %s (box %u,%u %ux%u)", fpga_status_str(st),
+                 velocity_box.box.x1, velocity_box.box.y1, velocity_box.box.x2, velocity_box.box.y2);
     }
-    if (!frames.timer) {
-        if (now - frames.last_sync_ms < SYNC_LOST_MS) return 0;
-        frames.timer = true;
-        frames.next_frame_ms = now;
-        LOG_WARN("no frame SYNC from the FPGA for %u ms: frames from a %u ms timer instead",
-                 SYNC_LOST_MS, FRAME_MS);
-    }
-    if ((int32_t)(now - frames.next_frame_ms) < 0) return 0;
-    n = (now - frames.next_frame_ms) / FRAME_MS + 1u;
-    frames.next_frame_ms += n * FRAME_MS;
-    return n;
+    phys.owed = 0;
+}
+
+/* Once a frame while playing: the steps owed since the last frame, then
+ * the first one's read. */
+static void phys_frame(void)
+{
+    uint32_t owed = phys.owed + frame_steps_take(&phys.clock);
+    phys.owed = (uint8_t)(owed < PHYS_MAX_OWED ? owed : PHYS_MAX_OWED);
+    phys_read();
 }
 
 /* Runs on every way into RUN, also after a resync that kept the session,
- * so nothing here may reset the game. Frames that went by while probing
- * or loading don't count as missed. */
+ * so nothing here may reset the game. Time that went by while probing,
+ * loading or in a demo doesn't count. */
 static void run_enter(void)
 {
     input_t stale;
     input_take(&stale);         /* input from loading / a demo / HOLD doesn't count */
     run.sync_seen = frame_sync_count();
-    frames.last_sync_ms  = plat_millis();     /* give SYNC a chance first */
-    frames.next_frame_ms = plat_millis();
+    run.last_ms   = plat_millis();
+    phys_reset();
 }
 
 /* Images and the HUD's sprites, made once, on the first load. From here
@@ -380,10 +413,14 @@ void set_next_velocity_box(velocity_box_t *vb)
     velocity_box = *vb;
 }
 
+/* A step's READ_BOX is back: one step of the player. */
 static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
 {
+    phys.reading = false;
     if (err != FPGA_ERR_NONE)
     {
+        if (err == FPGA_ERR_CANCELLED || err == FPGA_ERR_ABORTED)
+            return;                                 /* a resync / reset is already on it */
         LOG_WARN(
             "read box, x %d, y %d, dx %d, dy %d: %s",
             velocity_box.box.x1,
@@ -392,39 +429,40 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
             velocity_box.box.y2,
             fpga_err_str(err)
         );
+        failed = true;                              /* the link is out of step: resync */
         return;
     }
 
+    if (phys.owed) phys.owed--;
     update_player(&player, cmd->rx, velocity_box);  /* moves its sprite too */
 #if !HUD_DEMO
     health_bar_set(player.health * 100u / PLAYER_MAX_HEALTH);
     fuel_bar_set(player.fly_meter * 100u / MAX_FLY_TIME);
 #endif
+    /* The next owed step, if any -- unless that step took us out of
+     * playing (a portal saves the room, dying reloads it). */
+    if (state == S_RUN && run_state == RS_SIM) phys_read();
 }
 
-/* One game frame. n = SYNCs since the last one (n > 1: we fell behind). */
-static void run_frame(uint32_t n)
+/* One game frame: on a SYNC, however many came since the last one. */
+static void run_frame(void)
 {
     /* the player only moves while playing (not in the menu, not while drawing) */
-    if (run_state == RS_SIM) {
-        fpga_cmd_t player_box_cmd = fpga_cmd_read_box(
-            velocity_box.box, box, velocity_box.length
-        );
-        player_box_cmd.done = update_player_callback;
-        fpga_submit(&player_box_cmd);
-    }
+    if (run_state == RS_SIM) phys_frame();
+    else                     phys_reset();
 
     sprite_move(cursor, (int16_t)run.cx, (int16_t)run.cy);   /* sprite_poll sends it */
-    sprite_frame(n);            /* animations step */
-    hud_frame(n);               /* HUD_DEMO: the bars slide */
+    sprite_frame();             /* animations, by real time */
+    hud_frame();                /* HUD_DEMO: the bars slide */
 }
 
 static void run_poll(void)
 {
     if (!sprite_poll()) { failed = true; return; }
     sim_flush();                /* a START_SIM / STOP_SIM the queue had no room for */
-    uint32_t n = frames_due();
-    if (n == 0) return;
+    if (frame_sync_take(&run.sync_seen) == 0) return;   /* no new SYNC: no frame */
+
+    uint32_t dt_ms = frame_elapsed_ms(&run.last_ms, 100u);  /* the stick cursor */
 
     /* Input once per frame: usb_input adds up presses, releases and mouse
      * movement between takes, so nothing that happened in between is lost
@@ -434,7 +472,7 @@ static void run_poll(void)
     led_set(LED_NO_INPUT, !run.keys.keyboard && !run.keys.mouse);
     /* input_log(&run.keys); */
     int32_t dx = run.keys.mouse_dx, dy = run.keys.mouse_dy;
-    pad_pointer(&run.keys, &dx, &dy);
+    pad_pointer(&run.keys, dt_ms, &dx, &dy);
     /* The tip (the sprite's top-left) stays on the screen, so every cell
      * can be pointed at; the rest of the picture may hang off the right
      * and bottom edges. */
@@ -471,7 +509,7 @@ static void run_poll(void)
         break;
     }
 
-    run_frame(n);
+    run_frame();
 }
 
 static void handle_movement_keys(input_t in)
@@ -634,10 +672,10 @@ static void fpga_reset_done(void)
 }
 
 /* the state machine */
-static void resync(void)
+static void resync(const char *why)
 {
     led_flash(LED_RESYNC, 1000);
-    LOG_WARN("command failed in '%s' -> resync: %s", state_names[state], fpga_last_failure());
+    LOG_WARN("'%s': %s -> resync", state_names[state], why);
     if (state == S_SAVE || state == S_LOAD || state == S_RUN)
         resume_to = state;
     fpga_abort_all();            /* callbacks run now (CANCELLED)... */
@@ -665,7 +703,11 @@ void game_poll(void)
         return;
     }
     if (demo_busy()) { paused = true; demo_poll(); return; }
-    if (paused) { paused = false; if (state == S_RUN) run_enter(); }
+    if (paused) {
+        paused = false;
+        frame_sync_heartbeat_reset();   /* the demo's time doesn't count */
+        if (state == S_RUN) run_enter();
+    }
 
     if (state == S_HOLD) {              /* the console's turn: not even a resync */
         static bool told;
@@ -676,7 +718,12 @@ void game_poll(void)
         }
         return;
     }
-    if (failed) { resync(); return; }
+    if (failed) { resync(fpga_last_failure()); return; }
+    if ((state == S_LOAD || state == S_SAVE || state == S_RUN) && !frame_sync_alive()) {
+        LOG_WARN("no SYNC from the FPGA for %u ms", (unsigned)FRAME_SYNC_HEARTBEAT_MS);
+        resync("no heartbeat: the FPGA is gone");
+        return;
+    }
 
     switch (state) {
     case S_PROBE:

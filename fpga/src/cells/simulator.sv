@@ -96,9 +96,6 @@ module simulator #(
     for (int c = 0; c < sim_pkg::SimulationCoreCount; c++)
       noise_lfsr[c] = 16'hACE1 ^ 16'(c * 16'h3B5D + 1);
 
-  // Positional noise:
-  logic [15:0] positional_noise[sim_pkg::SimulationCoreCount];
-
   // Write transaction sends to res_buffer 0 and recieves to 1
   logic is_sending_row;
   assign is_sending_row = current_row_index[0] == is_odd_major_evaluation;
@@ -122,20 +119,11 @@ module simulator #(
     for (int core = 0; core < sim_pkg::SimulationCoreCount; core++)
     setup_stage.nb[core] <= setup_neighbourhood(core);
 
-    if(pulse_new_row && current_row_index == '0) begin
-      for(int c = 0; c < sim_pkg::SimulationCoreCount; c++) begin
-        positional_noise[c] <= 16'hABCD ^ 16'(c * 16'hF13D + 1);
-      end
-    end else if (setup_stage.valid)
+    if (setup_stage.valid)
     for (int c = 0; c < sim_pkg::SimulationCoreCount; c++) begin
       noise_lfsr[c] <= {
         noise_lfsr[c][14:0],
         noise_lfsr[c][15] ^ noise_lfsr[c][13] ^ noise_lfsr[c][12] ^ noise_lfsr[c][10]
-      };
-
-      positional_noise[c] <= {
-        positional_noise[c][14:0],
-        positional_noise[c][15] ^ positional_noise[c][13] ^ positional_noise[c][12]
       };
     end
     // ---- [PIPELINE 2] Stage 2: explosion and GoL rules from the registered neighbourhood ----
@@ -257,7 +245,6 @@ module simulator #(
       sim_pkg::fluid_movement_t   fluid_movement;
       sim_pkg::neighbourhood_row_en_t sending_en, receiving_en;
       sim_pkg::neighbourhood_row_t sending_val, receiving_val;
-      logic apply_turbulence;
 
       at_left_edge = (core == 0) && (rule_stage.base == '0);
       at_right_edge = (core == sim_pkg::SimulationCoreCount - 1) && (rule_stage.base == BaseW'(Stride - 1));
@@ -314,7 +301,7 @@ module simulator #(
           receiving_val.center = nb.topRight;
         end else if(!is_sending_row && !is_unmatched_boundry_row && out_upper.center == nb.top) begin
           receiving_en.center = 1'b1;
-          receiving_val.center = sim_pkg::remove_turbulence(nb.center);
+          receiving_val.center = sim_pkg::remove_turbulence(nb.top);
         end
         if (fluid_movement.centerLeft) begin
           sending_en.right   = 1'b1;
@@ -328,7 +315,7 @@ module simulator #(
           sending_val.center = nb.right;
         end else if(!is_sending_row && !is_unmatched_boundry_row && out_lower.center == nb.center) begin
           sending_en.center = 1'b1;
-          sending_val.center = sim_pkg::remove_turbulence(nb.topRight);
+          sending_val.center = sim_pkg::remove_turbulence(nb.center);
         end
       end
 

@@ -42,7 +42,7 @@ package color_pkg;
       sim_pkg::MatStone:   return (pixel[3] == 1'b1)
         ? stone_colors(pixel[2:0])
         : igneous_colors(pixel[2:0]);
-      default     return air_colors(pixel[3:0]); // Air
+      default     return 16'b00010_000100_00011; // Air
     endcase
   endfunction
 
@@ -200,27 +200,6 @@ package color_pkg;
       4'b1011: return 16'b01000_010000_01000;
       4'b1101: return 16'b01001_010010_01001;
       4'b1111: return 16'b01010_010100_01010;
-    endcase
-  endfunction
-
-  function automatic logic [15:0] air_colors (input logic [3:0] meta);
-    unique case (4'(meta))
-      4'b0000: return 16'b00010_000100_00011;
-      4'b0001: return 16'b00010_000100_00011;
-      4'b0010: return 16'b00011_000110_00100;
-      4'b0011: return 16'b00011_000110_00100;
-      4'b0100: return 16'b00100_001000_00101;
-      4'b0101: return 16'b00100_001000_00101;
-      4'b0110: return 16'b00101_001010_00110;
-      4'b0111: return 16'b00101_001010_00110;
-      4'b1000: return 16'b00110_001100_00111;
-      4'b1001: return 16'b00110_001100_00111;
-      4'b1010: return 16'b00111_001110_01000;
-      4'b1011: return 16'b00111_001110_01000;
-      4'b1100: return 16'b01000_010000_01001;
-      4'b1101: return 16'b01000_010000_01001;
-      4'b1110: return 16'b01001_010010_01010;
-      4'b1111: return 16'b01001_010010_01010;
     endcase
   endfunction
 endpackage

@@ -176,6 +176,11 @@ package sim_pkg;
   endfunction
 
   typedef struct packed {
+    logic [BitsPerPixel-1:0] right;
+    logic [BitsPerPixel-1:0] center;
+    logic [BitsPerPixel-1:0] left;
+  } neighbourhood_row_t;
+  typedef struct packed {
     logic [BitsPerPixel-1:0] topLeft;
     logic [BitsPerPixel-1:0] top;
     logic [BitsPerPixel-1:0] topRight;

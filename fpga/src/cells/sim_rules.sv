@@ -107,7 +107,7 @@ package sim_rules;
   // Was: the whole buffer array passed by `ref` and indexed inside the function, which
   // synthesis did not build the way simulation runs it (nothing ever moved).
   function automatic sim_pkg::gravity_movement_t gravity_rules(
-      input logic [23:0] out_upper, input logic [23:0] out_lower,
+      input sim_pkg::neighbourhood_row_t out_upper, input sim_pkg::neighbourhood_row_t out_middle,
       input sim_pkg::neighbourhood_t stencil, input logic r);
 
     logic [3:0] center_density = sim_pkg::mat_density(stencil.center[7:4]);
@@ -130,10 +130,10 @@ package sim_rules;
     logic d_1_1 = sim_pkg::mat_density(stencil.bottomRight[7:4]) < center_density;
 
     logic unchanged_n1_n1 =
-        stencil.topLeft == out_upper[7:0];
-    logic unchanged_0_n1 = stencil.top == out_upper[15:8];
-    logic unchanged_1_n1 = stencil.topRight == out_upper[23:16];
-    logic unchanged_0_0 = stencil.center == out_lower[15:8];
+        stencil.topLeft == out_upper.left;
+    logic unchanged_0_n1 = stencil.top == out_upper.center;
+    logic unchanged_1_n1 = stencil.topRight == out_upper.right;
+    logic unchanged_0_0 = stencil.center == out_middle.center;
 
     logic d_topLeft_lte_left = sim_pkg::mat_density(stencil.topLeft[7:4]) <= sim_pkg::mat_density(stencil.left[7:4]);
     logic d_topRight_lte_right = sim_pkg::mat_density(stencil.topRight[7:4]) <= sim_pkg::mat_density(stencil.right[7:4]);
@@ -170,7 +170,8 @@ package sim_rules;
 
   // [SYNTH FIX 2] same change as gravity_rules: plain 24-bit {right, centre, left} inputs.
   function automatic sim_pkg::fluid_movement_t fluid_rules(
-      input logic [23:0] out_upper, input logic [23:0] out_lower,
+      input sim_pkg::neighbourhood_row_t out_upper,
+      input sim_pkg::neighbourhood_row_t out_middle,
       input sim_pkg::neighbourhood_t stencil, input logic r, input logic is_sending_row,
       input logic at_left_edge, input logic at_right_edge);
     // Relies on the fact that every gravity rule has been evaluated prior.
@@ -194,25 +195,25 @@ package sim_rules;
 
 
     logic top_unchanged =
-      stencil.top == out_upper[15:8];
+      stencil.top == out_upper.center;
     logic top_left_unchanged = 0, top_right_unchanged = 0;
 
     logic center_unchanged =
-      stencil.center == out_lower[15:8];
+      stencil.center == out_middle.center;
     logic left_unchanged = 0, right_unchanged = 0;
 
     if (!at_left_edge) begin
       top_left_unchanged =
-        stencil.topLeft == out_upper[7:0];
+        stencil.topLeft == out_upper.left;
 
-      left_unchanged = stencil.left == out_lower[7:0];
+      left_unchanged = stencil.left == out_middle.left;
     end
 
     if (!at_right_edge) begin
       top_right_unchanged =
-        stencil.topRight == out_upper[23:16];
+        stencil.topRight == out_upper.right;
 
-      right_unchanged = stencil.right == out_lower[23:16];
+      right_unchanged = stencil.right == out_middle.right;
     end
 
     // If we're a not a sending row, we know our sending row can't

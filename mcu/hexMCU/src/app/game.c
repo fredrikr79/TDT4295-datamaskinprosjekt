@@ -296,12 +296,12 @@ static int32_t clamp32(int32_t v, int32_t lo, int32_t hi)
  * by counting SYNCs: the player, the stick cursor and the animations go by
  * real time, so they play the same at any frame rate. */
 
-/* ---- the player: fixed steps on real time ------------------------------------
- * The player steps PHYS_HZ times a second of real time, whatever the FPGA's
- * frame rate (frame_steps_take()). At 59.5 Hz that's one step a frame, and
- * one more every two seconds or so. player.c's numbers (speeds, gravity,
- * timers) are per step, so at 60 they play as they did stepping once per
- * SYNC on the real FPGA.
+/* ---- the player: fixed steps, one per SYNC or on real time ------------------
+ * The player takes about PHYS_HZ steps a second (frame_steps_take()): one
+ * per SYNC while SYNC comes at close to that rate (the real FPGA's
+ * 59.52 Hz: smooth, a step every frame, 0.8 % slow), and PHYS_HZ a second
+ * of real time otherwise. player.c's numbers (speeds, gravity, timers) are
+ * per step.
  * A step is a READ_BOX of the cells around the player (velocity_box), then
  * update_player() in its callback, which sets the next box. Only one is
  * out at a time: the next owed step's read goes out from the callback, so

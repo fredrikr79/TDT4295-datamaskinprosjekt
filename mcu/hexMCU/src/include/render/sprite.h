@@ -148,6 +148,18 @@ void sprite_init(void);                 /* empty everything; once at start */
 void sprite_frame(void);                /* each game frame: animations, by real time */
 bool sprite_poll(void);                 /* each poll; false: a command failed -> resync */
 void sprite_lost(void);                 /* after fpga_abort_all() */
+
+/* Sprite changes (moves, show / hide) go out this many us before the next
+ * SYNC, to land in the screen's blanking; 0: right after a SYNC instead.
+ * Starts from settings.toml (sprite.lead_us), else SPRITE_SYNC_LEAD_US.
+ * Tune it with the console ("sprite lead"); "sprite lead save" stores it. */
+#define SPRITE_SYNC_LEAD_MAX_US 16000u
+void     sprite_set_sync_lead_us(uint32_t us);
+uint32_t sprite_sync_lead_us(void);
+/* How the timing went since the last call (then starts over): of the
+ * changes that finished, the latest one's time against the SYNC it was
+ * aimed at, in us (negative: before it, as it should be). false: none. */
+bool     sprite_sync_stats(int32_t *latest_us, uint32_t *count);
 void sprite_forget(void);               /* new FPGA session: send everything again */
 
 unsigned sprite_pending(void);          /* images not on the FPGA yet */

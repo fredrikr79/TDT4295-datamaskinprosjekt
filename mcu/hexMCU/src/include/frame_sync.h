@@ -14,6 +14,10 @@
  *   - when to draw: a game frame per new SYNC          frame_sync_take()
  *   - the FPGA's heartbeat: no SYNC for a while means
  *     the FPGA is gone                                 frame_sync_alive()
+ *   - when the NEXT SYNC will come, to the
+ *     microsecond: sprite changes go out just before
+ *     it, in the screen's blanking (sprite.c)         frame_sync_last(),
+ *                                                      frame_sync_period_us()
  * What it's NOT used for: timing. Nothing counts SYNCs to measure time, so
  * the game plays the same at any frame rate. Things that move do it on
  * real time instead:
@@ -39,6 +43,13 @@ uint32_t frame_sync_count(void);    /* pulses since boot                  */
 /* Frames since *seen (0 = none yet), and moves *seen up to now. */
 uint32_t frame_sync_take(uint32_t *seen);
 
+/* ---- when SYNCs come ------------------------------------------------------------
+ * The interrupt notes each SYNC's time (plat_micros()), and keeps a running
+ * average of the time between them (measured: 16800 us on the real FPGA).
+ * The next SYNC is due at at_us + frame_sync_period_us(). */
+void     frame_sync_last(uint32_t *count, uint32_t *at_us);   /* the last SYNC: count, time */
+uint32_t frame_sync_period_us(void);
+
 /* ---- heartbeat ------------------------------------------------------------------
  * frame_sync_alive() is false once no SYNC has come for
  * FRAME_SYNC_HEARTBEAT_MS: the FPGA is gone (reset, reprogramming,
@@ -56,20 +67,31 @@ uint32_t frame_sync_take(uint32_t *seen);
 void frame_sync_heartbeat_reset(void);
 bool frame_sync_alive(void);
 
-/* ---- fixed steps on real time -----------------------------------------------------
- * A clock that says how many whole steps of 1/hz s have gone by since it
- * last said, however often it's asked. The leftover carries over, so no
- * time is lost: at 60 a second, asked every 16.8 ms, it's 1 step each time
- * and 2 every 2 s or so. A gap of more than a second counts as a second
- * (after a stall nobody wants a minute of steps).
+/* ---- fixed steps: one per SYNC, or on real time -------------------------------------
+ * A clock that says how many steps of about 1/hz s have gone by since it
+ * last said. Two ways, picked anew each time it's asked:
+ *   - locked: SYNC is coming, and its measured period is within
+ *     FRAME_STEPS_LOCK_PCT of 1/hz: exactly one step per SYNC. The real
+ *     FPGA's 59.52 Hz against 60 is 0.8 % slow, which nobody sees, and
+ *     the steps line up with the frames: no frame ever gets two steps.
+ *   - free: otherwise (no SYNC, or a frame rate far from hz), whole steps
+ *     of 1/hz s of real time, in microseconds, the leftover carried over.
+ *     A gap of more than a second counts as a second.
+ * Switching between them is logged.
  *
  *   frame_steps_t clock;
  *   frame_steps_start(&clock, 60);     // and again whenever time shouldn't count
  *   uint32_t n = frame_steps_take(&clock); */
+#ifndef FRAME_STEPS_LOCK_PCT
+#define FRAME_STEPS_LOCK_PCT 5u
+#endif
+
 typedef struct {
-    uint32_t last_ms;           /* when time was last added                 */
-    uint32_t acc;               /* ms x hz not stepped yet: 1000 = a step   */
-    uint16_t hz;
+    uint32_t last_us;           /* when time was last added (free)            */
+    uint32_t acc_us;            /* time not stepped yet (free)                */
+    uint32_t step_us;           /* 1/hz                                       */
+    uint32_t sync_seen;         /* frame_sync_count() at the last take        */
+    bool     locked;            /* the last take went by SYNC                 */
 } frame_steps_t;
 
 void     frame_steps_start(frame_steps_t *c, uint16_t hz);

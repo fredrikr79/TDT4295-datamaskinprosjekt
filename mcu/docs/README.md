@@ -298,6 +298,10 @@ The highest level that can be shown is set at build time with
 | `reset fpga` / `reset mcu` / `reset` | Reset the FPGA (reset pin), the MCU, or both |
 | `reset -b fpga` / `reset -b` | The same with PROGRAM_B: the FPGA wipes its design and loads it from flash again (the handshake waits for DONE); without `fpga`, the MCU is reset after |
 | `abort` | Drop every queued FPGA command |
+| `sprite lead [<µs>]` | Sprite changes go out this long before SYNC, to land in the screen's blanking (default 1000); also shows the measured SYNC period and when the last changes really finished |
+| `badapple delay [<µs>]` | Bad Apple's writes start this long after each SYNC |
+| `sprite lead save`, `badapple delay save` | Keep the current value in `settings.toml` on the SD card, so it's used from the next start |
+| `settings`, `settings reload` | What `settings.toml` holds / read it again |
 
 ---
 
@@ -347,6 +351,22 @@ FAT32. Laid out like this:
 rom/x,y.dat        the rooms as shipped (x,y = room coordinates)
 save/x,y.dat       saved rooms; read before rom/ if they exist
 sprites/*.spr      images and animations (`tools/png2spr.py`)
+settings.toml      tuned values, kept between runs (written by "... save")
+```
+
+`settings.toml` is a small part of TOML: comments, `[section]` lines, and
+`name = number` (decimal or `0x` hex). Anything else is logged and skipped. It's
+read once, the first time a setting is needed; with no file or card, the
+defaults count. The console's tuning commands store their value with `save`,
+which writes the whole file again, so comments in it are lost. It can also be
+edited on the PC (in `$HEXMCU_SD` for the emulator).
+
+```toml
+[sprite]
+lead_us = 1000      # sprite changes go out this long before SYNC
+
+[badapple]
+delay_us = 15500    # Bad Apple's writes start this long after SYNC
 ```
 
 ---

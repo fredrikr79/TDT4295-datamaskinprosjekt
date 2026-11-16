@@ -25,6 +25,9 @@
 #include "game.h"
 #include "badapple.h"
 #include "assets.h"
+#include "sprite.h"
+#include "frame_sync.h"
+#include "settings.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -558,6 +561,10 @@ static void cmd_info(int argc, char **argv)
  * sprite new <memID> <x> <y> <w> <h> [hide]    SPRITE_WRITE -> spriteID
  * sprite move <id> <x> <y> [hide]              SPRITE_UPDATE
  * sprite del <id>                              SPRITE_DELETE
+ * sprite lead [<us> | save]                    the game's sprite changes go out
+ *                                              this long before SYNC (sprite.c);
+ *                                              shows how the timing went; save:
+ *                                              keep it in settings.toml
  * For bringing up the FPGA's sprites by hand. These IDs are the same ones
  * the game's HUD uses, so mixing the two confuses both. */
 static void cmd_sprite(int argc, char **argv)
@@ -603,6 +610,30 @@ static void cmd_sprite(int argc, char **argv)
                    (uint16_t)a[1], (uint16_t)a[2]));
         return;
     }
+    if (strcmp(sub, "lead") == 0 && (argc == 2 || argc == 3)) {
+        if (argc == 3 && !strcmp(argv[2], "save")) {
+            if (settings_save("sprite.lead_us", (int32_t)sprite_sync_lead_us()))
+                log_raw("saved: sprite.lead_us = %lu in %s\r\n",
+                        (unsigned long)sprite_sync_lead_us(), SETTINGS_FILE);
+            return;
+        }
+        if (argc == 3) {
+            if (!parse_arg("lead", argv[2], SPRITE_SYNC_LEAD_MAX_US, &a[0])) return;
+            sprite_set_sync_lead_us((uint32_t)a[0]);
+        }
+        uint32_t lead = sprite_sync_lead_us(), n;
+        int32_t  latest;
+        if (lead) log_raw("sprite lead: changes go out %lu us before SYNC", (unsigned long)lead);
+        else      log_raw("sprite lead: 0, changes go out right after SYNC");
+        log_raw(" (SYNC every %lu us)\r\n", (unsigned long)frame_sync_period_us());
+        if (sprite_sync_stats(&latest, &n))
+            log_raw("  since last asked: %lu changes, the latest done %ld us %s %s\r\n",
+                    (unsigned long)n, (long)(latest < 0 ? -latest : latest),
+                    latest <= 0 ? "before" : "after", lead ? "the SYNC" : "SYNC");
+        else
+            log_raw("  since last asked: no changes\r\n");
+        return;
+    }
     if (strcmp(sub, "del") == 0 && argc == 3) {
         if (!parse_arg("id", argv[2], 0xFFFF, &a[0])) return;
         if (console_busy()) return;
@@ -612,7 +643,8 @@ static void cmd_sprite(int argc, char **argv)
     log_raw("usage: sprite upload <w> <h> <colour>\r\n"
             "       sprite new <memID> <x> <y> <w> <h> [hide]\r\n"
             "       sprite move <id> <x> <y> [hide]\r\n"
-            "       sprite del <id>\r\n");
+            "       sprite del <id>\r\n"
+            "       sprite lead [<us> | save]\r\n");
 }
 
 /* sim start | stop */
@@ -967,7 +999,12 @@ void cli_quit(const char *why)
  * badapple [-l] [-s <dark><light>] [<file>]   play; -l loops, -s 34: Water
  *                                             for 0 pixels, Lava for 1
  * badapple -s                                 list the materials
+ * badapple delay [<us> | save]               wait this long after each SYNC
+ *                                             before writing (0..16800; also
+ *                                             while playing): moves the tear;
+ *                                             save: keep it in settings.toml
  * badapple stop */
+
 static void cmd_badapple(int argc, char **argv)
 {
     bool        loop  = false;
@@ -975,6 +1012,23 @@ static void cmd_badapple(int argc, char **argv)
     const char *file  = NULL;
  
     if (argc == 2 && !strcmp(argv[1], "stop")) { badapple_stop(); return; }
+    if (argc >= 2 && !strcmp(argv[1], "delay")) {
+        unsigned long us;
+        if (argc > 3) { log_raw("usage: badapple delay [<us> | save]\r\n"); return; }
+        if (argc == 3 && !strcmp(argv[2], "save")) {
+            if (settings_save("badapple.delay_us", (int32_t)badapple_sync_delay()))
+                log_raw("saved: badapple.delay_us = %lu in %s\r\n",
+                        (unsigned long)badapple_sync_delay(), SETTINGS_FILE);
+            return;
+        }
+        if (argc == 3) {
+            if (!parse_arg("delay", argv[2], BADAPPLE_DELAY_MAX_US, &us)) return;
+            badapple_set_sync_delay((uint32_t)us);
+        }
+        log_raw("badapple: writes start %lu us after each SYNC (SYNC every %lu us)\r\n",
+                (unsigned long)badapple_sync_delay(), (unsigned long)frame_sync_period_us());
+        return;
+    }
  
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-l")) { loop = true; continue; }
@@ -995,12 +1049,32 @@ static void cmd_badapple(int argc, char **argv)
             continue;
         }
         if (argv[i][0] == '-' || file) {
-            log_raw("usage: badapple [-l] [-s <dark><light>] [<file>] | badapple stop\r\n");
+            log_raw("usage: badapple [-l] [-s <dark><light>] [<file>] | badapple delay [<us> | save] | "
+                    "badapple stop\r\n");
             return;
         }
         file = argv[i];
     }
     badapple_start(file ? file : "badapple.bin", loop, dark, light);
+}
+
+/* settings          the values settings.toml holds (read at start)
+ * settings reload   read the file again (values already in use don't change
+ *                   until their module asks again, e.g. after a reset) */
+static void settings_line(void *ctx, const char *key, int32_t value)
+{
+    unsigned *n = ctx;
+    (*n)++;
+    log_raw("  %-24s %ld\r\n", key, (long)value);
+}
+
+static void cmd_settings(int argc, char **argv)
+{
+    if (argc == 2 && !strcmp(argv[1], "reload")) settings_reload();
+    else if (argc != 1) { log_raw("usage: settings [reload]\r\n"); return; }
+    unsigned n = 0;
+    settings_list(settings_line, &n);
+    log_raw("%u value%s in %s\r\n", n, n == 1 ? "" : "s", SETTINGS_FILE);
 }
 
 static void cmd_exit(int argc, char **argv)
@@ -1013,7 +1087,7 @@ static const cli_cmd_t cmds[] = {
     { "send",    cmd_send,     "send <op> [<x> <y> [<n> | <w> <h>]]  header only, e.g. send 0xB0" },
     { "read",    cmd_read,     "read <len>          e.g. read 4" },
     { "fecho",   cmd_fecho,    "fecho [-r N] <n> | <b0> <b1> ...  echo random / given bytes, N rounds" },
-    { "sprite",  cmd_sprite,   "sprite upload|new|move|del ...  sprite commands by hand" },
+    { "sprite",  cmd_sprite,   "sprite upload|new|move|del ... | lead [<us>|save]  sprite commands by hand / when changes go out" },
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]  (w h: screen px)" },
@@ -1027,7 +1101,8 @@ static const cli_cmd_t cmds[] = {
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
     { "exit",    cmd_exit,     "exit the emulator (host only)" },
-    { "badapple", cmd_badapple, "badapple [-l] [-s <dark><light>] [<file>] | stop  video on the grid (-s alone: materials)" },
+    { "badapple", cmd_badapple, "badapple [-l] [-s <dark><light>] [<file>] | delay [<us>|save] | stop  video on the grid (-s alone: materials)" },
+    { "settings", cmd_settings, "settings [reload]   what settings.toml holds (tuning commands store with save)" },
 };
 #define NUM_CMDS (sizeof cmds / sizeof cmds[0])
 
@@ -1143,4 +1218,4 @@ void cli_poll(void)
     int c;
     while ((c = io_getc()) >= 0)
         handle_char((char)c);
-}
+}   

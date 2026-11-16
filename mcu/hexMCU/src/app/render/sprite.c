@@ -36,16 +36,26 @@
 #include "storage.h"
 #include "log.h"
 #include "platform.h"
-#include "frame_sync.h"                 /* frame_elapsed_ms(), frame_sync_count() */
+#include "frame_sync.h"                 /* frame_elapsed_ms(), frame_sync_last() */
+#include "settings.h"
 
 #ifndef SPRITE_SYNC_UPDATES
 #define SPRITE_SYNC_UPDATES 1           /* changes wait for SYNC (see update_window_check()) */
 #endif
 #define SPRITE_SYNC_MAX_MS  50u         /* ...but not longer than this (3 frames) */
+#ifndef SPRITE_SYNC_LEAD_US
+#define SPRITE_SYNC_LEAD_US 1000u       /* go out this long before the next SYNC */
+#endif
 
 static bool     update_window;          /* open: send the waiting changes   */
 static uint32_t update_sync_seen;       /* the SYNC it last opened at       */
 static uint32_t update_opened_ms;
+static uint32_t sync_lead_us;           /* sprite_sync_lead_us()            */
+static bool     sync_lead_known;        /* read from settings.toml, or set  */
+static uint32_t window_target_us;       /* the SYNC the window aims at      */
+static bool     stat_any;               /* sprite_sync_stats()              */
+static int32_t  stat_latest_us;
+static uint32_t stat_count;
 static void update_window_check(void);
 
 /* Sprite file: "SP", W, H, frames (16 bits, MSB first), then the frames'
@@ -713,6 +723,12 @@ static void sprite_done(const fpga_cmd_t *cmd, fpga_err_t err)
         s->id = fpga_answer_id(cmd);
         /* fall through */
     case SPR_UPDATING:
+        if (s->state == SPR_UPDATING) {          /* not a create: when did it land? */
+            int32_t rel = (int32_t)(plat_micros() - window_target_us);
+            if (!stat_any || rel > stat_latest_us) stat_latest_us = rel;
+            stat_any = true;
+            stat_count++;
+        }
         s->state = SPR_LIVE;
         s->s_x = s->p_x; s->s_y = s->p_y; s->s_visible = s->p_visible;
         s->dirty = false;
@@ -885,30 +901,65 @@ bool sprite_poll(void)
     return !failed;
 }
 
-/* ---- sprite changes go out right after a SYNC ---------------------------------------------
+/* ---- sprite changes go out just before a SYNC ---------------------------------------------
  * The FPGA draws sprites as it scans the screen. A sprite moved, shown or
  * hidden while the scan is passing over it tears: its upper rows at the
- * old place, the rest at the new. So changes to live sprites wait for the
- * next SYNC and go out on the first poll after it, ahead of whatever the
- * game queues for that frame, to land in the vertical blanking. A sprite
- * shows where it was put one frame (16.8 ms) later, which nobody sees.
+ * old place, the rest at the new. The scan is in its blanking just before
+ * SYNC (found with Bad Apple's delay: writes ending at SYNC don't tear), so
+ * changes to live sprites wait, and go out sync_lead_us before the next
+ * SYNC, predicted from the last one and the measured period
+ * (frame_sync.h). Whatever is moved during a frame shows at the next one.
+ * Lead 0: right after a SYNC instead (the first poll after it).
  * If no SYNC comes for SPRITE_SYNC_MAX_MS (an FPGA that doesn't send it),
  * they go anyway. -DSPRITE_SYNC_UPDATES=0: send them at once, as before.
- * Making and deleting sprites, and image uploads, don't wait. */
+ * Making and deleting sprites, and image uploads, don't wait.
+ * sprite_sync_stats() says when they really landed, to tune the lead. */
+void sprite_set_sync_lead_us(uint32_t us)
+{
+    sync_lead_us    = us < SPRITE_SYNC_LEAD_MAX_US ? us : SPRITE_SYNC_LEAD_MAX_US;
+    sync_lead_known = true;
+}
+
+/* From settings.toml (sprite.lead_us) the first time, else the default. */
+uint32_t sprite_sync_lead_us(void)
+{
+    if (!sync_lead_known) {
+        int32_t v = settings_get("sprite.lead_us", (int32_t)SPRITE_SYNC_LEAD_US);
+        sprite_set_sync_lead_us(v < 0 ? 0u : (uint32_t)v);
+    }
+    return sync_lead_us;
+}
+
+bool sprite_sync_stats(int32_t *latest_us, uint32_t *count)
+{
+    bool any = stat_any;
+    *latest_us = stat_latest_us;
+    *count     = stat_count;
+    stat_any   = false;
+    stat_count = 0;
+    return any;
+}
 static void update_window_check(void)
 {
 #if SPRITE_SYNC_UPDATES
-    uint32_t now = plat_millis(), c = frame_sync_count();
-    if (c != update_sync_seen) {
+    uint32_t now_ms = plat_millis(), c, at;
+    frame_sync_last(&c, &at);
+    if (c != update_sync_seen) {                /* not opened yet since this SYNC */
+        uint32_t lead = sprite_sync_lead_us();
+        uint32_t target = lead ? at + frame_sync_period_us() : at;
+        if ((int32_t)(plat_micros() - (target - lead)) < 0) return;           /* not yet */
         update_sync_seen = c;
         update_window    = true;
-        update_opened_ms = now;
-    } else if (now - update_opened_ms >= SPRITE_SYNC_MAX_MS) {
+        update_opened_ms = now_ms;
+        window_target_us = target;
+    } else if (now_ms - update_opened_ms >= SPRITE_SYNC_MAX_MS) {
         update_window    = true;                /* no SYNC: don't wait forever */
-        update_opened_ms = now;
+        update_opened_ms = now_ms;
+        window_target_us = plat_micros();
     }
 #else
     update_window = true;
+    window_target_us = plat_micros();
 #endif
 }
 

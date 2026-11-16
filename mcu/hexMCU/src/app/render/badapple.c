@@ -67,6 +67,7 @@
 #include "log.h"
 #include "assets.h"                     /* material_name() */
 #include "frame_sync.h"
+#include "settings.h"
 
 #if FPGA_SIM_IDS_PER_BYTE != 1
 #error "badapple.c sends one cell per byte (FPGA_SIM_IDS_PER_BYTE 1)"
@@ -118,13 +119,27 @@
  * it is the tear. Starting them just after the scan has passed the top
  * keeps the scan ahead all the way down, so no half-written picture shows.
  * Outside ba: it's a setting, not part of a run. */
-#ifndef BA_SYNC_DELAY_MS
-#define BA_SYNC_DELAY_MS 0u
+#ifndef BA_SYNC_DELAY_US
+#define BA_SYNC_DELAY_US 14799u
 #endif
-static uint32_t sync_delay_ms = BA_SYNC_DELAY_MS;
+static uint32_t sync_delay_us;
+static bool     sync_delay_known;      /* read from settings.toml, or set */
 
-void     badapple_set_sync_delay(uint32_t ms) { sync_delay_ms = ms; }
-uint32_t badapple_sync_delay(void)            { return sync_delay_ms; }
+uint32_t badapple_sync_delay(void)
+{
+    if (!sync_delay_known) {
+        int32_t v = settings_get("badapple.delay_us", (int32_t)BA_SYNC_DELAY_US);
+        sync_delay_us    = v < 0 ? 0u : (uint32_t)v;
+        sync_delay_known = true;
+    }
+    return sync_delay_us;
+}
+
+void badapple_set_sync_delay(uint32_t us)
+{
+    sync_delay_us    = us;
+    sync_delay_known = true;
+}
 
 
 typedef enum { BA_OFF, BA_CLEAR, BA_PLAY } phase_t;
@@ -154,8 +169,8 @@ static struct {
     /* frame SYNC */
     bool     sync_on;           /* still waiting for SYNC (not given up) */
     bool     sync_waiting;      /* a frame is due, waiting for a SYNC   */
-    bool     sync_delaying;     /* got it, waiting sync_delay_ms        */
-    uint32_t sync_at;           /* when the SYNC was seen               */
+    bool     sync_delaying;     /* got it, waiting sync_delay_us        */
+    uint32_t sync_at_us;        /* when it came (the interrupt's time)  */
     uint32_t sync_mark;         /* SYNC count when the wait began       */
     uint32_t sync_wait_t;
     uint32_t sync_missed;       /* frames sent without one, in a row    */
@@ -479,8 +494,8 @@ bool badapple_start(const char *path, bool loop, material_t dark, material_t lig
              (unsigned long)(ba.frames / BA_FPS / 60u), (unsigned long)(ba.frames / BA_FPS % 60u),
              material_name(dark), material_name(light),
              ba.maxp, in->max_cmd, BA_REFRESH_EVERY, loop ? ", looping" : "");
-    if (sync_delay_ms)
-        LOG_INFO("writes start %lu ms after each SYNC", (unsigned long)sync_delay_ms);
+    if (badapple_sync_delay())
+        LOG_INFO("writes start %lu us after each SYNC", (unsigned long)badapple_sync_delay());
     return true;
 }
 
@@ -517,7 +532,7 @@ static void play_poll(void)
      * before), at most a frame time. */
     if (ba.sync_on) {
         if (ba.sync_delaying) {                             /* after the SYNC */
-            if (plat_millis() - ba.sync_at < sync_delay_ms) return;
+            if (plat_micros() - ba.sync_at_us < badapple_sync_delay()) return;
             ba.sync_delaying = false;
             goto synced;
         }
@@ -532,9 +547,10 @@ static void play_poll(void)
         ba.sync_waiting = false;
         if (got) {
             ba.sync_missed = 0;
-            if (sync_delay_ms) {                            /* then wait a bit more */
+            if (badapple_sync_delay()) {                    /* then wait a bit more */
+                uint32_t c;
+                frame_sync_last(&c, &ba.sync_at_us);
                 ba.sync_delaying = true;
-                ba.sync_at       = plat_millis();
                 return;
             }
         } else {

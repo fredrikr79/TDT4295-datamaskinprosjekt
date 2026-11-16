@@ -16,11 +16,13 @@ void badapple_stop(void);
 void badapple_poll(void);               /* main loop, every pass           */
 bool badapple_busy(void);
 
-/* Wait this long after a SYNC before a frame's writes start (0: at once,
- * the default). Whole ms, by plat_millis(), so the real wait is between
- * ms - 1 and ms. For finding where the writes stop tearing: sweep it and
- * watch the tear move. Can be changed while playing. */
-void     badapple_set_sync_delay(uint32_t ms);
+/* Wait this long after a SYNC before a frame's writes start, in us,
+ * counted from the SYNC interrupt itself (frame_sync_last()). For finding
+ * where the writes stop tearing: sweep it and watch the tear move. Can be
+ * changed while playing. Starts from settings.toml (badapple.delay_us),
+ * else BA_SYNC_DELAY_US; "badapple delay save" stores it there. */
+#define BADAPPLE_DELAY_MAX_US 16800u    /* a frame */
+void     badapple_set_sync_delay(uint32_t us);
 uint32_t badapple_sync_delay(void);
 
 #endif

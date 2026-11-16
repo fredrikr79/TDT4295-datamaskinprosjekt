@@ -14,7 +14,7 @@ static sprite_t *spr;                   /* the picture, at the player's top-left
 
 static void sprite_follow(const player_t *player)
 {
-    sprite_move(spr, (int16_t)player->x, (int16_t)player->y);
+    sprite_move(spr, (int16_t) (player->x * 4), (int16_t) (player->y * 4));
 }
 
 uint16_t ticks_since_last_damage = 0;
@@ -77,14 +77,40 @@ void damage_player(player_t *player, uint16_t amount)
     ticks_since_last_damage = PLAYER_DAMAGE_TO_HEAL_DELAY;
 
     // TODO: Check if dead
-    // if (player->health == 0) reset_game()
+    if (player->health == 0) game_reset();
 }
 
 void heal_player(player_t *player, uint16_t amount)
 {
+    if (player->health == 0) return;
+
     if (player->health + amount < PLAYER_MAX_HEALTH)
         player->health += amount;
     else player->health = PLAYER_MAX_HEALTH;
+}
+
+void keep_player_in_bounds(player_t *player)
+{
+    if (player->x <= 0)
+    {
+        player->x = 0;
+        player->velocity_x = 0;
+    }
+    if (player->y <= 0)
+    {
+        player->y = 0;
+        player->velocity_y = 0;
+    }
+    if (ROOM_X - 1 <= player->x + PLAYER_SIZE_X)
+    {
+        player->x = ROOM_X - 1 - PLAYER_SIZE_X;
+        player->velocity_x = 0;
+    }
+    if (ROOM_Y - 1 <= player->y + PLAYER_SIZE_Y)
+    {
+        player->y = ROOM_Y - 1 - PLAYER_SIZE_Y;
+        player->velocity_y = 0;
+    }
 }
 
 void update_player(
@@ -132,7 +158,7 @@ void update_player(
     
     // Breathing
     if (!in_air && 0 < player->breath_meter) player->breath_meter--;
-    else if (in_air && player->breath_meter < 250) player->breath_meter++;
+    else if (in_air && player->breath_meter < PLAYER_MAX_BREATH) player->breath_meter++;
 
     // Check if on ground
     bool on_ground = velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y;
@@ -157,15 +183,15 @@ void update_player(
     // Apply friction
     if (on_ground || in_water || in_acid)
     {
-        player->velocity_x *= 0.7;
+        player->velocity_x *= FRICTION_GROUND_WATER;
         player->fly_meter += FLY_REGEN_SPEED;
         if (MAX_FLY_TIME < player->fly_meter)
             player->fly_meter = MAX_FLY_TIME;
     }
     else if (in_lava)
-        player->velocity_x *= 0.4;
+        player->velocity_x *= FRICTION_LAVA;
     else
-        player->velocity_x *= 0.9;
+        player->velocity_x *= FRICTION_AIR;
 
     // Accelerate from input
     if (move_direction)
@@ -180,7 +206,7 @@ void update_player(
             player->velocity_x = target_velocity;
     }
     // Stop if no input and low velocity
-    else if (fabsf(player->velocity_x) < 0.3) player->velocity_x = 0;
+    else if (fabsf(player->velocity_x) < 0.075) player->velocity_x = 0;
 
     // Calculate gravity with bouyancy included
     float gravity_force = GRAVITY_AIR;
@@ -199,6 +225,9 @@ void update_player(
     if (gravity_force < gravity_force_from_max) force_y = gravity_force;
     else force_y = gravity_force_from_max;
     // LOG_DBG("gravity_force: %f, force_y: %f", gravity_force, force_y);
+
+    // Apply terminal velocity
+    if (max_gravity < player->velocity_y) player->velocity_y = max_gravity;
 
     // Jump, fly & swim
     if (jump_next_frame) perform_jump(
@@ -267,6 +296,7 @@ void update_player(
             player->x = portal->dest_pos_x;
         if (portal->dest_pos_y != 65535)
             player->y = portal->dest_pos_y;
+        keep_player_in_bounds(player);
         player->still_in_portal = PLAYER_PORTAL_EXHAUSTION;
         game_change_room(
             portal->dest_room_x,
@@ -323,6 +353,8 @@ void update_player(
         player->velocity_x, player->velocity_y
     );
     set_next_velocity_box(&next_velocity_box);
+
+    // Update player sprite
     sprite_follow(player);                  /* sprite_poll() sends it */
     //LOG_DBG("end vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 }
@@ -347,18 +379,28 @@ void start_jump()
     jump_next_frame = true;
 }
 
+void player_set_default(player_t *player)
+{
+    player->x = 78;
+    player->y = 30;
+
+    player->velocity_x = 0;
+    player->velocity_y = 0;
+
+    player->fly_meter = MAX_FLY_TIME;
+
+    player->health = PLAYER_MAX_HEALTH;
+    player->breath_meter = PLAYER_MAX_BREATH;
+    player->burn_timer = 0;
+
+    player->still_in_portal = 0;
+}
+
 void player_init()
 {
     // Init the player struct
-    player_t player = (player_t) {
-        .x = 100, .y = 100,
-        .velocity_x = 0, .velocity_y = 0,
-        .health = PLAYER_MAX_HEALTH,
-        .fly_meter = MAX_FLY_TIME,
-        .breath_meter = PLAYER_MAX_BREATH,
-        .burn_timer = 0,
-        .still_in_portal = 0
-    };
+    player_t player = (player_t) {};
+    player_set_default(&player);
     set_player(player);
     sprite_follow(&player);
 

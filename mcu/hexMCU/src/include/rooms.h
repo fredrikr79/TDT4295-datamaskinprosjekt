@@ -7,8 +7,8 @@
 
 #include "fpga.h"
 
-#define ROOM_X 640
-#define ROOM_Y 360
+#define ROOM_X 160
+#define ROOM_Y 90
 #define MAX_PORTALS 8
 #define DATA_MAX_SIZE (1 + 14*MAX_PORTALS + ROOM_X*ROOM_Y*2)
 
@@ -35,6 +35,7 @@ void progress_online_room(struct online_room *room, uint8_t *new_ids, uint16_t i
 bool save_online_room(struct online_room *room);
 
 bool delete_save(int x, int y);
+void delete_all_saves();
 
 /* ---- moving the current room to / from the FPGA ---------------------------
  *   room_load_start(x, y)   read the room's file; STOP_SIM, send it row by

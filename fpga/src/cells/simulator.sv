@@ -118,7 +118,7 @@ module simulator #(
 
 
     // ---- [PIPELINE 2] Stage 2: explosion and GoL rules from the registered neighbourhood ----
-    rule_stage.base <= setup_stage.valid;
+    rule_stage.valid <= setup_stage.valid;
     rule_stage.last <= setup_stage.last;
     rule_stage.base <= setup_stage.base;
     for (int core = 0; core < sim_pkg::SimulationCoreCount; core++) begin
@@ -144,15 +144,15 @@ module simulator #(
     // the column to its left writing +1, or the column to its right writing -1. Those are
     // fixed for each column, so this is three small compares per pixel instead of the
     // previous 16 write calls x 40 positions per core.
-    if (rule_stage.base) begin
+    if (rule_stage.valid) begin
       for (int b = 0; b < 2; b++) begin
-        for (int c = 0; c < sim_pkg::SimulationCoreCount; c++) begin
-          if (wr_en[c][b].center)
-            output_buffers[b][c*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[c][b].center;
-          if (c > 0 && wr_en[c-1][b].left)
-            output_buffers[b][c*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[c-1][b].left;
-          if (c < sim_pkg::SimulationCoreCount - 1 && wr_en[c+1][b].right)
-            output_buffers[b][c*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[c+1][b].right;
+        for (int column = 0; column < sim_pkg::CellGridWidth; column++) begin
+          if (wr_en[column/Stride][b].center)
+            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[column/Stride][b].center;
+          else if (column > 0 && wr_en[(column-1)/Stride][b].left)
+            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[(column-1)/Stride][b].left;
+          else if (column < sim_pkg::CellGridWidth - 1 && wr_en[(column+1)/Stride][b].right)
+            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[(column+1)/Stride][b].right;
         end
       end
     end
@@ -161,7 +161,9 @@ module simulator #(
     // [PIPELINE] end-of-row work now happens when stage 2 finishes the last pixel.
     // simulation_base / is_row_running are advanced by stage 1 above.
     begin
-      if (rule_stage.base && rule_stage.last) begin
+      pulse_transaction_pair_done <= 1'b0;
+      pulse_row_done <= 1'b0;
+      if (rule_stage.valid && rule_stage.last) begin
         pulse_row_done <= 1'b1;
 
         if (!is_sending_row || is_unmatched_boundry_row) begin
@@ -183,8 +185,6 @@ module simulator #(
           current_row_index <= current_row_index + 1'b1;
         end
       end
-      pulse_transaction_pair_done <= 1'b0;
-      pulse_row_done <= 1'b0;
 
       if (pulse_new_row && sim_running) begin
         if (is_unmatched_boundry_row) begin

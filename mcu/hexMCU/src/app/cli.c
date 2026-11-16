@@ -24,6 +24,7 @@
 #include "storage.h"
 #include "game.h"
 #include "badapple.h"
+#include "assets.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -962,13 +963,44 @@ void cli_quit(const char *why)
     cli_async_end();
 }
 
+/* BADAPPLE
+ * badapple [-l] [-s <dark><light>] [<file>]   play; -l loops, -s 34: Water
+ *                                             for 0 pixels, Lava for 1
+ * badapple -s                                 list the materials
+ * badapple stop */
 static void cmd_badapple(int argc, char **argv)
 {
+    bool        loop  = false;
+    material_t  dark  = MAT_AIR, light = MAT_STONE;
+    const char *file  = NULL;
+ 
     if (argc == 2 && !strcmp(argv[1], "stop")) { badapple_stop(); return; }
-    bool loop = argc >= 2 && !strcmp(argv[1], "-l");
-    int  a    = loop ? 2 : 1;
-    if (argc > a + 1) { log_raw("usage: badapple [-l] [<file>] | stop\r\n"); return; }
-    badapple_start(argc > a ? argv[a] : "badapple.bin", loop);
+ 
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-l")) { loop = true; continue; }
+        if (!strcmp(argv[i], "-s")) {
+            const char *m = i + 1 < argc ? argv[i + 1] : "";
+            if (strlen(m) != 2 ||
+                m[0] < '0' || m[0] >= '0' + MAT_COUNT ||
+                m[1] < '0' || m[1] >= '0' + MAT_COUNT) {
+                log_raw("badapple -s <dark><light>, e.g. -s %u%u (the default):\r\n",
+                        (unsigned)MAT_AIR, (unsigned)MAT_STONE);
+                for (unsigned k = 0; k < MAT_COUNT; k++)
+                    log_raw("  %u  %s\r\n", k, material_name((material_t)k));
+                return;
+            }
+            dark  = (material_t)(m[0] - '0');
+            light = (material_t)(m[1] - '0');
+            i++;
+            continue;
+        }
+        if (argv[i][0] == '-' || file) {
+            log_raw("usage: badapple [-l] [-s <dark><light>] [<file>] | badapple stop\r\n");
+            return;
+        }
+        file = argv[i];
+    }
+    badapple_start(file ? file : "badapple.bin", loop, dark, light);
 }
 
 static void cmd_exit(int argc, char **argv)
@@ -995,7 +1027,7 @@ static const cli_cmd_t cmds[] = {
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
     { "exit",    cmd_exit,     "exit the emulator (host only)" },
-    { "badapple", cmd_badapple, "badapple [-l] [<file> | stop]  play a 120x90 1 bpp video on the grid" },
+    { "badapple", cmd_badapple, "badapple [-l] [-s <dark><light>] [<file>] | stop  video on the grid (-s alone: materials)" },
 };
 #define NUM_CMDS (sizeof cmds / sizeof cmds[0])
 

@@ -28,4 +28,8 @@ extern assets_t assets;
 
 void assets_init(void);
 
+/* A material's name ("Air", "Stone"...), "?" for one that doesn't exist.
+ * Plain strings, no FPGA or card needed: works before assets_init(). */
+const char *material_name(material_t m);
+
 #endif

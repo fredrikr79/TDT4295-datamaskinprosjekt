@@ -4,12 +4,18 @@
  * The file: 120x90 frames, 1350 bytes each (15 bytes a row, MSB = the
  * leftmost pixel, 1 = white), back to back, 25 fps -- what
  *   ffmpeg ... -pix_fmt monob -f rawvideo badapple.bin
- * makes (BA_FPS must match its fps=). Each pixel becomes one cell byte
- * (BA_WHITE / BA_BLACK), and the video sits in the middle of the grid
+ * makes (BA_FPS must match its fps=). Each pixel becomes one cell: the
+ * "dark" material for 0, the "light" one for 1 (default Air and Stone,
+ * chosen per run), and the video sits in the middle of the grid
  * (x 20..139 on a 160x90 grid).
  *
+ * The simulation is left alone: stop it first ("sim stop") for a clean
+ * picture, or leave it running and let the materials do their thing
+ * between frames. The game isn't stopped either -- whatever it draws into
+ * the grid is drawn over by the next frame.
+ *
  * How:
- *   start   STOP_SIM, then the whole grid black (WRITE_BOX bands)
+ *   start   the whole grid the dark material (WRITE_BOX bands)
  *   play    every frame (40 ms at 25 fps): the frame that is due,
  *           compared with the last one sent, byte by byte (8 pixels). Only what changed goes out, as
  *           few WRITE_BOXes as N allows:
@@ -59,7 +65,7 @@
 #include "storage.h"
 #include "platform.h"
 #include "log.h"
-#include "game.h"
+#include "assets.h"                     /* material_name() */
 #include "frame_sync.h"
 
 #if FPGA_SIM_IDS_PER_BYTE != 1
@@ -107,10 +113,6 @@
 #endif
 #define BA_SYNC_GIVE_UP 3u
 
-/* The two cell bytes. Pick the material the FPGA's colour table draws
- * lightest for white. The simulation is stopped, so nothing moves. */
-#define BA_BLACK      SIM_CELL(MAT_AIR)
-#define BA_WHITE      SIM_CELL(MAT_SAND)
 
 typedef enum { BA_OFF, BA_CLEAR, BA_PLAY } phase_t;
 
@@ -145,7 +147,7 @@ static struct {
     uint32_t sync_missed_all;
     uint32_t sync_c0, sync_t0;  /* for the SYNC rate in the log         */
 
-    uint8_t  in_flight;         /* our commands queued, done not called */
+    uint8_t  dark, light;       /* the two cell bytes                   */
     bool     failed;
 
     uint32_t chunk_first;       /* frame index of chunk[0]              */
@@ -168,6 +170,11 @@ static struct {
     uint8_t  tx[BA_W * BA_H] __attribute__((aligned(8)));
 } ba;
 
+/* Our commands queued and not done yet. Outside ba: they can outlive a
+ * run (stop doesn't cancel them, they just finish), and start waits for
+ * them since their payload is in ba.tx. */
+static uint8_t in_flight;
+
 /* 8 packed pixels -> 8 cell bytes in one store (little-endian: byte 0 is
  * the leftmost pixel, the MSB of the packed byte). */
 static uint64_t lut[256];
@@ -177,7 +184,7 @@ static void lut_init(void)
     for (unsigned v = 0; v < 256u; v++) {
         uint64_t w = 0;
         for (unsigned i = 0; i < 8u; i++) {
-            uint64_t cell = (v & (0x80u >> i)) ? BA_WHITE : BA_BLACK;
+            uint64_t cell = (v & (0x80u >> i)) ? ba.light : ba.dark;
             w |= cell << (8u * i);
         }
         lut[v] = w;
@@ -188,7 +195,7 @@ static void lut_init(void)
 static void cmd_done(const fpga_cmd_t *c, fpga_err_t err)
 {
     (void)c;
-    ba.in_flight--;
+    in_flight--;
     /* The first error is the real one; the CANCELLED ones behind it, and
      * the ABORTED ones from our own stop, say nothing new. */
     if (err != FPGA_ERR_NONE && ba.phase != BA_OFF && !ba.failed) {
@@ -203,7 +210,7 @@ static bool submit(fpga_cmd_t *c)
 {
     c->done = cmd_done;
     fpga_status_t st = fpga_submit(c);
-    if (st == FPGA_OK) { ba.in_flight++; return true; }
+    if (st == FPGA_OK) { in_flight++; return true; }
     if (st != FPGA_EFULL) {
         LOG_ERR("command not queued: %s", fpga_status_str(st));
         ba.failed = true;
@@ -211,8 +218,8 @@ static bool submit(fpga_cmd_t *c)
     return false;
 }
 
-/* The whole grid black, a band of rows at a time, from tx[] (all
- * BA_BLACK at this point). */
+/* The whole grid the dark material, a band of rows at a time, from tx[]
+ * (all ba.dark at this point). */
 static void submit_clear(void)
 {
     while (ba.clear_row < ba.grid_h) {
@@ -363,10 +370,11 @@ static const uint8_t *frame(uint32_t i)
 }
 
 /* ---- start / stop -------------------------------------------------------- */
+/* Stop. Commands already queued are left to finish (cancelling them would
+ * cancel the game's too, and the game would resync). */
 static void finish(const char *why)
 {
     ba.phase = BA_OFF;                      /* cmd_done: no more error lines */
-    if (ba.in_flight) fpga_abort_all();     /* ours, and anything queued with them */
     LOG_INFO("%s: %lu frames sent, %lu dropped, %lu loops", why, (unsigned long)ba.sent,
              (unsigned long)ba.dropped, (unsigned long)ba.loops);
     timing_log();
@@ -388,11 +396,21 @@ void badapple_stop(void)
     finish("stopped");
 }
 
-bool badapple_start(const char *path, bool loop)
+/* A material's cell byte, with the state a new cell of it needs (fpga.h). */
+static uint8_t cell_of(material_t m)
+{
+    uint8_t b = SIM_CELL(m);
+    if (m == MAT_LIFE)      b |= SIM_LIFE_ALIVE;
+    if (m == MAT_EXPLOSIVE) b |= SIM_EXPLOSIVE_FULL;
+    return b;
+}
+
+bool badapple_start(const char *path, bool loop, material_t dark, material_t light)
 {
     if (ba.phase != BA_OFF) { LOG_WARN("already playing ('badapple stop')"); return false; }
-    if (game_loading()) {
-        LOG_ERR("the game is using the grid: 'loading off' first");
+    if (in_flight) { LOG_WARN("the last run's commands are still finishing: try again"); return false; }
+    if ((unsigned)dark >= MAT_COUNT || (unsigned)light >= MAT_COUNT) {
+        LOG_ERR("no such material (0..%u)", MAT_COUNT - 1u);
         return false;
     }
 
@@ -432,21 +450,18 @@ bool badapple_start(const char *path, bool loop)
     ba.y0         = (uint16_t)((in->sim_h - BA_H) / 2u);
     ba.maxp       = maxp < sizeof ba.tx ? maxp : (uint16_t)sizeof ba.tx;
     ba.clear_rows = (uint16_t)(ba.maxp / ba.grid_w);
+    ba.dark       = cell_of(dark);
+    ba.light      = cell_of(light);
 
     lut_init();
-    memset(ba.tx, BA_BLACK, sizeof ba.tx);
-
-    fpga_cmd_t stop = fpga_cmd_sim_run(false);  /* nothing may move under the video */
-    if (!submit(&stop)) {
-        LOG_ERR("couldn't queue STOP_SIM (queue full?)");
-        return false;
-    }
+    memset(ba.tx, ba.dark, sizeof ba.tx);
 
     ba.phase = BA_CLEAR;
-    LOG_INFO("%s: %lu frames (%lu:%02lu), up to %u bytes per WRITE_BOX (N=%u), "
+    LOG_INFO("%s: %lu frames (%lu:%02lu), %s / %s, up to %u bytes per WRITE_BOX (N=%u), "
              "whole frame every %u%s", path,
              (unsigned long)ba.frames,
              (unsigned long)(ba.frames / BA_FPS / 60u), (unsigned long)(ba.frames / BA_FPS % 60u),
+             material_name(dark), material_name(light),
              ba.maxp, in->max_cmd, BA_REFRESH_EVERY, loop ? ", looping" : "");
     return true;
 }
@@ -457,7 +472,7 @@ static void play_poll(void)
     /* The frame being sent: the rest of its boxes, then wait until it's
      * all out (tx[] is in use until then). */
     submit_bands();
-    if (ba.next_band < ba.nbands || ba.in_flight) return;
+    if (ba.next_band < ba.nbands || in_flight) return;
     if (ba.timing) { ba.timing = false; frame_sent(); }
 
     /* Idle until the next frame: read ahead if it's not in the chunk. */
@@ -547,7 +562,7 @@ void badapple_poll(void)
 
     if (ba.phase == BA_CLEAR) {
         submit_clear();
-        if (ba.clear_row < ba.grid_h || ba.in_flight) return;
+        if (ba.clear_row < ba.grid_h || in_flight) return;
         ba.phase   = BA_PLAY;               /* tx[] is free from here on */
         ba.t0      = plat_millis();
         ba.sync_on = BA_WAIT_SYNC;

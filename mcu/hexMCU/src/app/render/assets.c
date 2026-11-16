@@ -36,6 +36,11 @@ static const char *const material_names[] = {
 _Static_assert(sizeof material_names / sizeof material_names[0] == MAT_COUNT,
                "a material in fpga.h has no name in material_names");
 
+const char *material_name(material_t m)
+{
+    return (unsigned)m < MAT_COUNT ? material_names[m] : "?";
+}
+
 /* ---- the player ------------------------------------------------------------
  * PLAYER_SIZE_X x PLAYER_SIZE_Y (player.h), one letter per pixel, looked up
  * in player_colour() below -- the same size as the hitbox, since a screen

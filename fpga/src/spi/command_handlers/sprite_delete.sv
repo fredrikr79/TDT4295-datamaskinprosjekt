@@ -63,6 +63,13 @@ always_ff @(posedge clk) begin
                     sprite_req_body.id <= param_id;
                     sprite_req_valid <= 1'b1;
                     sprite_delete_done <= 1'b1;
+                    sprite_req_body.active <= 0; // unused in req
+                    sprite_req_body.x <= 0;      // unused in req
+                    sprite_req_body.y <= 0;      // unused in req
+                    sprite_req_body.mem_id <= 0; // unused in req
+                    sprite_req_body.w <= 0;      // unused in req
+                    sprite_req_body.h <= 0;      // unused in req
+                    sprite_update_done <= 1;
                     state <= DONE;
                 end
                 // end

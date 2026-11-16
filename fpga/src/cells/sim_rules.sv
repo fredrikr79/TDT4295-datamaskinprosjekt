@@ -27,9 +27,9 @@ package sim_rules;
     return (a > b) ? a : b;
   endfunction
 
-  function automatic logic [7:0] explosion_rules(
-      input sim_pkg::neighbourhood_t stencil, input logic can_move_free,
-      input logic diagonal_cheap);
+  function automatic logic [7:0] explosion_rules(input sim_pkg::neighbourhood_t stencil,
+                                                 input logic can_move_free,
+                                                 input logic diagonal_cheap);
 
     logic [3:0] blast_resistance = sim_pkg::mat_blast_resistance(stencil.center[7:4]);
     logic center_is_explo = (stencil.center[7:4] == sim_pkg::MatExplo);
@@ -92,9 +92,11 @@ package sim_rules;
     logic center_is_alive = stencil.center[7:4] == sim_pkg::MatGOL && stencil.center[3];
 
     // [SYNTH FIX] single result variable, single return
-    logic can_live = sim_pkg::mat_solid(stencil.center[7:4])
-        && !sim_pkg::mat_spreads(stencil.center[7:4])
-        && (neighbour_count == 4'd3 || (neighbour_count == 4'd2 && center_is_alive));
+    logic can_live = sim_pkg::mat_solid(
+        stencil.center[7:4]
+    ) && !sim_pkg::mat_spreads(
+        stencil.center[7:4]
+    ) && (neighbour_count == 4'd3 || (neighbour_count == 4'd2 && center_is_alive));
     logic [7:0] result;
     result = 8'hFF;  // no change
     if (can_live) result = {sim_pkg::MatGOL, refresh ? refresh_state : 1'b1, 3'b000};
@@ -129,16 +131,31 @@ package sim_rules;
     logic d_0_1 = sim_pkg::mat_density(stencil.bottom[7:4]) < center_density;
     logic d_1_1 = sim_pkg::mat_density(stencil.bottomRight[7:4]) < center_density;
 
-    logic unchanged_n1_n1 =
-        stencil.topLeft == out_upper.left;
+    logic unchanged_n1_n1 = stencil.topLeft == out_upper.left;
     logic unchanged_0_n1 = stencil.top == out_upper.center;
     logic unchanged_1_n1 = stencil.topRight == out_upper.right;
     logic unchanged_0_0 = stencil.center == out_middle.center;
 
-    logic d_topLeft_lte_left = sim_pkg::mat_density(stencil.topLeft[7:4]) <= sim_pkg::mat_density(stencil.left[7:4]);
-    logic d_topRight_lte_right = sim_pkg::mat_density(stencil.topRight[7:4]) <= sim_pkg::mat_density(stencil.right[7:4]);
-    logic d_left_lte_bottomLeft = sim_pkg::mat_density(stencil.left[7:4]) <= sim_pkg::mat_density(stencil.bottomLeft[7:4]);
-    logic d_right_lte_bottomRight = sim_pkg::mat_density(stencil.right[7:4]) <= sim_pkg::mat_density(stencil.bottomRight[7:4]);
+    logic d_topLeft_lte_left = sim_pkg::mat_density(
+        stencil.topLeft[7:4]
+    ) <= sim_pkg::mat_density(
+        stencil.left[7:4]
+    );
+    logic d_topRight_lte_right = sim_pkg::mat_density(
+        stencil.topRight[7:4]
+    ) <= sim_pkg::mat_density(
+        stencil.right[7:4]
+    );
+    logic d_left_lte_bottomLeft = sim_pkg::mat_density(
+        stencil.left[7:4]
+    ) <= sim_pkg::mat_density(
+        stencil.bottomLeft[7:4]
+    );
+    logic d_right_lte_bottomRight = sim_pkg::mat_density(
+        stencil.right[7:4]
+    ) <= sim_pkg::mat_density(
+        stencil.bottomRight[7:4]
+    );
 
     logic moveDown = unchanged_0_n1 && unchanged_0_0 && m_0_n1 && d_0_n1;
 
@@ -170,8 +187,7 @@ package sim_rules;
 
   // [SYNTH FIX 2] same change as gravity_rules: plain 24-bit {right, centre, left} inputs.
   function automatic sim_pkg::fluid_movement_t fluid_rules(
-      input sim_pkg::neighbourhood_row_t out_upper,
-      input sim_pkg::neighbourhood_row_t out_middle,
+      input sim_pkg::neighbourhood_row_t out_upper, input sim_pkg::neighbourhood_row_t out_middle,
       input sim_pkg::neighbourhood_t stencil, input logic r, input logic is_sending_row,
       input logic at_left_edge, input logic at_right_edge);
     // Relies on the fact that every gravity rule has been evaluated prior.
@@ -186,32 +202,68 @@ package sim_rules;
     logic s_0_n1 = sim_pkg::mat_spreads(stencil.top[7:4]);
     logic s_0_0 = sim_pkg::mat_spreads(stencil.center[7:4]);
 
-    logic top_can_fall = sim_pkg::mat_displaceable(stencil.center[7:4]) && (sim_pkg::mat_falls(stencil.top[7:4]) && (sim_pkg::mat_density(stencil.top[7:4]) > sim_pkg::mat_density(stencil.center[7:4])) || sim_pkg::mat_falls(stencil.topLeft[7:4]) && (sim_pkg::mat_density(stencil.topLeft[7:4]) > sim_pkg::mat_density(stencil.center[7:4])) || sim_pkg::mat_falls(stencil.topRight[7:4]) && (sim_pkg::mat_density(stencil.topRight[7:4]) > sim_pkg::mat_density(stencil.center[7:4])));
+    logic top_can_fall = sim_pkg::mat_displaceable(
+        stencil.center[7:4]
+    ) && (sim_pkg::mat_falls(
+        stencil.top[7:4]
+    ) && (sim_pkg::mat_density(
+        stencil.top[7:4]
+    ) > sim_pkg::mat_density(
+        stencil.center[7:4]
+    )) || sim_pkg::mat_falls(
+        stencil.topLeft[7:4]
+    ) && (sim_pkg::mat_density(
+        stencil.topLeft[7:4]
+    ) > sim_pkg::mat_density(
+        stencil.center[7:4]
+    )) || sim_pkg::mat_falls(
+        stencil.topRight[7:4]
+    ) && (sim_pkg::mat_density(
+        stencil.topRight[7:4]
+    ) > sim_pkg::mat_density(
+        stencil.center[7:4]
+    )));
 
-    logic center_can_fall = sim_pkg::mat_displaceable(stencil.bottom[7:4]) && (sim_pkg::mat_falls(stencil.center[7:4]) && (sim_pkg::mat_density(stencil.center[7:4]) > sim_pkg::mat_density(stencil.bottom[7:4])) || sim_pkg::mat_falls(stencil.left[7:4]) && (sim_pkg::mat_density(stencil.left[7:4]) > sim_pkg::mat_density(stencil.bottom[7:4])) || sim_pkg::mat_falls(stencil.right[7:4]) && (sim_pkg::mat_density(stencil.right[7:4]) > sim_pkg::mat_density(stencil.bottom[7:4])));
+    logic center_can_fall = sim_pkg::mat_displaceable(
+        stencil.bottom[7:4]
+    ) && (sim_pkg::mat_falls(
+        stencil.center[7:4]
+    ) && (sim_pkg::mat_density(
+        stencil.center[7:4]
+    ) > sim_pkg::mat_density(
+        stencil.bottom[7:4]
+    )) || sim_pkg::mat_falls(
+        stencil.left[7:4]
+    ) && (sim_pkg::mat_density(
+        stencil.left[7:4]
+    ) > sim_pkg::mat_density(
+        stencil.bottom[7:4]
+    )) || sim_pkg::mat_falls(
+        stencil.right[7:4]
+    ) && (sim_pkg::mat_density(
+        stencil.right[7:4]
+    ) > sim_pkg::mat_density(
+        stencil.bottom[7:4]
+    )));
 
     sim_pkg::fluid_movement_t res = 'b0000;
 
 
 
-    logic top_unchanged =
-      stencil.top == out_upper.center;
+    logic top_unchanged = stencil.top == out_upper.center;
     logic top_left_unchanged = 0, top_right_unchanged = 0;
 
-    logic center_unchanged =
-      stencil.center == out_middle.center;
+    logic center_unchanged = stencil.center == out_middle.center;
     logic left_unchanged = 0, right_unchanged = 0;
 
     if (!at_left_edge) begin
-      top_left_unchanged =
-        stencil.topLeft == out_upper.left;
+      top_left_unchanged = stencil.topLeft == out_upper.left;
 
       left_unchanged = stencil.left == out_middle.left;
     end
 
     if (!at_right_edge) begin
-      top_right_unchanged =
-        stencil.topRight == out_upper.right;
+      top_right_unchanged = stencil.topRight == out_upper.right;
 
       right_unchanged = stencil.right == out_middle.right;
     end
@@ -223,13 +275,7 @@ package sim_rules;
     // Top row
     if (!is_sending_row && !top_can_fall && !a_0_n1 && s_0_n1) begin
       // Incoming
-      if (r
-          && !at_right_edge
-          && a_1_n1
-          && top_unchanged
-          && top_right_unchanged
-      )
-        res.topRight = 1;
+      if (r && !at_right_edge && a_1_n1 && top_unchanged && top_right_unchanged) res.topRight = 1;
       else if (!r && !at_left_edge && a_n1_n1 && top_unchanged && top_left_unchanged)
         res.topLeft = 1;
     end
@@ -237,8 +283,7 @@ package sim_rules;
     // Bottom row
     if (!is_sending_row && !center_can_fall && !a_0_0 && s_0_0) begin
       // Incoming
-      if (r && !at_right_edge && a_1_0 && center_unchanged && right_unchanged)
-        res.centerRight = 1;
+      if (r && !at_right_edge && a_1_0 && center_unchanged && right_unchanged) res.centerRight = 1;
       else if (!r && !at_left_edge && a_n1_0 && center_unchanged && left_unchanged)
         res.centerLeft = 1;
     end

@@ -104,6 +104,17 @@ package sim_rules;
       result = {sim_pkg::MatGOL, refresh ? refresh_state : 1'b0, 3'b000};
     return result;
   endfunction
+
+  function automatic sim_pkg::pixel_t stone_generator_rules(input sim_pkg::neighbourhood_t stencil);
+    sim_pkg::pixel_t result = 'hFF;
+    if (stencil.center.material == sim_pkg::MatLava)
+      if (stencil.top.material == sim_pkg::MatWater)
+        result = {sim_pkg::MatStone, 1'b0, 3'(sim_pkg::IgneousStoneThickness)};
+      else if (stencil.top.material == sim_pkg::MatStone && stencil.top[2:0] > 0)
+        result = {sim_pkg::MatStone, 1'b0, stencil.top[2:0] - 3'd1};
+    return result;
+  endfunction
+
   // [SYNTH FIX 2] The output-row pixels are passed in as two plain 24-bit values,
   // {right, centre, left}: out_upper from output buffer 1, out_lower from output buffer 0.
   // Was: the whole buffer array passed by `ref` and indexed inside the function, which

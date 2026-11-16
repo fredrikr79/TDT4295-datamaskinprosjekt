@@ -43,6 +43,7 @@ package sim_pkg;
   } material_props_t;
 
   localparam int GolRefreshDelay = 'd100;
+  localparam logic [2:0] IgneousStoneThickness = 'sb111;
 
   // Lookup table for materials
   function automatic material_props_t props(material_t m);

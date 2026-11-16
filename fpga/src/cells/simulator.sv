@@ -243,6 +243,7 @@ module simulator #(
       sim_pkg::neighbourhood_row_t out_upper, out_lower;
       sim_pkg::gravity_movement_t gravity_movement;
       sim_pkg::fluid_movement_t   fluid_movement;
+      sim_pkg::pixel_t stone_generator_update;
       sim_pkg::neighbourhood_row_en_t sending_en, receiving_en;
       sim_pkg::neighbourhood_row_t sending_val, receiving_val;
 
@@ -259,6 +260,7 @@ module simulator #(
         gravity_movement = sim_rules::gravity_rules(out_upper, out_lower, nb, lfsr[0]);
         fluid_movement = sim_rules::fluid_rules(out_upper, out_lower, nb, lfsr[0], is_sending_row,
                                                 at_left_edge, at_right_edge);
+        stone_generator_update = sim_rules::stone_generator_rules(nb);
       end
 
       sending_en = 0;
@@ -272,6 +274,11 @@ module simulator #(
       end else if (gol_r[core] != 8'hFF) begin
         sending_en.center  = 1'b1;
         sending_val.center = gol_r[core];
+      end else if (stone_generator_update != 8'hFF) begin
+        sending_en.center = 1'b1;
+        sending_val.center = stone_generator_update;
+        receiving_en.center = 1'b1;
+        receiving_val.center = {sim_pkg::MatAir, 4'b0000};
       end else if (gravity_movement == sim_pkg::DownRight) begin
         sending_en.center   = 1'b1;
         sending_val.center  = sim_pkg::add_turbulence(nb.topLeft);

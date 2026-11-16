@@ -23,8 +23,8 @@ velocity_box_t create_velocity_box(
     int dy = VELOCITY_BOX_Y;
     int rel_x = (dx - size_x) / 2;
     int rel_y = (dy - size_y) / 2;
-    if (vel_y < -5) rel_y += rel_y / 2;
-    else if (5 < vel_y) rel_y /= 2;
+    if (vel_y < SPEED(-5)) rel_y += rel_y / 2;
+    else if (SPEED(5) < vel_y) rel_y /= 2;
 
     // Player position
     int x = floorf(pos_x + 0.5);

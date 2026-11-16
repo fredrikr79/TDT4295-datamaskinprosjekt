@@ -26,10 +26,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* 1: the bars slide up and down by themselves (in hud_frame()), to show
- * they work. 0: they show what health_bar_set() / fuel_bar_set() say. */
+/* 0: the bars show what health_bar_set() / fuel_bar_set() say -- game.c
+ * sets them from the player after every physics step (player.health of
+ * PLAYER_MAX_HEALTH, player.fly_meter of MAX_FLY_TIME).
+ * 1 (-DHUD_DEMO=1): they slide up and down by themselves instead (in
+ * hud_frame()), to show the bars work without a player. */
 #ifndef HUD_DEMO
-#define HUD_DEMO 1
+#define HUD_DEMO 0
 #endif
 
 void hud_init(uint16_t screen_w, uint16_t screen_h);

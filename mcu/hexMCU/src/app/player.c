@@ -206,7 +206,7 @@ void update_player(
             player->velocity_x = target_velocity;
     }
     // Stop if no input and low velocity
-    else if (fabsf(player->velocity_x) < 0.075) player->velocity_x = 0;
+    else if (fabsf(player->velocity_x) < SPEED(0.075)) player->velocity_x = 0;
 
     // Calculate gravity with bouyancy included
     float gravity_force = GRAVITY_AIR;
@@ -265,7 +265,7 @@ void update_player(
     else
     {
         ticks_since_last_heal = PLAYER_HEAL_DELAY;
-        player->health += PLAYER_HEAL_AMOUNT;
+        heal_player(player, PLAYER_HEAL_AMOUNT);    /* stops at PLAYER_MAX_HEALTH */
     }
 
     // Damage

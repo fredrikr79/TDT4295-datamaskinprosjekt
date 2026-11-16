@@ -307,6 +307,20 @@ The highest level that can be shown is set at build time with
 
 ## Using the board
 
+### Keys while playing
+
+| Key | |
+|---|---|
+| A / D, ← / →, d-pad left / right | Move |
+| Space, ↑, d-pad up, cross (A) | Jump; held in the air, the jetpack |
+| Esc, PS button | Pause menu |
+| F1 | Bad Apple: start / stop |
+| F5 | Restart this room as designed (its save is deleted) |
+| F6 | Clear the room: the whole grid air (the room file only changes if the room is saved after) |
+| F7 | Back to the start: room 0,0, the player at its starting place (saved rooms are kept) |
+| F8 | The player to the top of the screen, same x |
+| F9 | Delete every saved room (`sd del save/`); F9 then F7 is a whole new game |
+
 ### Boot order
 
 <!-- TODO with the PCB team: power source, switches, what must not be connected during boot -->

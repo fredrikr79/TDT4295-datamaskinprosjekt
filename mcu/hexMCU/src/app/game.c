@@ -20,6 +20,8 @@
 #include "menu.h"
 #include "draw.h"
 #include "hud.h"
+#include "badapple.h"
+#include "storage.h"
 
 /* tuning */
 #define FIRST_ROOM_X  0
@@ -328,10 +330,26 @@ static void phys_reset(void)
 
 static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err);
 
+/* F8: the player to the top of the screen, same x. Done here, with no read
+ * out: a read already sent is for the box around the old place. */
+static bool teleport_top;
+
+static void teleport(void)
+{
+    teleport_top      = false;
+    player.y          = 0;
+    player.velocity_y = 0;
+    velocity_box = create_velocity_box(player.x, player.y, PLAYER_SIZE_X, PLAYER_SIZE_Y,
+                                       player.velocity_x, player.velocity_y);
+    player_sprite_init((int16_t)(player.x * FPGA_SIM_SCALE), 0);
+}
+
 /* The next owed step's READ_BOX, if none is out. A full queue: next frame. */
 static void phys_read(void)
 {
-    if (phys.reading || phys.owed == 0) return;
+    if (phys.reading) return;
+    if (teleport_top) teleport();
+    if (phys.owed == 0) return;
     fpga_cmd_t c = fpga_cmd_read_box(velocity_box.box, box, velocity_box.length);
     c.done = update_player_callback;
     fpga_status_t st = fpga_submit(&c);
@@ -433,6 +451,7 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
         return;
     }
 
+    if (state != S_RUN) return;     /* a room started loading (F5, F6...): the box is old */
     if (phys.owed) phys.owed--;
     update_player(&player, cmd->rx, velocity_box);  /* moves its sprite too */
 #if !HUD_DEMO
@@ -442,6 +461,60 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
     /* The next owed step, if any -- unless that step took us out of
      * playing (a portal saves the room, dying reloads it). */
     if (state == S_RUN && run_state == RS_SIM) phys_read();
+}
+
+/* ---- function keys: shortcuts for testing and showing off ---------------------
+ *   F1  Bad Apple: start / stop (badapple.bin, Air and Stone, like the console)
+ *   F5  restart this room: as designed, its save deleted (the menu's Restart room)
+ *   F6  clear the room: the whole grid air, on the FPGA (the 'clear' demo); the
+ *       room file only changes if the room is saved after
+ *   F7  back to the start: room FIRST_ROOM_X, _Y, the player at its starting
+ *       place (saved rooms are kept: F9 first for a whole new game)
+ *   F8  the player to the top of the screen, same x
+ *   F9  delete every saved room (sd del save/)
+ * Only while the game runs (RUN). true: a room started loading, RUN is left. */
+static bool hotkeys(const input_t *in)
+{
+    if (key_pressed(in, KEY_F1)) {
+        if (badapple_busy()) badapple_stop();
+        else                 badapple_start("badapple.bin", false, MAT_AIR, MAT_STONE);
+    }
+    if (key_pressed(in, KEY_F9)) {                  /* before F7: F9 + F7 is a new game */
+        uint32_t files = 0;
+        storage_status_t st = storage_delete_dir("save/", &files);
+        if (st == STORAGE_OK || st == STORAGE_NOT_FOUND)
+            LOG_INFO("F9: saved rooms deleted (%lu file%s)", (unsigned long)files,
+                     files == 1 ? "" : "s");
+        else
+            LOG_WARN("F9: deleting save/: %s", storage_status_str(st));
+    }
+    if (key_pressed(in, KEY_F6)) {
+        LOG_INFO("F6: clearing the room");
+        demo_start("clear");                        /* the game waits while it runs */
+    }
+    if (key_pressed(in, KEY_F8)) {
+        LOG_INFO("F8: the player to the top");
+        teleport_top = true;                        /* done by phys_read() */
+    }
+    if (key_pressed(in, KEY_F5)) {
+        LOG_INFO("F5: restarting room %d, %d", room_x, room_y);
+        delete_save(room_x, room_y);
+        load_start();
+        return true;
+    }
+    if (key_pressed(in, KEY_F7)) {
+        LOG_INFO("F7: back to the start, room %d, %d", FIRST_ROOM_X, FIRST_ROOM_Y);
+        room_x = FIRST_ROOM_X;
+        room_y = FIRST_ROOM_Y;
+        player_set_default(&player);
+        velocity_box = create_velocity_box(player.x, player.y, PLAYER_SIZE_X, PLAYER_SIZE_Y,
+                                           player.velocity_x, player.velocity_y);
+        player_sprite_init((int16_t)(player.x * FPGA_SIM_SCALE),
+                           (int16_t)(player.y * FPGA_SIM_SCALE));
+        load_start();
+        return true;
+    }
+    return false;
 }
 
 /* One game frame: on a SYNC, however many came since the last one. */
@@ -479,6 +552,8 @@ static void run_poll(void)
     run.cx = clamp32(run.cx + dx, 0, (int32_t)scr->width  - 1);
     run.cy = clamp32(run.cy + dy, 0, (int32_t)scr->height - 1);
 
+    if (hotkeys(&run.keys)) return;                 /* F5 / F7: a room is loading */
+
     switch (run_state) {
     case RS_MENU: {
         menu_action_t a = menu_frame(&run.keys, run.cx, run.cy);
@@ -512,16 +587,32 @@ static void run_poll(void)
     run_frame();
 }
 
+/* Held on any connected controller. */
+static bool any_pad_held(const input_t *in, uint32_t buttons)
+{
+    for (unsigned p = 0; p < INPUT_PADS; p++)
+        if (in->pad[p].connected && (in->pad[p].held & buttons)) return true;
+    return false;
+}
+
+/* The player's controls, while playing:
+ *   left / right   A / D, the arrow keys, or the d-pad
+ *   jump           space, the up arrow, d-pad up, or cross (A on an Xbox-style
+ *                  pad); held in the air, it flies the jetpack */
 static void handle_movement_keys(input_t in)
 {
-    bool left_pressed = key_held(&in, KEY_A);
-    bool right_pressed = key_held(&in, KEY_D);
+    bool left_pressed  = key_held(&in, KEY_A) || key_held(&in, KEY_LEFT) ||
+                         any_pad_held(&in, PAD_LEFT);
+    bool right_pressed = key_held(&in, KEY_D) || key_held(&in, KEY_RIGHT) ||
+                         any_pad_held(&in, PAD_RIGHT);
 
     if (left_pressed && !right_pressed)      move_left();
     else if (right_pressed && !left_pressed) move_right();
     else                                     move_stop();
 
-    if (key_held(&in, KEY_SPACE)) start_jump();
+    if (key_held(&in, KEY_SPACE) || key_held(&in, KEY_UP) ||
+        any_pad_held(&in, PAD_UP | PAD_SOUTH))
+        start_jump();
 }
 
 /* Leave the current room: save it, then load `to`.

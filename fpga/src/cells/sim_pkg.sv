@@ -217,4 +217,26 @@ package sim_pkg;
   function automatic logic no_movement(fluid_movement_t movement);
     return !movement.topRight && !movement.topLeft && !movement.centerRight && !movement.centerLeft;
   endfunction
+
+  // Liquid turbulence
+
+  function automatic pixel_t add_turbulence(input pixel_t pixel);
+    pixel_t result;
+    result = p;
+    if (sim_pkg::mat_spreads(p.material) && p.data != 4'd15) begin
+      result.data = p.data + 4'd1;
+    end
+    return result;
+  endfunction
+
+  function automatic sim_pkg::pixel_t remove_turbulence(input sim_pkg::pixel_t pixel);
+    pixel_t result;
+    result = p;
+    if (sim_pkg::mat_spreads(p.material) && p.data != 4'd0) begin
+      result.data = p.data - 4'd1;
+    end
+    return result;
+  endfunction
+
+
 endpackage

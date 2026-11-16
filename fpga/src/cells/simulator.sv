@@ -96,6 +96,9 @@ module simulator #(
     for (int c = 0; c < sim_pkg::SimulationCoreCount; c++)
       noise_lfsr[c] = 16'hACE1 ^ 16'(c * 16'h3B5D + 1);
 
+  // Positional noise:
+  logic [15:0] positional_noise[sim_pkg::SimulationCoreCount];
+
   // Write transaction sends to res_buffer 0 and recieves to 1
   logic is_sending_row;
   assign is_sending_row = current_row_index[0] == is_odd_major_evaluation;
@@ -111,7 +114,6 @@ module simulator #(
 
     // Drive signals (output buffers must be owned by this block)
 
-
     // [PIPELINE] Stage 1: read each core's neighbourhood from input_buffers and register it,
     // then advance the issue counter. Only the 40:1 window mux is in front of these registers.
     setup_stage.valid <= is_row_running;
@@ -120,13 +122,21 @@ module simulator #(
     for (int core = 0; core < sim_pkg::SimulationCoreCount; core++)
     setup_stage.nb[core] <= setup_neighbourhood(core);
 
-    if (setup_stage.valid)
-      for (int c = 0; c < sim_pkg::SimulationCoreCount; c++)
+    if(pulse_new_row && current_row_index == '0) begin
+      for(int c = 0; c < sim_pkg::SimulationCoreCount; c++) begin
+        positional_noise[c] <= 16'hABCD ^ 16'(c * 16'hF13D + 1);
+      end
+    end else if (setup_stage.valid)
+    for (int c = 0; c < sim_pkg::SimulationCoreCount; c++)
       noise_lfsr[c] <= {
         noise_lfsr[c][14:0],
         noise_lfsr[c][15] ^ noise_lfsr[c][13] ^ noise_lfsr[c][12] ^ noise_lfsr[c][10]
       };
 
+      positional_noise[c] <= {
+        positional_noise[c][14:0],
+        positional_noise[c][15] ^ positional_noise[c][13] ^ positional_noise[c][12]
+      };
 
     // ---- [PIPELINE 2] Stage 2: explosion and GoL rules from the registered neighbourhood ----
     rule_stage.valid <= setup_stage.valid;
@@ -247,6 +257,7 @@ module simulator #(
       sim_pkg::fluid_movement_t   fluid_movement;
       sim_pkg::neighbourhood_row_en_t sending_en, receiving_en;
       sim_pkg::neighbourhood_row_t sending_val, receiving_val;
+      logic apply_turbulence;
 
       at_left_edge = (core == 0) && (rule_stage.base == '0);
       at_right_edge = (core == sim_pkg::SimulationCoreCount - 1) && (rule_stage.base == BaseW'(Stride - 1));
@@ -276,42 +287,48 @@ module simulator #(
         sending_val.center = gol_r[core];
       end else if (gravity_movement == sim_pkg::DownRight) begin
         sending_en.center   = 1'b1;
-        sending_val.center  = nb.topLeft;
+        sending_val.center  = add_turbulence(nb.topLeft);
         receiving_en.right  = 1'b1;
-        receiving_val.right = nb.center;
+        receiving_val.right = add_turbulence(nb.center);
       end else if (gravity_movement == sim_pkg::Down) begin
         receiving_en.center = 1'b1;
-        receiving_val.center = nb.center;
+        receiving_val.center = add_turbulence(nb.center);
         sending_en.center = 1'b1;
-        sending_val.center = nb.top;
+        sending_val.center = add_turbulence(nb.top);
       end else if (gravity_movement == sim_pkg::DownLeft) begin
         sending_en.center  = 1'b1;
-        sending_val.center = nb.topRight;
+        sending_val.center = add_turbulence(nb.topRight);
         receiving_en.left  = 1'b1;
-        receiving_val.left = nb.center;
+        receiving_val.left = add_turbulence(nb.center);
       end else begin
         // fluid: a top-row move and a centre-row move can both happen
         if (fluid_movement.topLeft) begin
           receiving_en.right   = 1'b1;
-          receiving_val.right  = nb.top;
+          receiving_val.right  = sim_pkg::add_turbulence(nb.top); // Turbulence
           receiving_en.center  = 1'b1;
-          receiving_val.center = nb.topLeft;
+          receiving_val.center = nb.topLeft; // Turbulence
         end else if (fluid_movement.topRight) begin
           receiving_en.left = 1'b1;
-          receiving_val.left = nb.top;
+          receiving_val.left = sim_pkg::add_turbulence(nb.top);
           receiving_en.center = 1'b1;
           receiving_val.center = nb.topRight;
+        end else if(!is_sending_row && !is_unmatched_boundry_row && out_upper.center == nb.top) begin
+          receiving_en.center = 1'b1;
+          receiving_val.center = sim_pkg::remove_turbulence(nb.center);
         end
         if (fluid_movement.centerLeft) begin
           sending_en.right   = 1'b1;
-          sending_val.right  = nb.center;
+          sending_val.right  = sim_pkg::add_turbulence(nb.center); // Turbulence
           sending_en.center  = 1'b1;
-          sending_val.center = nb.left;
+          sending_val.center = nb.left; // Turbulence
         end else if (fluid_movement.centerRight) begin
           sending_en.left = 1'b1;
-          sending_val.left = nb.center;
+          sending_val.left = sim_pkg::add_turbulence(nb.center);
           sending_en.center = 1'b1;
           sending_val.center = nb.right;
+        end else if(!is_sending_row && !is_unmatched_boundry_row && out_lower.center == nb.center) begin
+          sending_en.center = 1'b1;
+          sending_val.center = sim_pkg::remove_turbulence(nb.topRight);
         end
       end
 

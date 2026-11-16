@@ -1,4 +1,3 @@
-
 // Changes for LUT reduction are tagged [CHANGED] / [REMOVED] / [NEW]. grep "\[CHANGED\]\|\[REMOVED\]\|\[NEW\]"
 module simulator #(
 ) (
@@ -59,8 +58,20 @@ module simulator #(
 
   // [WRITE STAGE] write slots from the always_comb block near the end of the file:
   // [core][buffer][slot], slot 0 = column-1, 1 = this column, 2 = column+1.
-  sim_pkg::neighbourhood_row_en_t wr_en[sim_pkg::SimulationCoreCount][2];
-  sim_pkg::neighbourhood_row_t wr_val[sim_pkg::SimulationCoreCount][2];
+  sim_pkg::neighbourhood_row_en_t write_staging_stage_en[sim_pkg::SimulationCoreCount][2];
+  sim_pkg::neighbourhood_row_t write_staging_stage_val[sim_pkg::SimulationCoreCount][2];
+
+  // [LOOP CUT 1] New write stage: the rule stage's writes, registered, applied one cycle later.
+  logic [BaseW-1:0] write_base = '0;
+  logic write_valid = 1'b0;
+  logic write_last = 1'b0;
+  sim_pkg::neighbourhood_row_en_t write_en[sim_pkg::SimulationCoreCount][2];
+  sim_pkg::neighbourhood_row_t write_val[sim_pkg::SimulationCoreCount][2];
+
+  // [LOOP CUT 1] The three output pixels around the rule stage's column, per core and output
+  // row, held in registers. Read one stage early (see out_view_next near the end).
+  sim_pkg::neighbourhood_row_t out_view[sim_pkg::SimulationCoreCount][2];
+  sim_pkg::neighbourhood_row_t out_view_next[sim_pkg::SimulationCoreCount][2];
 
   // [CHANGED] was "int gol_refresh_counter = 1" + "gol_refresh_counter % GolRefreshDelay == 0"
   // (a 32-bit modulo). Now a 7-bit counter wrapping at GolRefreshDelay. Starts at 1 like the
@@ -134,9 +145,19 @@ module simulator #(
       );
     end
 
-    // Step the per-core noise LFSRs once per pixel.
+    // [LOOP CUT 2] Output pixels for the column entering the rule stage.
+    for (int core = 0; core < sim_pkg::SimulationCoreCount; core++)
+      for (int b = 0; b < 2; b++) out_view[core][b] <= out_view_next[core][b];
 
-    // ---- Stage 3 below works on base_r / nb_r / valid_r ----
+    // [LOOP CUT 2] Register the rule stage's writes; they are applied one cycle later.
+    write_valid <= rule_stage.valid;
+    write_last  <= rule_stage.last;
+    write_base  <= rule_stage.base;
+    for (int core = 0; core < sim_pkg::SimulationCoreCount; core++)
+      for (int b = 0; b < 2; b++) begin
+        write_en[core][b]  <= write_staging_stage_en[core][b];
+        write_val[core][b] <= write_staging_stage_val[core][b];
+      end
 
 
     // [WRITE STAGE] Apply the write slots worked out in the always_comb block below.
@@ -144,15 +165,16 @@ module simulator #(
     // the column to its left writing +1, or the column to its right writing -1. Those are
     // fixed for each column, so this is three small compares per pixel instead of the
     // previous 16 write calls x 40 positions per core.
-    if (rule_stage.valid && sim_running) begin
+    // [LOOP CUT 3] uses the write stage copies (write_*) instead of rule_stage / wr_*.
+    if (write_valid && sim_running) begin
       for (int b = 0; b < 2; b++) begin
         for (int column = 0; column < sim_pkg::CellGridWidth; column++) begin
-          if (rule_stage.base == BaseW'(column % Stride) && wr_en[column/Stride][b].center)
-            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[column/Stride][b].center;
-          else if (column > 0 && rule_stage.base == BaseW'((column - 1) % Stride) &&  wr_en[(column-1)/Stride][b].left)
-            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[(column-1)/Stride][b].left;
-          else if (column < sim_pkg::CellGridWidth - 1 && rule_stage.base == BaseW'((column + 1) % Stride) && wr_en[(column+1)/Stride][b].right)
-            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[(column+1)/Stride][b].right;
+          if (write_base == BaseW'(column % Stride) && write_en[column/Stride][b].center)
+            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= write_val[column/Stride][b].center;
+          else if (column > 0 && write_base == BaseW'((column - 1) % Stride) &&  write_en[(column-1)/Stride][b].left)
+            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= write_val[(column-1)/Stride][b].left;
+          else if (column < sim_pkg::CellGridWidth - 1 && write_base == BaseW'((column + 1) % Stride) && write_en[(column+1)/Stride][b].right)
+            output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= write_val[(column+1)/Stride][b].right;
         end
       end
     end
@@ -163,7 +185,8 @@ module simulator #(
     begin
       pulse_transaction_pair_done <= 1'b0;
       pulse_row_done <= 1'b0;
-      if (rule_stage.valid && rule_stage.last) begin
+      // [LOOP CUT 4] was rule_stage.valid && rule_stage.last: wait for the last write to land.
+      if (write_valid && write_last) begin
         pulse_row_done <= 1'b1;
 
         if (!is_sending_row || is_unmatched_boundry_row) begin
@@ -211,7 +234,7 @@ module simulator #(
   end
 
   // [WRITE STAGE] Per-core decision for the pixel in stage 3, as write slots.
-  //   wr_en / wr_val [core][buffer][slot], slot 0 = column-1, 1 = this column, 2 = column+1.
+  //   write_staging_stage_en / write_staging_stage_val [core][buffer][slot], slot 0 = column-1, 1 = this column, 2 = column+1.
   // Priority is unchanged: explosion, GoL, gravity, fluid. The rows are named by role first
   // ("mine" = the row being processed, output buffer is_sending_row; "other" = the other
   // output buffer) and mapped onto the two physical buffers at the end.
@@ -228,8 +251,9 @@ module simulator #(
       at_left_edge = (core == 0) && (rule_stage.base == '0);
       at_right_edge = (core == sim_pkg::SimulationCoreCount - 1) && (rule_stage.base == BaseW'(Stride - 1));
       nb = rule_stage.nb[core];
-      out_upper = out_slice(output_buffers[1], core);
-      out_lower = out_slice(output_buffers[0], core);
+      // [LOOP CUT 5] from registers instead of out_slice(output_buffers[...])
+      out_upper = out_view[core][1];
+      out_lower = out_view[core][0];
 
       gravity_movement = sim_pkg::DownNone;
       fluid_movement = '0;
@@ -294,19 +318,19 @@ module simulator #(
       // role -> physical buffer: "mine" is output buffer is_sending_row
       for (int b = 0; b < 2; b++) begin
         if (is_sending_row == 1'(b)) begin
-          wr_en[core][b].left = sending_en.left;
-          wr_en[core][b].right = sending_en.right;
-          wr_en[core][b].center = sending_en.center;
-          wr_val[core][b].left = sending_val.left;
-          wr_val[core][b].right = sending_val.right;
-          wr_val[core][b].center = sending_val.center;
+          write_staging_stage_en[core][b].left = sending_en.left;
+          write_staging_stage_en[core][b].right = sending_en.right;
+          write_staging_stage_en[core][b].center = sending_en.center;
+          write_staging_stage_val[core][b].left = sending_val.left;
+          write_staging_stage_val[core][b].right = sending_val.right;
+          write_staging_stage_val[core][b].center = sending_val.center;
         end else begin
-          wr_en[core][b].left = receiving_en.left;
-          wr_en[core][b].right = receiving_en.right;
-          wr_en[core][b].center = receiving_en.center;
-          wr_val[core][b].left = receiving_val.left;
-          wr_val[core][b].right = receiving_val.right;
-          wr_val[core][b].center = receiving_val.center;
+          write_staging_stage_en[core][b].left = receiving_en.left;
+          write_staging_stage_en[core][b].right = receiving_en.right;
+          write_staging_stage_en[core][b].center = receiving_en.center;
+          write_staging_stage_val[core][b].left = receiving_val.left;
+          write_staging_stage_val[core][b].right = receiving_val.right;
+          write_staging_stage_val[core][b].center = receiving_val.center;
         end
       end
     end
@@ -330,8 +354,35 @@ module simulator #(
   function automatic logic [3*sim_pkg::BitsPerPixel-1:0] out_slice(input sim_pkg::row_buffer_t row,
                                                                    input int core);
     window_t w = window(row, core);
-    return w[rule_stage.base*sim_pkg::BitsPerPixel+:3*sim_pkg::BitsPerPixel];
+    // [LOOP CUT 6] was rule_stage.base: the read now happens one stage earlier
+    return w[setup_stage.base*sim_pkg::BitsPerPixel+:3*sim_pkg::BitsPerPixel];
   endfunction
+
+  // [LOOP CUT 6] Output-row view for the column in the setup stage (about to enter the rule
+  // stage). output_buffers does not yet hold what the two columns before it wrote, so those
+  // are patched in. With this file's slot naming (.left lands on column+1, .right on column-1):
+  //   column-2 (write stage): its .left write lands on this view's left pixel
+  //   column-1 (rule stage):  its .center write lands on this view's left pixel,
+  //                           its .left write lands on this view's centre pixel
+  always_comb begin
+    for (int core = 0; core < sim_pkg::SimulationCoreCount; core++) begin
+      for (int b = 0; b < 2; b++) begin
+        logic [3*sim_pkg::BitsPerPixel-1:0] bits;
+        bits = out_slice(output_buffers[b], core);
+        out_view_next[core][b].left   = bits[0*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel];
+        out_view_next[core][b].center = bits[1*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel];
+        out_view_next[core][b].right  = bits[2*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel];
+        if (sim_running) begin
+          if (write_valid && write_en[core][b].left)
+            out_view_next[core][b].left = write_val[core][b].left;
+          if (rule_stage.valid && write_staging_stage_en[core][b].center)
+            out_view_next[core][b].left = write_staging_stage_val[core][b].center;
+          if (rule_stage.valid && write_staging_stage_en[core][b].left)
+            out_view_next[core][b].center = write_staging_stage_val[core][b].left;
+        end
+      end
+    end
+  end
 
   // [CHANGED] Rewritten. Was: setup_neighbourhood(int column), nine separate
   // input_buffers[k][bit_column +: 8] reads with 32-bit indexes (each a 160:1 mux) plus
@@ -361,4 +412,3 @@ module simulator #(
 
 
 endmodule
-

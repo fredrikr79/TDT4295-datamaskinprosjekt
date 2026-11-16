@@ -5,6 +5,7 @@
 #include "game.h"
 #include "usb_input.h"
 #include "platform.h"
+#include "badapple.h"
 
 void myMain(void)
 {
@@ -20,6 +21,7 @@ void myMain(void)
         cli_poll();
         usb_poll();
         game_poll();
+        badapple_poll();
     }
 }
 

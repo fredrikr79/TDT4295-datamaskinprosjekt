@@ -22,6 +22,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/render/menu.c
     ${APP_ROOT}/src/app/render/draw.c
     ${APP_ROOT}/src/app/render/hud.c
+    ${APP_ROOT}/src/app/render/badapple.c
     
 )
 set(APP_INCLUDES

@@ -23,6 +23,7 @@
 #include "led.h"
 #include "storage.h"
 #include "game.h"
+#include "badapple.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -961,6 +962,15 @@ void cli_quit(const char *why)
     cli_async_end();
 }
 
+static void cmd_badapple(int argc, char **argv)
+{
+    if (argc == 2 && !strcmp(argv[1], "stop")) { badapple_stop(); return; }
+    bool loop = argc >= 2 && !strcmp(argv[1], "-l");
+    int  a    = loop ? 2 : 1;
+    if (argc > a + 1) { log_raw("usage: badapple [-l] [<file>] | stop\r\n"); return; }
+    badapple_start(argc > a ? argv[a] : "badapple.bin", loop);
+}
+
 static void cmd_exit(int argc, char **argv)
 {
     (void)argc; (void)argv;
@@ -985,6 +995,7 @@ static const cli_cmd_t cmds[] = {
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
     { "exit",    cmd_exit,     "exit the emulator (host only)" },
+    { "badapple", cmd_badapple, "badapple [-l] [<file> | stop]  play a 120x90 1 bpp video on the grid" },
 };
 #define NUM_CMDS (sizeof cmds / sizeof cmds[0])
 

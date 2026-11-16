@@ -36,7 +36,17 @@
 #include "storage.h"
 #include "log.h"
 #include "platform.h"
-#include "frame_sync.h"                 /* frame_elapsed_ms() */
+#include "frame_sync.h"                 /* frame_elapsed_ms(), frame_sync_count() */
+
+#ifndef SPRITE_SYNC_UPDATES
+#define SPRITE_SYNC_UPDATES 1           /* changes wait for SYNC (see update_window_check()) */
+#endif
+#define SPRITE_SYNC_MAX_MS  50u         /* ...but not longer than this (3 frames) */
+
+static bool     update_window;          /* open: send the waiting changes   */
+static uint32_t update_sync_seen;       /* the SYNC it last opened at       */
+static uint32_t update_opened_ms;
+static void update_window_check(void);
 
 /* Sprite file: "SP", W, H, frames (16 bits, MSB first), then the frames'
  * pixels one after the other, RGB565 MSB first (tools/png2spr.py). */
@@ -847,6 +857,7 @@ bool sprite_poll(void)
     }
 
     /* sprites */
+    update_window_check();
     for (unsigned i = 0; i < SPRITE_MAX; i++) {
         sprite_t *s = &sprs[i];
         fpga_cmd_t c;
@@ -861,7 +872,7 @@ bool sprite_poll(void)
             c = fpga_cmd_sprite_delete(s->id);
             if (!submit(&c, sprite_done, s)) return !failed;
             s->state = SPR_DELETING;
-        } else if (s->state == SPR_LIVE &&
+        } else if (update_window && s->state == SPR_LIVE &&
                    (s->dirty || s->x != s->s_x || s->y != s->s_y ||
                     s->visible != s->s_visible)) {          /* moved / shown / hidden: update */
             s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
@@ -870,7 +881,35 @@ bool sprite_poll(void)
             s->state = SPR_UPDATING;
         }
     }
+    update_window = false;      /* all sent: the next ones wait for the next SYNC */
     return !failed;
+}
+
+/* ---- sprite changes go out right after a SYNC ---------------------------------------------
+ * The FPGA draws sprites as it scans the screen. A sprite moved, shown or
+ * hidden while the scan is passing over it tears: its upper rows at the
+ * old place, the rest at the new. So changes to live sprites wait for the
+ * next SYNC and go out on the first poll after it, ahead of whatever the
+ * game queues for that frame, to land in the vertical blanking. A sprite
+ * shows where it was put one frame (16.8 ms) later, which nobody sees.
+ * If no SYNC comes for SPRITE_SYNC_MAX_MS (an FPGA that doesn't send it),
+ * they go anyway. -DSPRITE_SYNC_UPDATES=0: send them at once, as before.
+ * Making and deleting sprites, and image uploads, don't wait. */
+static void update_window_check(void)
+{
+#if SPRITE_SYNC_UPDATES
+    uint32_t now = plat_millis(), c = frame_sync_count();
+    if (c != update_sync_seen) {
+        update_sync_seen = c;
+        update_window    = true;
+        update_opened_ms = now;
+    } else if (now - update_opened_ms >= SPRITE_SYNC_MAX_MS) {
+        update_window    = true;                /* no SYNC: don't wait forever */
+        update_opened_ms = now;
+    }
+#else
+    update_window = true;
+#endif
 }
 
 /* ---- errors, sessions ------------------------------------------------------------------- */

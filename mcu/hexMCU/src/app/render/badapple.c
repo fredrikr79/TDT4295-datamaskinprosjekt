@@ -113,6 +113,19 @@
 #endif
 #define BA_SYNC_GIVE_UP 3u
 
+/* Wait after the SYNC before writing (badapple_set_sync_delay()). The
+ * writes take most of a frame and race the screen scan: where they cross
+ * it is the tear. Starting them just after the scan has passed the top
+ * keeps the scan ahead all the way down, so no half-written picture shows.
+ * Outside ba: it's a setting, not part of a run. */
+#ifndef BA_SYNC_DELAY_MS
+#define BA_SYNC_DELAY_MS 0u
+#endif
+static uint32_t sync_delay_ms = BA_SYNC_DELAY_MS;
+
+void     badapple_set_sync_delay(uint32_t ms) { sync_delay_ms = ms; }
+uint32_t badapple_sync_delay(void)            { return sync_delay_ms; }
+
 
 typedef enum { BA_OFF, BA_CLEAR, BA_PLAY } phase_t;
 
@@ -141,6 +154,8 @@ static struct {
     /* frame SYNC */
     bool     sync_on;           /* still waiting for SYNC (not given up) */
     bool     sync_waiting;      /* a frame is due, waiting for a SYNC   */
+    bool     sync_delaying;     /* got it, waiting sync_delay_ms        */
+    uint32_t sync_at;           /* when the SYNC was seen               */
     uint32_t sync_mark;         /* SYNC count when the wait began       */
     uint32_t sync_wait_t;
     uint32_t sync_missed;       /* frames sent without one, in a row    */
@@ -464,6 +479,8 @@ bool badapple_start(const char *path, bool loop, material_t dark, material_t lig
              (unsigned long)(ba.frames / BA_FPS / 60u), (unsigned long)(ba.frames / BA_FPS % 60u),
              material_name(dark), material_name(light),
              ba.maxp, in->max_cmd, BA_REFRESH_EVERY, loop ? ", looping" : "");
+    if (sync_delay_ms)
+        LOG_INFO("writes start %lu ms after each SYNC", (unsigned long)sync_delay_ms);
     return true;
 }
 
@@ -499,6 +516,11 @@ static void play_poll(void)
     /* Due: now wait for the FPGA's next SYNC (a new edge, not one from
      * before), at most a frame time. */
     if (ba.sync_on) {
+        if (ba.sync_delaying) {                             /* after the SYNC */
+            if (plat_millis() - ba.sync_at < sync_delay_ms) return;
+            ba.sync_delaying = false;
+            goto synced;
+        }
         if (!ba.sync_waiting) {
             ba.sync_waiting = true;
             ba.sync_mark    = frame_sync_count();
@@ -510,6 +532,11 @@ static void play_poll(void)
         ba.sync_waiting = false;
         if (got) {
             ba.sync_missed = 0;
+            if (sync_delay_ms) {                            /* then wait a bit more */
+                ba.sync_delaying = true;
+                ba.sync_at       = plat_millis();
+                return;
+            }
         } else {
             ba.sync_missed_all++;
             if (++ba.sync_missed >= BA_SYNC_GIVE_UP) {
@@ -517,6 +544,7 @@ static void play_poll(void)
                 LOG_WARN("no frame SYNC from the FPGA: frames on the MCU clock only");
             }
         }
+    synced:
         due = (plat_millis() - ba.t0) / BA_FRAME_MS;       /* the wait took time */
         if (due >= ba.frames) return;                       /* the end: next poll */
     }

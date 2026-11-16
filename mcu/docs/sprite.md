@@ -201,7 +201,18 @@ At most one command per sprite per poll:
 |---|---|---|
 | NONE | its image is UPLOADED | SPRITE_WRITE (memID, visible, x, y, w, h) → CREATING |
 | LIVE | `remove` set | SPRITE_DELETE → DELETING |
-| LIVE | `x/y/visible` ≠ `s_*`, or `dirty` | SPRITE_UPDATE → UPDATING |
+| LIVE | `x/y/visible` ≠ `s_*`, or `dirty`, and the update window is open | SPRITE_UPDATE → UPDATING |
+
+**Updates wait for SYNC.** The FPGA draws sprites as it scans the screen, so a
+sprite moved while the scan passes over it tears: its upper rows at the old
+place, the rest at the new. So updates go out only in a window that opens on the
+first `sprite_poll()` after a new SYNC, ahead of what the game queues for that
+frame, to land in the vertical blanking. The window closes once everything
+waiting has been sent; a full queue keeps it open until the rest is sent. A
+sprite therefore shows where it was put one frame (16.8 ms) later. If no SYNC
+comes for 50 ms (`SPRITE_SYNC_MAX_MS`), the window opens anyway.
+`-DSPRITE_SYNC_UPDATES=0` sends updates at once, as before. Creating and
+deleting sprites, and image uploads, don't wait.
 
 **`sprite_done()`**:
 - **Create OK:** the answer is the spriteID; the state becomes LIVE.

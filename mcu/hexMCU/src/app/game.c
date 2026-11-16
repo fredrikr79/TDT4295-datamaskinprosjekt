@@ -21,7 +21,7 @@
 #include "draw.h"
 
 /* tuning */
-#define FIRST_ROOM_X -3
+#define FIRST_ROOM_X  0
 #define FIRST_ROOM_Y  0
 
 /* ======================================================================
@@ -344,7 +344,7 @@ static void sprites_setup(void)
     assets_init();              /* reads the sprite files' headers from the card */
 
     const fpga_info_t *scr = fpga_link_info();
-    player_sprite_init(100, 100);   /* the player's picture, until it first moves */
+    player_sprite_init((int) player.x, (int) player.y);   /* the player's picture, until it first moves */
 
     /* test: a sentence centred near the top */
     int32_t w = sprite_img_w(assets.title);
@@ -492,6 +492,18 @@ void game_change_room(int to_x, int to_y)
     next_room_y = to_y;
     after_save = AFTER_SAVE_NEXT_ROOM;
     save_start();
+}
+
+// Delete all saved rooms and start over
+void game_reset()
+{
+    if (state != S_RUN) return;
+    menu_reset();
+    delete_all_saves();
+    room_x = FIRST_ROOM_X;
+    room_y = FIRST_ROOM_Y;
+    player_set_default(&player);
+    load_start();
 }
 
 /* ---- the handshake is done: same session -> resume, new -> reload ------ */

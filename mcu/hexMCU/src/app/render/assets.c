@@ -39,24 +39,124 @@ _Static_assert(sizeof material_names / sizeof material_names[0] == MAT_COUNT,
  * in player_colour() below -- the same size as the hitbox, since a screen
  * pixel is a simulation cell. Edit away; a row that is too long fails to
  * compile, a short one is see-through at the end. */
-static const char player_art[PLAYER_SIZE_Y][PLAYER_SIZE_X + 1] = {
-    "  KKKK  ",
-    " KYYYYK ",
-    "KYYYYYYK",
-    "KYKYYKYK",     /* eyes   */
-    "KPYYYYPK",     /* cheeks */
-    "KYKKKKYK",     /* mouth  */
-    " KYYYYK ",
-    "  KKKK  ",
-    " KBBBBK ",
-    "KBBBBBBK",
-    "KBKBBKBK",
-    "KYKBBKYK",     /* hands  */
-    " KDDDDK ",
-    " KDKKDK ",
-    " KDKKDK ",
-    "KKK  KKK",     /* shoes  */
+// static const char player_art[PLAYER_SIZE_Y][PLAYER_SIZE_X + 1] = {
+//     "  KKKK  ",
+//     " KYYYYK ",
+//     "KYYYYYYK",
+//     "KYKYYKYK",     /* eyes   */
+//     "KPYYYYPK",     /* cheeks */
+//     "KYKKKKYK",     /* mouth  */
+//     " KYYYYK ",
+//     "  KKKK  ",
+//     " KBBBBK ",
+//     "KBBBBBBK",
+//     "KBKBBKBK",
+//     "KYKBBKYK",     /* hands  */
+//     " KDDDDK ",
+//     " KDKKDK ",
+//     " KDKKDK ",
+//     "KKK  KKK",     /* shoes  */
+// };
+static const char player_art[4*PLAYER_SIZE_Y][4*PLAYER_SIZE_X + 1] = {
+    "    KKKKKKKK    ",
+    "    KKKKKKKK    ",
+    "  KKYYYYYYYYKK  ",
+    "  KKYYYYYYYYKK  ",
+    "KKYYYYYYYYYYYYKK",
+    "KKYYYYYYYYYYYYKK",
+    "KKYYKKYYYYKKYYKK",     /* eyes   */
+    "KKYYKKYYYYKKYYKK",     /* eyes   */
+    "KKPPYYYYYYYYPPKK",     /* cheeks */
+    "KKPPYYYYYYYYPPKK",     /* cheeks */
+    "KKYYKKKKKKKKYYKK",     /* mouth  */
+    "KKYYKKKKKKKKYYKK",     /* mouth  */
+    "  KKYYYYYYYYKK  ",
+    "  KKYYYYYYYYKK  ",
+    "    KKKKKKKK    ",
+    "    KKKKKKKK    ",
+    "  KKBBBBBBBBKK  ",
+    "  KKBBBBBBBBKK  ",
+    "KKBBBBBBBBBBBBKK",
+    "KKBBBBBBBBBBBBKK",
+    "KKBBKKBBBBKKBBKK",
+    "KKBBKKBBBBKKBBKK",
+    "KKYYKKBBBBKKYYKK",     /* hands  */
+    "KKYYKKBBBBKKYYKK",     /* hands  */
+    "  KKDDDDDDDDKK  ",
+    "  KKDDDDDDDDKK  ",
+    "  KKDDKKKKDDKK  ",
+    "  KKDDKKKKDDKK  ",
+    "  KKDDKKKKDDKK  ",
+    "  KKDDKKKKDDKK  ",
+    "KKKKKK    KKKKKK",     /* shoes  */
+    "KKKKKK    KKKKKK",     /* shoes  */
 };
+// static const char player_art[PLAYER_SIZE_Y*4][PLAYER_SIZE_X*4 + 1] = {
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
+//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
+//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
+//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
+//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
+//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
+//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
+//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
+//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
+//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
+//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
+//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
+//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
+//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
+//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
+//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "        KKKKKKKKKKKKKKKK        ",
+//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
+//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
+//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
+//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
+//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
+//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
+//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
+//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
+//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
+//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
+//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
+//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
+//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
+//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
+//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
+//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
+//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
+//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
+//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
+//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
+//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
+//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
+//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
+//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
+// };
 
 static uint16_t player_colour(char c)
 {
@@ -76,7 +176,7 @@ static void player_px(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
     (void)ctx;
     for (uint32_t i = 0; i < len; i += PX_BYTES) {
         uint32_t p = (offset + i) / PX_BYTES;
-        uint16_t colour = player_colour(player_art[p / PLAYER_SIZE_X][p % PLAYER_SIZE_X]);
+        uint16_t colour = player_colour(player_art[p / (4*PLAYER_SIZE_X)][p % (4*PLAYER_SIZE_X)]);
         buf[i]     = (uint8_t)(colour >> 8);
         buf[i + 1] = (uint8_t)colour;
     }
@@ -94,7 +194,7 @@ void assets_init(void)
     if (!assets.cursor) assets.cursor = sprite_img_solid(8, 8, RGB565(255, 255, 255));
 
     /* generated */
-    assets.player = sprite_img_fill(PLAYER_SIZE_X, PLAYER_SIZE_Y, player_px, NULL);
+    assets.player = sprite_img_fill(4*PLAYER_SIZE_X, 4*PLAYER_SIZE_Y, player_px, NULL);
 
     /* texts: one image per text */
     assets.title     = text("Hei verden! Lagre spill? æøå ÆØÅ");

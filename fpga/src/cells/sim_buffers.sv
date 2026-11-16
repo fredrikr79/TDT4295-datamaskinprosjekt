@@ -19,6 +19,11 @@ module sim_buffers #(
     output mem_map_pkg::fb_y_t commit_y,
     output logic commit_res_buffer,
     output logic pulse_frame_restart,
+    // Rows the compositor should latch on pulse_row_commit.
+    output sim_pkg::row_buffer_t commit_rows[2],
+
+    // High while a simulated frame is in progress.
+    output logic sim_frame_active,
 
     output logic mem_toggle,
     output memory_pkg::transaction_e mem_transaction,
@@ -38,7 +43,7 @@ module sim_buffers #(
   localparam int unsigned RowIdxBits = $clog2(GridHeight + 2);  // 9
   typedef logic [RowIdxBits-1:0] row_idx_t;
 
-  typedef enum logic [2:0] {
+  typedef enum logic [3:0] {
     FRAME_START,   // empty the window and pull row 0 in
     PRIME_FIRST,   // row 0 into buffers[2]
     PRIME_SECOND,  // row 1 into buffers[1]
@@ -46,11 +51,19 @@ module sim_buffers #(
     RUN_ROW,       // wait on pulse_row_done, and shift buffers when this happens, if pulse_transaction_pair_done, write to memory as well.
     COMMIT_FIRST,  // hold the first (or only) row until the compositor can take it
     WRITE_BACK,    // write one or two res_buffer rows to memory
-    PREFETCH       // start fetching of row_index + 1 or start over from beginning of a frame
+    PREFETCH,      // start fetching of row_index + 1 or start over from beginning of a frame
+    DISPLAY_ROW    // paused: hand the row in buffers[2] to the compositor without simulating it
   } state_e;
 
   state_e state;
   row_idx_t row_index;
+
+  // Latched at the start of every frame from !sim_running.
+  logic display_only;
+
+  assign sim_frame_active = !display_only && state != FRAME_START;
+  assign commit_rows[0] = display_only ? buffers[2] : res_buffer[0];
+  assign commit_rows[1] = display_only ? buffers[2] : res_buffer[1];
 
   logic single_row_edgecase;
   logic write_lower;  // if the lower row of a transaction pair is queued for write to memory
@@ -90,6 +103,7 @@ module sim_buffers #(
     if (reset) begin
       state <= FRAME_START;
       pulse_frame_restart <= 1'b1;
+      display_only <= 1'b0;
       commit_y <= '0;
       commit_res_buffer <= 1'b0;
       row_index <= '0;
@@ -159,7 +173,8 @@ module sim_buffers #(
             start_xfer <= 1'b1;
             start_is_write <= 1'b0;
             start_row <= row_idx_t'(0);
-            state <= PRIME_FIRST;
+            display_only <= !sim_running;
+            state <= sim_running ? PRIME_FIRST : DISPLAY_ROW;
           end
         end
 
@@ -182,10 +197,8 @@ module sim_buffers #(
         end
 
         START_ROW: begin
-          if (sim_running) begin
-            pulse_new_row <= 1'b1;
-            state <= RUN_ROW;
-          end
+          pulse_new_row <= 1'b1;
+          state <= RUN_ROW;
         end
 
         RUN_ROW: begin
@@ -270,8 +283,22 @@ module sim_buffers #(
               pulse_frame_restart <= 1'b1;
             end else begin
               row_index <= row_index + row_idx_t'(1);
-              state <= START_ROW;
+              state <= display_only ? DISPLAY_ROW : START_ROW;
             end
+          end
+        end
+
+        DISPLAY_ROW: begin
+          if (xfer_idle && fb_row_ready) begin
+            pulse_row_commit <= 1'b1;
+            commit_y <= mem_map_pkg::fb_y_t'(row_index);
+            commit_res_buffer <= 1'b0;
+            if (32'(row_index) + 1 < GridHeight) begin
+              start_xfer <= 1'b1;
+              start_is_write <= 1'b0;
+              start_row <= row_index + row_idx_t'(1);
+            end
+            state <= PREFETCH;
           end
         end
 

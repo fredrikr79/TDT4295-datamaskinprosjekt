@@ -144,14 +144,14 @@ module simulator #(
     // the column to its left writing +1, or the column to its right writing -1. Those are
     // fixed for each column, so this is three small compares per pixel instead of the
     // previous 16 write calls x 40 positions per core.
-    if (rule_stage.valid) begin
+    if (rule_stage.valid && sim_running) begin
       for (int b = 0; b < 2; b++) begin
         for (int column = 0; column < sim_pkg::CellGridWidth; column++) begin
-          if (wr_en[column/Stride][b].center)
+          if (rule_stage.base == BaseW'(column % Stride) && wr_en[column/Stride][b].center)
             output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[column/Stride][b].center;
-          else if (column > 0 && wr_en[(column-1)/Stride][b].left)
+          else if (column > 0 && rule_stage.base == BaseW'((column - 1) % Stride) &&  wr_en[(column-1)/Stride][b].left)
             output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[(column-1)/Stride][b].left;
-          else if (column < sim_pkg::CellGridWidth - 1 && wr_en[(column+1)/Stride][b].right)
+          else if (column < sim_pkg::CellGridWidth - 1 && rule_stage.base == BaseW'((column + 1) % Stride) && wr_en[(column+1)/Stride][b].right)
             output_buffers[b][column*sim_pkg::BitsPerPixel+:sim_pkg::BitsPerPixel] <= wr_val[(column+1)/Stride][b].right;
         end
       end
@@ -186,7 +186,7 @@ module simulator #(
         end
       end
 
-      if (pulse_new_row && sim_running) begin
+      if (pulse_new_row) begin
         if (is_unmatched_boundry_row) begin
           output_buffers[is_sending_row] <= input_buffers[1];
         end else if (is_sending_row) begin

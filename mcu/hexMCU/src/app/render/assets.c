@@ -42,10 +42,11 @@ const char *material_name(material_t m)
 }
 
 /* ---- the player ------------------------------------------------------------
- * PLAYER_SIZE_X x PLAYER_SIZE_Y (player.h), one letter per pixel, looked up
- * in player_colour() below -- the same size as the hitbox, since a screen
- * pixel is a simulation cell. Edit away; a row that is too long fails to
- * compile, a short one is see-through at the end. */
+ * 4*PLAYER_SIZE_X x 4*PLAYER_SIZE_Y pixels, one letter per pixel, looked up
+ * in player_colour() below: the hitbox (player.h) is in grid cells, and a
+ * cell is 4x4 screen pixels (FPGA_SIM_SCALE), so the picture covers it
+ * exactly. Edit away; a row that is too long warns and is cut off, a short
+ * one is see-through at the end. */
 // static const char player_art[PLAYER_SIZE_Y][PLAYER_SIZE_X + 1] = {
 //     "  KKKK  ",
 //     " KYYYYK ",

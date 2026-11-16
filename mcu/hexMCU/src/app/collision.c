@@ -218,9 +218,12 @@ bool perform_object_movement(
             {
                 if (tile_has_collision(box[base_x + horizontal_progress + y*velocity_box.box.x2]))
                 {
-                    if (y < step_allowance)
+                    // Fix: was y < step_allowance, but y is the row in the box, not in the
+                    // player: only true near the room's top, where the player could then
+                    // walk through a wall at head height
+                    if (y - y_start < step_allowance)
                     {
-                        step_start = y + 1;
+                        step_start = y - y_start + 1;
                         continue;
                     }
                     else if (y_target - y - 1 < step_allowance && step_end < y_target - y)
@@ -253,10 +256,17 @@ bool perform_object_movement(
                         x_start += 2;
                         x_end += 2;
                     }
-                    uint8_t y = velocity_box.rel_x - 1 + vertical_progress;
-                    uint8_t y_end = y - step_end;
+                    // Fix: was rel_x (a column) for the row above the head, and uint8_t,
+                    // which wrapped to 255 (far past box[]) at the room's top
+                    int y = velocity_box.rel_y - 1 + vertical_progress;
+                    int y_end = y - step_end;
                     while (y > y_end)
                     {
+                        if (y < 0)              // the room's top: no room to step up
+                        {
+                            hit_roof = true;
+                            break;
+                        }
                         for (uint8_t x = x_start; x < x_end; x++)
                         {
                             if (tile_has_collision(box[x + y*velocity_box.box.x2]))
@@ -356,14 +366,15 @@ bool perform_object_movement(
         *pos_y = 0;
         *velocity_y = 0;
     }
-    if (ROOM_X - 1 <= *pos_x + size_x)
+    // Fix: was ROOM_X - 1 - size_x: one cell short of the room's last column / row
+    if (ROOM_X <= *pos_x + size_x)
     {
-        *pos_x = ROOM_X - 1 - size_x;
+        *pos_x = ROOM_X - size_x;
         *velocity_x = 0;
     }
-    if (ROOM_Y - 1 <= *pos_y + size_y)
+    if (ROOM_Y <= *pos_y + size_y)
     {
-        *pos_y = ROOM_Y - 1 - size_y;
+        *pos_y = ROOM_Y - size_y;
         *velocity_y = 0;
     }
 

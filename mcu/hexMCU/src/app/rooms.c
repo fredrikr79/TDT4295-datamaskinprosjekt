@@ -242,10 +242,12 @@ void encode_room(uint8_t *tileIDs, uint8_t *data, unsigned long *data_size)
     data[*data_size + 7] = portals[i].y2 & lower_mask;
 
     // Encode room
+    // Fix: was & 7, but decode_room() reads & 127: saving turned a portal to
+    // room 8 (or -8) and beyond into one to the wrong room
     data[*data_size + 8] = (portals[i].dest_room_x < 0) << 7;
-    data[*data_size + 8] += abs(portals[i].dest_room_x) & 7;
+    data[*data_size + 8] += abs(portals[i].dest_room_x) & 127;
     data[*data_size + 9] = (portals[i].dest_room_y < 0) << 7;
-    data[*data_size + 9] += abs(portals[i].dest_room_y) & 7;
+    data[*data_size + 9] += abs(portals[i].dest_room_y) & 127;
   
     // Encode pos
     data[*data_size + 10] = portals[i].dest_pos_x >> 8;

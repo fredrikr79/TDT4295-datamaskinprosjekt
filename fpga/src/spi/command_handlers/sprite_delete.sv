@@ -69,7 +69,6 @@ always_ff @(posedge clk) begin
                     sprite_req_body.mem_id <= 0; // unused in req
                     sprite_req_body.w <= 0;      // unused in req
                     sprite_req_body.h <= 0;      // unused in req
-                    sprite_update_done <= 1;
                     state <= DONE;
                 end
                 // end

@@ -127,7 +127,7 @@ module simulator #(
         positional_noise[c] <= 16'hABCD ^ 16'(c * 16'hF13D + 1);
       end
     end else if (setup_stage.valid)
-    for (int c = 0; c < sim_pkg::SimulationCoreCount; c++)
+    for (int c = 0; c < sim_pkg::SimulationCoreCount; c++) begin
       noise_lfsr[c] <= {
         noise_lfsr[c][14:0],
         noise_lfsr[c][15] ^ noise_lfsr[c][13] ^ noise_lfsr[c][12] ^ noise_lfsr[c][10]
@@ -137,7 +137,7 @@ module simulator #(
         positional_noise[c][14:0],
         positional_noise[c][15] ^ positional_noise[c][13] ^ positional_noise[c][12]
       };
-
+    end
     // ---- [PIPELINE 2] Stage 2: explosion and GoL rules from the registered neighbourhood ----
     rule_stage.valid <= setup_stage.valid;
     rule_stage.last <= setup_stage.last;

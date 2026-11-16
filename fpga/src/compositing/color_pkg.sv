@@ -86,8 +86,8 @@ package color_pkg;
 
   function automatic logic [15:0] gol_colors (input logic [3:0] meta);
     unique case (1'(meta[3]))
-      0: return 16'b11100_111001_11100; // of white
-      1: return 16'b01110_011000_01100; // red-ish gray
+      0: return 16'b01110_011000_01100; // red-ish gray
+      1: return 16'b11100_111001_11100; // of white
     endcase
   endfunction
 

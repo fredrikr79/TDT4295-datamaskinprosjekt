@@ -176,20 +176,24 @@ package sim_pkg;
   endfunction
 
   typedef struct packed {
-    logic [BitsPerPixel-1:0] right;
-    logic [BitsPerPixel-1:0] center;
-    logic [BitsPerPixel-1:0] left;
+    logic [MaterialBits-1:0] material;
+    logic [BitsPerPixel-MaterialBits-1:0] data;
+  } pixel_t;
+  typedef struct packed {
+    pixel_t right;
+    pixel_t center;
+    pixel_t left;
   } neighbourhood_row_t;
   typedef struct packed {
-    logic [BitsPerPixel-1:0] topLeft;
-    logic [BitsPerPixel-1:0] top;
-    logic [BitsPerPixel-1:0] topRight;
-    logic [BitsPerPixel-1:0] left;
-    logic [BitsPerPixel-1:0] center;
-    logic [BitsPerPixel-1:0] right;
-    logic [BitsPerPixel-1:0] bottomLeft;
-    logic [BitsPerPixel-1:0] bottom;
-    logic [BitsPerPixel-1:0] bottomRight;
+    pixel_t topLeft;
+    pixel_t top;
+    pixel_t topRight;
+    pixel_t left;
+    pixel_t center;
+    pixel_t right;
+    pixel_t bottomLeft;
+    pixel_t bottom;
+    pixel_t bottomRight;
   } neighbourhood_t;
 
   typedef enum {

@@ -180,6 +180,11 @@ package sim_pkg;
     logic [BitsPerPixel-MaterialBits-1:0] data;
   } pixel_t;
   typedef struct packed {
+    logic right;
+    logic center;
+    logic left;
+  } neighbourhood_row_en_t;
+  typedef struct packed {
     pixel_t right;
     pixel_t center;
     pixel_t left;

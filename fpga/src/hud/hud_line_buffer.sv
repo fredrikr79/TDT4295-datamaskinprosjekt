@@ -85,10 +85,14 @@ module hud_line_buffer #(
   // Find out if sprite needs to be rendered on this row, and if so, which part of it.
   always_comb begin
     row_in_sprite = 32'(line_y) - 32'(current_sprite.y);
-    rows_overlap = (32'(line_y) >= 32'(current_sprite.y)) && (32'(line_y) < 32'(current_sprite.y) + 32'(current_sprite.h));
+    rows_overlap = (32'(line_y) >= 32'(current_sprite.y))
+      && (32'(line_y) < 32'(current_sprite.y) + 32'(current_sprite.h));
     span_x0 = 32'(current_sprite.x);
-    span_x1 = (32'(current_sprite.x) + 32'(current_sprite.w) > LineBytes) ? LineBytes : 32'(current_sprite.x) + 32'(current_sprite.w);
-    visible_on_row = current_sprite.active && rows_overlap && (span_x0 < LineBytes) && (span_x1 > span_x0);
+    span_x1 = (32'(current_sprite.x) + 32'(current_sprite.w) > LineBytes)
+      ? LineBytes
+      : 32'(current_sprite.x) + 32'(current_sprite.w);
+    visible_on_row = current_sprite.active && rows_overlap
+      && (span_x0 < LineBytes) && (span_x1 > span_x0);
   end
 
   logic [31:0] sprite_row_addr;
@@ -227,7 +231,8 @@ module hud_line_buffer #(
               end else begin
                 if ({pixel_hi, mem_read_data} != SeeThroughColor) begin
                   px_opaque_store[dest_x] <= 1'b1;
-                  px_color_store[dest_x] <= color_pkg::rgb565_to_hud_color({pixel_hi, mem_read_data});
+                  px_color_store[dest_x]
+                    <= color_pkg::rgb565_to_hud_color({pixel_hi, mem_read_data});
                 end
                 dest_x <= dest_x + 1'b1;
               end

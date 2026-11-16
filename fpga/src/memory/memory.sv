@@ -121,9 +121,12 @@ module memory #(
   end
 
   // Before the initializer is finished it owns the controller
-  assign controller_toggle = initializer_finished ? (arb_toggle ^ toggle_offset) : initializer_toggle;
-  assign controller_next_transaction = initializer_finished ? req_transaction[owner]
-                                                            : initializer_next_transaction;
+  assign controller_toggle = initializer_finished
+    ? (arb_toggle ^ toggle_offset)
+    : initializer_toggle;
+  assign controller_next_transaction = initializer_finished
+    ? req_transaction[owner]
+    : initializer_next_transaction;
   assign controller_address = initializer_finished ? req_address[owner] : initializer_address;
   assign controller_length = initializer_finished ? req_length[owner] : initializer_length;
   assign controller_write_data = initializer_finished ? client_write_data[owner]

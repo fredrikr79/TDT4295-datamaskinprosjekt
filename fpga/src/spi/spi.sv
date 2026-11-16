@@ -233,6 +233,7 @@ module spi #(
       .state(state),
       .in_fifo(in_fifo),
       .out_empty(out_empty),
+      .out_full(out_full),
       .in_empty(in_empty),
       .reset_s(reset_s),
       .proc_w_en(proc_w_en),

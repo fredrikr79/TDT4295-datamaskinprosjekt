@@ -81,7 +81,7 @@ module write_sprite #(
             if(in_empty) begin
               error_valid <= 1'b1;
               error_code <= MISSING_PARAMETER_ERROR;
-            end else begin 
+            end else begin
               sprite_base_addr <= mem_addr;
               state <= MEM_INIT_REQ;
             end

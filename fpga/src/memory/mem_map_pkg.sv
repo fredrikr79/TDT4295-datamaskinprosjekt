@@ -15,11 +15,13 @@ package mem_map_pkg;
   localparam int unsigned DieBytes = 8 * 1024 * 1024;  // 8 MiB per die
   localparam int unsigned DeviceBytes = 2 * DieBytes;  // Max capacity of SRAM
 
-  // Framebuffers
-  localparam int unsigned FbBytes = ScreenCells;  // 230,400
+  // Memory parameters
+  parameter int unsigned GridMemLocationStart = 32'd0;
+  parameter int unsigned BytesPerGridPixel = 1;
+  parameter int unsigned BytesPerScreenPixel = 2;
 
-  // HUD sprites
-  // TODO
+  // Framebuffers
+  localparam int unsigned FbBytes = ScreenCells * BytesPerScreenPixel;  // 230,400
 
   // Memory pointers //
   localparam int unsigned CellGridMemPointer = 0;
@@ -47,9 +49,6 @@ package mem_map_pkg;
                                                         input fb_y_t y);
     return fb_line_addr(buffer_sel, y) + memory_pkg::address_t'(int'(x));
   endfunction
-
-  parameter int unsigned GridMemLocationStart = 32'd0;
-  parameter int unsigned BytesPerGridPixel = 1;
 
   // Memory transaction states
   typedef enum bit [3:0] {

@@ -37,8 +37,9 @@ module fb_line_fetcher #(
     else next_line = mem_map_pkg::fb_y_t'(coord_y + 1'b1);
   end
 
+  // + Fetch when new frame about to start
   logic fetch_needed;
-  assign fetch_needed = (32'(coord_y) < ActiveHeight - 1) || near_frame_end; // + Fetch when new frame about to start
+  assign fetch_needed = (32'(coord_y) < ActiveHeight - 1) || near_frame_end;
   logic [CountBits-1:0] remaining;
   assign remaining = CountBits'(LineBytes) - bytes_requested;
 

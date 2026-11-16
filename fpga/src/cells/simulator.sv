@@ -287,19 +287,19 @@ module simulator #(
         sending_val.center = gol_r[core];
       end else if (gravity_movement == sim_pkg::DownRight) begin
         sending_en.center   = 1'b1;
-        sending_val.center  = add_turbulence(nb.topLeft);
+        sending_val.center  = sim_pkg::add_turbulence(nb.topLeft);
         receiving_en.right  = 1'b1;
-        receiving_val.right = add_turbulence(nb.center);
+        receiving_val.right = sim_pkg::add_turbulence(nb.center);
       end else if (gravity_movement == sim_pkg::Down) begin
         receiving_en.center = 1'b1;
-        receiving_val.center = add_turbulence(nb.center);
+        receiving_val.center = sim_pkg::add_turbulence(nb.center);
         sending_en.center = 1'b1;
-        sending_val.center = add_turbulence(nb.top);
+        sending_val.center = sim_pkg::add_turbulence(nb.top);
       end else if (gravity_movement == sim_pkg::DownLeft) begin
         sending_en.center  = 1'b1;
-        sending_val.center = add_turbulence(nb.topRight);
+        sending_val.center = sim_pkg::add_turbulence(nb.topRight);
         receiving_en.left  = 1'b1;
-        receiving_val.left = add_turbulence(nb.center);
+        receiving_val.left = sim_pkg::add_turbulence(nb.center);
       end else begin
         // fluid: a top-row move and a centre-row move can both happen
         if (fluid_movement.topLeft) begin

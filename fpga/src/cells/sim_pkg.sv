@@ -223,8 +223,8 @@ package sim_pkg;
   function automatic pixel_t add_turbulence(input pixel_t pixel);
     pixel_t result;
     result = pixel;
-    if (sim_pkg::mat_spreads(p.material) && p.data != 4'd15) begin
-      result.data = p.data + 4'd1;
+    if (sim_pkg::mat_spreads(pixel.material) && pixel.data != 4'd15) begin
+      result.data = pixel.data + 4'd1;
     end
     return result;
   endfunction
@@ -232,8 +232,8 @@ package sim_pkg;
   function automatic sim_pkg::pixel_t remove_turbulence(input sim_pkg::pixel_t pixel);
     pixel_t result;
     result = pixel;
-    if (sim_pkg::mat_spreads(p.material) && p.data != 4'd0) begin
-      result.data = p.data - 4'd1;
+    if (sim_pkg::mat_spreads(pixel.material) && pixel.data != 4'd0) begin
+      result.data = pixel.data - 4'd1;
     end
     return result;
   endfunction

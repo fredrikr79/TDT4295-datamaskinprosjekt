@@ -19,6 +19,7 @@ module sim_buffers #(
     output mem_map_pkg::fb_y_t commit_y,
     output logic commit_res_buffer,
     output logic pulse_frame_restart,
+    output logic idle,
 
     output logic mem_toggle,
     output memory_pkg::transaction_e mem_transaction,
@@ -63,6 +64,7 @@ module sim_buffers #(
   logic start_xfer, start_is_write, start_buffer, xfer_active, xfer_write, xfer_idle;
   row_idx_t start_row, xfer_row;
   assign xfer_idle = !xfer_active && !start_xfer;
+  assign idle = (state == FRAME_START) && xfer_idle;
 
   logic [CountBits-1:0] bytes_requested, bytes_moved;
   logic [RowBits-1:0] write_shift;
@@ -154,7 +156,7 @@ module sim_buffers #(
           buffers[2] <= '0;
 
           // Wait until compositor is ready to write a new frame
-          if (fb_ready) begin
+          if (fb_ready && sim_running) begin
             // Writes first row to buffer[2] next pulse
             start_xfer <= 1'b1;
             start_is_write <= 1'b0;
@@ -185,6 +187,9 @@ module sim_buffers #(
           if (sim_running) begin
             pulse_new_row <= 1'b1;
             state <= RUN_ROW;
+          end else begin
+            state <= FRAME_START;
+            pulse_frame_restart <= 1'b1;
           end
         end
 

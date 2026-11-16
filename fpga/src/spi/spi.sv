@@ -26,7 +26,7 @@ module spi #(
     // Memory
     input logic [7:0] mem_out,
     output logic [7:0] mem_in,
-    output logic [15:0] mem_len,
+    output logic [6:0] mem_len,
     input logic mem_busy,
     mem_data_on_wire,
     mem_allow,  // from mem_access_policy
@@ -254,6 +254,7 @@ module spi #(
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
+      .mem_allow(mem_allow),
       // .sprite_id_bitmap(sprite_id_bitmap),
       .write_sprite_valid(write_sprite_valid),
       .write_sprite_mem_id(write_sprite_mem_id),
@@ -266,8 +267,8 @@ module spi #(
   );
 
   // DEBUG
-  assign led_r_n = ~state[2];
-  assign led_g_n = ~state[1];
-  assign led_b_n = ~state[0];
+  assign led_r_n = ~error_valid;
+  assign led_g_n = error_valid;
+  assign led_b_n = ~(state == spi_pck::ST_BOOT);
 
 endmodule

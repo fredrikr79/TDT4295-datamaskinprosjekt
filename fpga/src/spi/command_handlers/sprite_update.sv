@@ -3,6 +3,7 @@ module sprite_update #(
 )(
     input wire clk, ck_rst, send_sprite_update,
     input logic in_empty,
+    mem_allow,
     input logic [7:0] in_fifo,
     // input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output logic sprite_update_done,
@@ -98,13 +99,18 @@ always_ff @(posedge clk) begin
                     //     error_valid <= 1'b1;
                     //     error_code <= UNKNOWN_IDENTIFIER_ERROR;
                     // end else begin
+                    if (mem_allow) begin
                         sprite_req_body.id <= param_id;
                         sprite_req_body.active <= param_active;
                         sprite_req_body.x <= param_x;
                         sprite_req_body.y <= param_y;
+                        sprite_req_body.mem_id <= 0; // unused in req
+                        sprite_req_body.w <= 0;      // unused in req
+                        sprite_req_body.h <= 0;      // unused in req
                         sprite_req_valid <= 1'b1;
                         sprite_update_done <= 1'b1;
                         state <= DONE;
+                    end
                     // end
                 end
                 DONE: begin

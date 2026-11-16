@@ -10,6 +10,7 @@ module spi_processor #(
     clk,
     mem_busy,
     mem_data_on_wire,
+    mem_allow,
     sprite_id_found,
     input hud_pkg::sprite_lut_id sprite_available_id,
     // input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
@@ -599,7 +600,8 @@ module spi_processor #(
     .sprite_id_found(sprite_id_found),
     .sprite_req_body(sprite_w_body),
     .error_valid(sprite_write_error_valid),
-    .error_code(sprite_write_error_code)
+    .error_code(sprite_write_error_code),
+    .mem_allow(mem_allow)
   );
 
   sprite_update sprite_update_cmd_processor (
@@ -614,7 +616,8 @@ module spi_processor #(
       .sprite_req_body(sprite_u_body),
       // .sprite_id_bitmap(sprite_id_bitmap),
       .error_valid(sprite_update_error_valid),
-      .error_code(sprite_update_error_code)
+      .error_code(sprite_update_error_code),
+      .mem_allow(mem_allow)
   );
 
   sprite_delete sprite_delete_cmd_processor (
@@ -629,7 +632,8 @@ module spi_processor #(
       .sprite_req_body(sprite_d_body),
       // .sprite_id_bitmap(sprite_id_bitmap),
       .error_valid(sprite_delete_error_valid),
-      .error_code(sprite_delete_error_code)
+      .error_code(sprite_delete_error_code),
+      .mem_allow(mem_allow)
   );
 
 

@@ -3,6 +3,7 @@ module sprite_write #(
 )(
     input wire clk, ck_rst, send_sprite_write, sprite_id_found,
     input logic in_empty,
+    mem_allow,
     input logic [7:0] in_fifo,
     input logic [15:0] sprite_available_id,
     output logic sprite_write_r_en,
@@ -137,17 +138,19 @@ always_ff @(posedge clk) begin
                 end
             end
             EXECUTE: begin
-                sprite_req_body <= {
-                    param_active,
-                    param_id,
-                    param_mem_id,
-                    param_x,
-                    param_y,
-                    param_w,
-                    param_h
-                };
-                sprite_req_valid <= 1'b1;
-                state <= ID_TOP;
+                if(mem_allow) begin
+                    sprite_req_body <= {
+                        param_active,
+                        param_id,
+                        param_mem_id,
+                        param_x,
+                        param_y,
+                        param_w,
+                        param_h
+                    };
+                    sprite_req_valid <= 1'b1;
+                    state <= ID_TOP;
+                end
             end
             ID_TOP: begin
                 sprite_write_w_en <= 1'b1;

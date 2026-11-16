@@ -55,8 +55,8 @@ hud_pkg::dynamic_sprite_data_t dynamic_w_data;
 hud_pkg::static_sprite_data_t static_r_data;
 hud_pkg::dynamic_sprite_data_t dynamic_r_data;
 
-(* ram_style = "block" *) hud_pkg::static_sprite_data_t static_data_mem [hud_pkg::SpriteLutDepth];
-(* ram_style = "block" *) hud_pkg::dynamic_sprite_data_t dynamic_data_mem [hud_pkg::SpriteLutDepth];
+hud_pkg::static_sprite_data_t static_data_mem [hud_pkg::SpriteLutDepth];
+hud_pkg::dynamic_sprite_data_t dynamic_data_mem [hud_pkg::SpriteLutDepth];
 
 
 assign dynamic_w_data = op == hud_pkg::LUT_DELETE

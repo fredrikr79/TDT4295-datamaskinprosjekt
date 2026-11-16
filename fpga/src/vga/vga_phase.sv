@@ -1,6 +1,6 @@
 module vga_phase #(
     // How many lines of blanking that are left before we drive near_frame_end high.
-    parameter int unsigned GuardLines = 1
+    parameter int unsigned GuardLines = 10
 ) (
     input logic clk,
     input logic reset,

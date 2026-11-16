@@ -1,5 +1,4 @@
 
-`timescale 1ns / 1ps
  
 // Testbench for the cell simulator, driving it through sim_wrap.
 //

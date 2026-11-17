@@ -45,12 +45,18 @@ any payload. Multi-byte fields go MSB first. The full spec is
   Drawing a 1 × 1 brush at the cursor is one cell: one byte of payload, shown
   as 4 × 4 pixels.
 - **CONS and BOX** work on the grid, which holds **a byte per
-  cell with the material ID in its high 4 bits**. The low 4 bits are the
-  FPGA's own (simulation state): write them as 0 and ignore them when reading
-  back. The FPGA turns materials into colours with its own lookup table.
+  cell with the material ID in its high 4 bits**. The low 4 bits are either
+  the FPGA's own state (liquids' speed, igneous rock's thickness, life,
+  explosive's power) or texture the MCU puts there (air, sand, stone: see
+  [texture.md](texture.md)). The FPGA turns materials into colours with its
+  own lookup table, shaded by the low bits.
   - The materials (`material_t` in fpga.h, the FPGA's `materials_e`):
     `MAT_AIR` 0, `MAT_STONE` 1, `MAT_SAND` 2, `MAT_WATER` 3, `MAT_LAVA` 4,
     `MAT_ACID` 5, `MAT_LIFE` 6 (game of life), `MAT_EXPLOSIVE` 7.
+  - Stone and igneous rock are both `MAT_STONE`; bit 3 tells them apart
+    (`SIM_STONE_BIT`): stone is `1xxx` (0x18 and up), igneous rock `0xxx`
+    (0x10 and up). `sim_is(b, MAT_STONE)` is true for both;
+    `sim_is_igneous(b)` for igneous rock only.
   - `SIM_CELL(MAT_SAND)` is the byte for a cell (0x20); `SIM_MAT(byte)` the
     material in one. `sim_put(buf, k, mat)` / `sim_get(buf, k)` fill and read
     cell k of a buffer, whichever packing is in use.

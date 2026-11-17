@@ -239,6 +239,19 @@ static inline bool sim_is(uint8_t b, material_t m) { return SIM_MAT(b) == (uint8
 #define SIM_LIFE_ALIVE      0x8u    /* game of life: a live cell (0 = dead)      */
 #define SIM_EXPLOSIVE_FULL  0xFu    /* explosive: full power, the sim burns it down */
 
+/* Stone and igneous rock are one material on the FPGA (MAT_STONE); bit 3
+ * of the low bits tells them apart:
+ *   stone         1xxx   xxx: the MCU's texture (texture.c)
+ *   igneous rock  0xxx   xxx: the FPGA's own state ("thickness")
+ * So stone is SIM_CELL(MAT_STONE) | SIM_STONE_BIT = 0x18, and a plain
+ * SIM_CELL(MAT_STONE) = 0x10 is igneous rock. sim_is(b, MAT_STONE) is true
+ * for both (both are solid). */
+#define SIM_STONE_BIT       0x8u
+static inline bool sim_is_igneous(uint8_t b)
+{
+    return sim_is(b, MAT_STONE) && !(b & SIM_STONE_BIT);
+}
+
 /* Material of cell k in packed CONS / BOX data, and setting it. sim_put()
  * clears the low bits / the other half as needed, so a buffer can be
  * filled cell by cell in any order. Work for both packings. */

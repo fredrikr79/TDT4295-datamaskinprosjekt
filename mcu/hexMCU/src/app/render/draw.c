@@ -8,6 +8,7 @@
 #include "fpga.h"
 #include "sprite.h"
 #include "assets.h"
+#include "texture.h"
 #include "log.h"
 
 /* ---- look ----------------------------------------------------------------- */
@@ -33,7 +34,7 @@ unsigned draw_sizes(uint16_t out[DRAW_SIZES_MAX])
 {
     /* the biggest square that fits in one WRITE_BOX */
     uint32_t bytes = fpga_max_payload(WRITE_BOX_OPCODE);
-    if (bytes > FILL_BYTES) bytes = FILL_BYTES;     /* the fill buffers' size */
+    if (bytes > FILL_BYTES) bytes = FILL_BYTES;     /* the payload buffers' size */
     uint32_t cells = bytes * FPGA_SIM_IDS_PER_BYTE;
     uint16_t max = isqrt16(cells);
     if (max < 1) max = 1;
@@ -51,7 +52,7 @@ static struct {
     uint16_t gw, gh;                        /* the grid, cells           */
     uint16_t size[DRAW_SIZES_MAX];          /* brush sizes, cells        */
     unsigned nsizes, cur_size;
-    uint8_t  mat;                           /* material_t                */
+    uint8_t  elem;                          /* draw_elements[] index     */
     unsigned in_flight;
     bool     failed;                        /* a WRITE_BOX failed        */
     bool     running;                       /* the simulation, as shown  */
@@ -60,7 +61,7 @@ static struct {
 
     /* HUD, bottom left: one sprite per text, the current one shown */
     sprite_t *panel;
-    sprite_t *mat_name[MAT_COUNT];
+    sprite_t *elem_name[DRAW_ELEMENTS];
     sprite_t *size_name[DRAW_SIZES_MAX];
 
     /* HUD, bottom right: "Paused" / "Running", on a panel each */
@@ -72,22 +73,28 @@ static struct {
     sprite_t *outline[DRAW_SIZES_MAX][4][2];
     uint16_t  outline_len[DRAW_SIZES_MAX];  /* pixels, one piece */
     uint16_t  sw, sh;                       /* the screen, pixels */
-} d = { .mat = MAT_SAND, .cur_size = 2 };
+} d = { .elem = 3, .cur_size = 2 };            /* Sand */
 
-/* Every byte of a solid box is the same, so one buffer per material holds
- * any box; it stays valid while the DMA sends it. */
-static uint8_t fill[MAT_COUNT][FILL_BYTES];
+#define DRAW_AIR 0u                             /* draw_elements[]: erasing */
 
-/* The byte a drawn cell gets: the material in the top 4 bits, and in the
- * low 4 bits what the material needs to start out right (fpga.h). */
-static uint8_t draw_cell(unsigned m)
-{
-    switch (m) {
-    case MAT_LIFE:      return (uint8_t)(SIM_CELL(m) | SIM_LIFE_ALIVE);       /* 0x68 */
-    case MAT_EXPLOSIVE: return (uint8_t)(SIM_CELL(m) | SIM_EXPLOSIVE_FULL);  /* 0x7F */
-    default:            return SIM_CELL(m);
-    }
-}
+const draw_element_t draw_elements[DRAW_ELEMENTS] = {
+    { "Air",          SIM_CELL(MAT_AIR) },
+    { "Stone",        (uint8_t)(SIM_CELL(MAT_STONE) | SIM_STONE_BIT) },     /* 0x18 */
+    { "Igneous rock", SIM_CELL(MAT_STONE) },                                /* 0x10 */
+    { "Sand",         SIM_CELL(MAT_SAND) },
+    { "Water",        SIM_CELL(MAT_WATER) },
+    { "Lava",         SIM_CELL(MAT_LAVA) },
+    { "Acid",         SIM_CELL(MAT_ACID) },
+    { "Game of Life", (uint8_t)(SIM_CELL(MAT_LIFE) | SIM_LIFE_ALIVE) },        /* 0x68 */
+    { "Explosive",    (uint8_t)(SIM_CELL(MAT_EXPLOSIVE) | SIM_EXPLOSIVE_FULL) }, /* 0x7F */
+};
+
+/* A box's payload, one per placement that can be queued: each cell is
+ * textured where it lands, so the bytes differ. Placements finish in the
+ * order they were queued, so with fewer than MAX_IN_FLIGHT queued, the
+ * next slot is free (the DMA is done with it). */
+static uint8_t tx[MAX_IN_FLIGHT][FILL_BYTES];
+static unsigned tx_next;
 
 static int16_t max16(int16_t a, int16_t b) { return a > b ? a : b; }
 
@@ -102,13 +109,11 @@ void draw_init(uint16_t screen_w, uint16_t screen_h)
     d.nsizes = draw_sizes(d.size);
     if (d.cur_size >= d.nsizes) d.cur_size = d.nsizes - 1u;
 
-    for (unsigned m = 0; m < MAT_COUNT; m++) memset(fill[m], draw_cell(m), sizeof fill[m]);
-
     /* HUD panel: as wide as the longest name and the longest size */
     int16_t mw = 0, sw = 0, th = 0;
-    for (unsigned m = 0; m < MAT_COUNT; m++) {
-        mw = max16(mw, (int16_t)sprite_img_w(assets.material[m]));
-        th = max16(th, (int16_t)sprite_img_h(assets.material[m]));
+    for (unsigned e = 0; e < DRAW_ELEMENTS; e++) {
+        mw = max16(mw, (int16_t)sprite_img_w(assets.element[e]));
+        th = max16(th, (int16_t)sprite_img_h(assets.element[e]));
     }
     for (unsigned i = 0; i < d.nsizes; i++) {
         sw = max16(sw, (int16_t)sprite_img_w(assets.draw_size[i]));
@@ -118,8 +123,8 @@ void draw_init(uint16_t screen_w, uint16_t screen_h)
     int16_t px = MARGIN, py = (int16_t)(screen_h - MARGIN - ph);
 
     d.panel = sprite_new(sprite_img_solid((uint16_t)pw, (uint16_t)ph, COL_PANEL), px, py, false);
-    for (unsigned m = 0; m < MAT_COUNT; m++)
-        d.mat_name[m] = sprite_new(assets.material[m], (int16_t)(px + PAD), (int16_t)(py + PAD), false);
+    for (unsigned e = 0; e < DRAW_ELEMENTS; e++)
+        d.elem_name[e] = sprite_new(assets.element[e], (int16_t)(px + PAD), (int16_t)(py + PAD), false);
     for (unsigned i = 0; i < d.nsizes; i++)
         d.size_name[i] = sprite_new(assets.draw_size[i], (int16_t)(px + PAD + mw + GAP),
                                     (int16_t)(py + PAD), false);
@@ -166,7 +171,7 @@ static void hud_show(bool on)
         sprite_show(d.sim_panel[k], on && k == (int)d.running);
         sprite_show(d.sim_text[k],  on && k == (int)d.running);
     }
-    for (unsigned m = 0; m < MAT_COUNT; m++) sprite_show(d.mat_name[m], on && m == d.mat);
+    for (unsigned e = 0; e < DRAW_ELEMENTS; e++) sprite_show(d.elem_name[e], on && e == d.elem);
     for (unsigned i = 0; i < d.nsizes; i++) {
         sprite_show(d.size_name[i], on && i == d.cur_size);
         for (unsigned k = 0; k < 4; k++)
@@ -236,7 +241,8 @@ void draw_enter(void)
      * down: don't let it place a box the moment drawing starts */
     d.wait_release = true;
     hud_show(true);
-    LOG_INFO("drawing: material %u, %ux%u", d.mat, d.size[d.cur_size], d.size[d.cur_size]);
+    LOG_INFO("drawing: %s, %ux%u", draw_elements[d.elem].name, d.size[d.cur_size],
+             d.size[d.cur_size]);
 }
 
 void draw_leave(void)
@@ -258,19 +264,29 @@ static void placed(const fpga_cmd_t *c, fpga_err_t err)
     }
 }
 
-/* A size x size box of material m (cells) at the cursor (screen pixels
- * px, py), cut to the grid. Size 1 is one byte of payload. */
-static void place(uint8_t m, int32_t px, int32_t py)
+/* A size x size box of element e (cells) at the cursor (screen pixels
+ * px, py), cut to the grid, each cell textured. Size 1 is one byte. */
+static void place(uint8_t e, int32_t px, int32_t py)
 {
     if (d.in_flight >= MAX_IN_FLIGHT) return;       /* the queue is busy: next frame */
     int32_t x0, y0, x1, y1;
     if (!brush_box(px, py, &x0, &y0, &x1, &y1)) return;
 
     uint16_t w = (uint16_t)(x1 - x0), h = (uint16_t)(y1 - y0);
-    fpga_cmd_t c = fpga_cmd_write_box(fpga_box((uint16_t)x0, (uint16_t)y0, w, h), fill[m],
+    uint8_t *buf = tx[tx_next], cell = draw_elements[e].cell;
+    if (FPGA_SIM_IDS_PER_BYTE == 2) memset(buf, 0, FILL_BYTES);    /* sim_put() ORs in */
+    for (uint32_t k = 0, y = 0; y < h; y++)
+        for (uint32_t x = 0; x < w; x++, k++) {
+            if (FPGA_SIM_IDS_PER_BYTE == 2) sim_put(buf, k, SIM_MAT(cell));  /* no low bits */
+            else buf[k] = texture_cell(cell, (unsigned)(x0 + (int32_t)x), (unsigned)(y0 + (int32_t)y));
+        }
+    fpga_cmd_t c = fpga_cmd_write_box(fpga_box((uint16_t)x0, (uint16_t)y0, w, h), buf,
                                       (uint16_t)fpga_sim_bytes((uint32_t)w * h));
     c.done = placed;
-    if (fpga_submit(&c) == FPGA_OK) d.in_flight++;
+    if (fpga_submit(&c) == FPGA_OK) {
+        d.in_flight++;
+        tx_next = (tx_next + 1u) % MAX_IN_FLIGHT;
+    }
 }
 
 /* ---- input ----------------------------------------------------------------------- */
@@ -288,11 +304,11 @@ static bool any_pad_held(const input_t *in, uint32_t b)
     return false;
 }
 
-static void set_material(int m)
+static void set_element(int e)
 {
-    m = ((m % (int)MAT_COUNT) + (int)MAT_COUNT) % (int)MAT_COUNT;     /* wraps both ways */
-    if ((uint8_t)m == d.mat) return;
-    d.mat = (uint8_t)m;
+    e = ((e % (int)DRAW_ELEMENTS) + (int)DRAW_ELEMENTS) % (int)DRAW_ELEMENTS;   /* wraps both ways */
+    if ((uint8_t)e == d.elem) return;
+    d.elem = (uint8_t)e;
     hud_show(true);
 }
 
@@ -310,17 +326,17 @@ draw_event_t draw_frame(const input_t *in, int32_t cx, int32_t cy)
     if (d.failed) { d.failed = false; return DRAW_FAILED; }
     if (!d.active) return DRAW_OK;
 
-    /* material: number row, wheel, L1 / R1, d-pad left / right */
-    for (unsigned m = 0; m < MAT_COUNT && m < 10u; m++) {
-        uint8_t key = m == 0 ? KEY_0 : (uint8_t)(KEY_1 + m - 1u);
-        if (key_pressed(in, key)) set_material((int)m);
+    /* element: number row, wheel, L1 / R1, d-pad left / right */
+    for (unsigned e = 0; e < DRAW_ELEMENTS && e < 10u; e++) {
+        uint8_t key = e == 0 ? KEY_0 : (uint8_t)(KEY_1 + e - 1u);
+        if (key_pressed(in, key)) set_element((int)e);
     }
     int step = 0;
     if (in->wheel > 0) step++;              /* up / away: next */
     if (in->wheel < 0) step--;
     if (any_pad_pressed(in, PAD_R1 | PAD_RIGHT)) step++;
     if (any_pad_pressed(in, PAD_L1 | PAD_LEFT))  step--;
-    if (step) set_material((int)d.mat + step);
+    if (step) set_element((int)d.elem + step);
 
     /* brush size: W / S, arrows, d-pad up / down */
     int grow = 0;
@@ -341,8 +357,8 @@ draw_event_t draw_frame(const input_t *in, int32_t cx, int32_t cy)
     bool put   = mouse_held(in, MOUSE_LEFT)  || any_pad_held(in, PAD_SOUTH | PAD_R2);
     if (d.wait_release && !erase && !put) d.wait_release = false;
     if (!d.wait_release) {
-        if (erase)    place(MAT_AIR, cx, cy);
-        else if (put) place(d.mat, cx, cy);
+        if (erase)    place(DRAW_AIR, cx, cy);
+        else if (put) place(d.elem, cx, cy);
     }
 
     /* pause / run: square, Enter, middle (wheel) button */

@@ -95,9 +95,9 @@ module memory_controller (
 
   assign wr_start_odd = current_address[0]
       && current_state == memory_pkg::WRITING
+      && previous_state == memory_pkg::WAITING_ON_LATENCY
       && current_transaction == memory_pkg::WRITE
-      && wr_left == 0
-      && bytes_this_state == 0;
+      && wr_left == 0;
 
   assign wr_start = wr_start_even || wr_start_odd;
 
@@ -178,14 +178,14 @@ module memory_controller (
 
   logic reset_byte_counter;
   assign reset_byte_counter = (current_state == previous_state) ? 0 : 1;
-  localparam int unsigned ByteCounterWidth = (memory_pkg::MaxMessageLength > 1)
-      ? $clog2(memory_pkg::MaxMessageLength) : 1;
+  localparam int unsigned ByteCounterN = memory_pkg::MaxMessageLength + 2;
+  localparam int unsigned ByteCounterWidth = $clog2(ByteCounterN);
 
   logic [ByteCounterWidth-1:0] bytes_this_state_raw;
   assign bytes_this_state = memory_pkg::message_length_t'(bytes_this_state_raw);
 
   mod_n_counter #(
-      .N(memory_pkg::MaxMessageLength)
+      .N(ByteCounterN)
   ) byte_counter (
       .clk(clk),
       .enable(enable),

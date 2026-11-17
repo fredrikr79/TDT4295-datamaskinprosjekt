@@ -7,6 +7,7 @@
 #include "assets.h"
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 static uint8_t explosion_box[EXPLOSION_SIZE_X*EXPLOSION_SIZE_Y] = {112};
 static uint8_t gol_box[GOL_SIZE_X*GOL_SIZE_Y] = {
@@ -61,6 +62,10 @@ static void next_step(projectile_t *projectile)
 static void detonate_projectile(projectile_t *projectile)
 {
     uint8_t *box;
+    uint16_t size_x;
+    uint16_t size_y;
+    uint16_t proj_size_x;
+    uint16_t proj_size_y;
     fpga_box_t box_fpga = {0};
 
     if (!(projectile->active)) return;
@@ -69,20 +74,25 @@ static void detonate_projectile(projectile_t *projectile)
     if (projectile->type == EXPLOSIVE)
     {
         box = explosion_box;
-        box_fpga.x1 = (uint16_t) projectile->x - EXPLOSION_SIZE_X;
-        box_fpga.y1 = (uint16_t) projectile->y - EXPLOSION_SIZE_Y;
-        box_fpga.x2 = EXPLOSION_SIZE_X;
-        box_fpga.y2 = EXPLOSION_SIZE_Y;
+        size_x = EXPLOSION_SIZE_X;
+        size_y = EXPLOSION_SIZE_Y;
+        proj_size_x = EXPLOSIVE_SIZE_X;
+        proj_size_y = EXPLOSIVE_SIZE_Y;
     }
     else if (projectile->type == GOL)
     {
         box = gol_box;
-        box_fpga.x1 = (uint16_t) projectile->x - GOL_SIZE_X;
-        box_fpga.y1 = (uint16_t) projectile->y - GOL_SIZE_Y;
-        box_fpga.x2 = GOL_SIZE_X;
-        box_fpga.y2 = GOL_SIZE_Y;
+        size_x = GOL_SIZE_X;
+        size_y = GOL_SIZE_Y;
+        proj_size_x = GOL_PROJ_SIZE_X;
+        proj_size_y = GOL_PROJ_SIZE_Y;
     }
     else return;
+
+    box_fpga.x1 = (uint16_t) projectile->x + abs(size_x - proj_size_x) / 2;
+    box_fpga.y1 = (uint16_t) projectile->y + abs(size_y - proj_size_y) / 2;
+    box_fpga.x2 = size_x;
+    box_fpga.y2 = size_y;
 
     // TODO: Check if there's room in the fpga command queue to not break more important functions
 

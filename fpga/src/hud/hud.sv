@@ -57,9 +57,15 @@ hud_pkg::dynamic_sprite_data_t dynamic_w_data;
 hud_pkg::static_sprite_data_t static_r_data;
 hud_pkg::dynamic_sprite_data_t dynamic_r_data;
 
+// Placeholder buffers for BRAM extraction to shorten hud path
+hud_pkg::static_sprite_data_t  static_r_data_q;
+hud_pkg::dynamic_sprite_data_t dynamic_r_data_q;
+hud_pkg::sprite_lut_id         read_req_id_q;
+logic                          read_allocated_q;
+
+
 (* ram_style = "block" *) hud_pkg::static_sprite_data_t static_data_mem [hud_pkg::SpriteLutDepth];
 (* ram_style = "block" *) hud_pkg::dynamic_sprite_data_t dynamic_data_mem [hud_pkg::SpriteLutDepth];
-
 
 assign dynamic_w_data = op == hud_pkg::LUT_DELETE
     ? '0
@@ -79,13 +85,20 @@ hud_pkg::sprite_lut_id read_req_id;
 
 always_comb begin
     sprite_read_entry = '0;
-    sprite_read_entry.active = dynamic_r_data.active & read_allocated;
-    sprite_read_entry.id = read_req_id;
-    sprite_read_entry.mem_id = static_r_data.mem_id;
-    sprite_read_entry.x = dynamic_r_data.x;
-    sprite_read_entry.y = dynamic_r_data.y;
-    sprite_read_entry.w = static_r_data.w;
-    sprite_read_entry.h = static_r_data.h;
+    sprite_read_entry.active = dynamic_r_data_q.active & read_allocated_q;
+    sprite_read_entry.id = read_req_id_q;
+    sprite_read_entry.mem_id = static_r_data_q.mem_id;
+    sprite_read_entry.x = dynamic_r_data_q.x;
+    sprite_read_entry.y = dynamic_r_data_q.y;
+    sprite_read_entry.w = static_r_data_q.w;
+    sprite_read_entry.h = static_r_data_q.h;
+end
+
+always_ff @(posedge clk) begin
+    static_r_data_q <= static_r_data;
+    dynamic_r_data_q <= dynamic_r_data;
+    read_req_id_q <= read_req_id;
+    read_allocated_q <= read_allocated;
 end
 
 always_ff @(posedge clk) begin

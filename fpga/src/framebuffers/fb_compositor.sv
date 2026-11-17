@@ -51,6 +51,7 @@ module fb_compositor #(
   logic [1:0] rowStride = 2'b0;
 
   // The row being written out to a fb, and to which fb.
+  logic reload_row_shift = 1'b0;
   logic [RowBits-1:0] row_shift;
   logic [RowBits-1:0] res_copy;
   mem_map_pkg::fb_y_t row_y;
@@ -115,6 +116,12 @@ module fb_compositor #(
         else rows_written <= '0;
       end
 
+      reload_row_shift <= row_writing_active && !pulse_row_commit
+        && 32'(bytes_moved) >= mem_map_pkg::ScreenWidth
+        && !mem_busy
+        && rowStride < 2'd3; 
+      if(reload_row_shift) row_shift <= res_copy;
+
       if (pulse_row_commit) begin
         if (!can_accept_commit) begin
           overrun <= 1'b1;
@@ -160,7 +167,6 @@ module fb_compositor #(
             row_y <= row_y + 1'b1;
             bytes_requested <= '0;
             bytes_moved <= '0;
-            row_shift <= res_copy;
             hud_line_start <= 1'b1;
           end
           rowStride <= rowStride + 1'b1;

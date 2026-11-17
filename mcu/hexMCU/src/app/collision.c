@@ -248,6 +248,43 @@ bool perform_object_movement(
                     horizontal_collision = true;
                     horizontal_progress -= dir_x;
                 }
+                else if (0 < step_start && step_end == 0)
+                {
+                    // Fix: only the head hits (a sloping roof). Before, nothing happened:
+                    // the player walked on into the roof, took damage and was pushed out
+                    // sideways every step (shaking). Now the mirror of stepping up: down by
+                    // that much if there's room under the feet (flying along a slope),
+                    // else it's a wall.
+                    bool blocked = false;
+                    uint8_t x_start = velocity_box.rel_x + horizontal_progress - 1;
+                    uint8_t x_end = x_start + size_x;
+                    if (x_is_right)
+                    {
+                        x_start += 2;
+                        x_end += 2;
+                    }
+                    int y_first = velocity_box.rel_y + size_y + vertical_progress;  // under the feet
+                    int y_end = y_first + step_start;
+                    if (y_end > velocity_box.box.y2) blocked = true;   // outside the box read
+                    for (int y = y_first; !blocked && y < y_end; y++)
+                        for (uint8_t x = x_start; x < x_end; x++)
+                            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
+                            {
+                                blocked = true;
+                                break;
+                            }
+                    if (blocked)
+                    {
+                        horizontal_done = true;
+                        horizontal_collision = true;
+                        horizontal_progress -= dir_x;
+                    }
+                    else
+                    {
+                        vertical_progress += step_start;
+                        vertical_movement_after_force = false;
+                    }
+                }
                 else if (step_start == 0 && 0 < step_end)
                 {
                     uint8_t step_amount = 0;

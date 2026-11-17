@@ -14,6 +14,7 @@
 #include "storage.h"
 #include "log.h"
 #include "fpga.h"
+#include "texture.h"
 
 /* Room files are DATA_MAX_SIZE (~5 KB): too big for the MCU stack (CubeMX
  * default 1 KB), so they live here. Not re-entrant -- one at a time. */
@@ -242,10 +243,12 @@ void encode_room(uint8_t *tileIDs, uint8_t *data, unsigned long *data_size)
     data[*data_size + 7] = portals[i].y2 & lower_mask;
 
     // Encode room
+    // Fix: was & 7, but decode_room() reads & 127: saving turned a portal to
+    // room 8 (or -8) and beyond into one to the wrong room
     data[*data_size + 8] = (portals[i].dest_room_x < 0) << 7;
-    data[*data_size + 8] += abs(portals[i].dest_room_x) & 7;
+    data[*data_size + 8] += abs(portals[i].dest_room_x) & 127;
     data[*data_size + 9] = (portals[i].dest_room_y < 0) << 7;
-    data[*data_size + 9] += abs(portals[i].dest_room_y) & 7;
+    data[*data_size + 9] += abs(portals[i].dest_room_y) & 127;
   
     // Encode pos
     data[*data_size + 10] = portals[i].dest_pos_x >> 8;
@@ -368,6 +371,24 @@ bool delete_save(int x, int y)
   return true;
 }
 
+static void delete_listed_save(
+  void *ctx, const char *name, uint32_t size, bool is_dir
+)
+{
+  char filename[NAME_LEN] = {0};
+  snprintf(filename, NAME_LEN, "save/%s", name);
+  storage_status_t status = storage_delete(filename);
+  if (status != STORAGE_OK && status != STORAGE_NOT_FOUND)
+  {
+    LOG_ERR("deleting listed save %s: %s", name, storage_status_str(status));
+  }
+}
+
+void delete_all_saves()
+{
+  storage_list("save", delete_listed_save, NULL);
+}
+
 /* ---- moving a room to / from the FPGA ------------------------------------
  *   load:  STOP_SIM -> WRITE_CONS row 0 .. ROOM_Y-1 -> START_SIM
  *   save:  STOP_SIM -> READ_CONS  row 0 .. ROOM_Y-1 -> write the file
@@ -474,6 +495,8 @@ void room_load_start(int x, int y)
 {
   LOG_INFO("loading room %d, %d", x, y);
   read_room(x, y, room_tiles);   // an empty room if there's no file (logged)
+  // Texture: noise in the low bits of air, sand and stone, from (x, y) and the room (texture.h)
+  texture_room(room_tiles, ROOM_X, ROOM_Y, x, y);
   job_start(JOB_LOAD, x, y);
 }
 
@@ -525,7 +548,13 @@ room_status_t room_poll(void)
       send_sim(true);                  // the new room runs from here
       return job.status;
     }
-    if (job.kind == JOB_SAVE) save_room(job.x, job.y, room_tiles);  // no card: logged
+    if (job.kind == JOB_SAVE)
+    {
+      // Texture: the file only keeps what can't be made again (sand's noise, igneous
+      // rock's thickness...); stone and air get theirs back on load (texture.h)
+      texture_strip_room(room_tiles, ROOM_X*ROOM_Y);
+      save_room(job.x, job.y, room_tiles);  // no card: logged
+    }
     LOG_INFO("room %d, %d %s", job.x, job.y, job.kind == JOB_LOAD ? "loaded" : "saved");
     job.status = ROOM_DONE;
     return job.status;

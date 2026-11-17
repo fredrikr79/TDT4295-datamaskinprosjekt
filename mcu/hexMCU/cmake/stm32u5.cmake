@@ -3,7 +3,7 @@
 # its CubeMX project: our common code, the STM32 port, TinyUSB.
 #
 # Used by both STM32 projects:
-#   CMakeLists.txt               the Nucleo-U545RE-Q (USB_IP fsdev)
+#   cube/hexU54/CMakeLists.txt   the Nucleo-U545RE-Q (USB_IP fsdev)
 #   cube/hexU59/CMakeLists.txt   the final board, STM32U595ZJT6 (USB_IP dwc2)
 #
 # How to use it, in a CubeMX CMakeLists.txt, after add_executable():
@@ -67,7 +67,7 @@ function(hexmcu_stm32u5_setup target)
     )
     target_include_directories(${target} PRIVATE
         ${TINYUSB_INCLUDES}
-        ${HEXMCU_ROOT}/src/port/stm32/usb                      # tusb_config.h, usb_backend.h, hid_mouse.h
+        ${HEXMCU_ROOT}/src/port/stm32/usb                      # tusb_config.h, hid_mouse.h (usb_backend.h is in src/include/)
     )
     # TinyUSB fixes in usb_backend_tinyusb.c, instead of patching third_party/:
     #   hcd_setup_send  hub descriptor request (hub.c)

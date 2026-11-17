@@ -1,7 +1,7 @@
 /* ======================================================================
  * fpga.h - async, queued command layer for the FPGA link.
  *
- * The protocol is docs/mcu_fpga_spi_api.md (the FPGA team's spec). On the
+ * The protocol is documentation/SPI/mcu_fpga_spi_api.md in the repo (the FPGA team's spec). On the
  * wire every command is one byte stream: opcode, then the parameters in
  * the order the spec lists them, then any payload. OCTOSPI carries the
  * first parameters in its address / alternate-bytes phases where they fit
@@ -45,15 +45,22 @@
  * cells are one stream, row by row, the last one at (X+W-1, Y+H-1), packed
  * like CONS (FPGA_SIM_IDS_PER_BYTE). Build boxes with fpga_box().
  *
+ * Grid vs screen: the grid is coarser than the screen. The FPGA shows each
+ * cell as an FPGA_SIM_SCALE x FPGA_SIM_SCALE block of pixels (4: a 160x90
+ * grid on a 640x360 screen). So CONS / BOX X,Y,W,H count CELLS, while
+ * sprites (the HUD) and the cursor count screen PIXELS. Convert with
+ * fpga_px_to_cell() / fpga_cell_to_px(); fpga_link_info() has both sizes.
+ *
  * INFO answer, MSB first (FPGA_INFO_BYTES): W, H, N 16 bits, SID 32 bits.
- *   W, H  screen size in pixels
+ *   W, H  screen size in pixels (640x360); the grid is W, H / FPGA_SIM_SCALE
  *   N     the FPGA's input buffer: no command, opcode and parameters
  *         included, may be larger than this
  *   SID   session id; a new one means the FPGA restarted and its memory
  *         (grid, sprite images and instances) is gone
  *
  * Every command is WRITE -> wait for FPGA_READY -> and, if it has an
- * answer, READ (READ_OPCODE, turnaround, then the answer bytes). When
+ * answer, READ (READ_OPCODE, turnaround, then the answer bytes) and the
+ * READY that follows it (FPGA_READY_AFTER_READ). When
  * READY goes high the FPGA's ACK line says whether the command worked.
  * Low (NACK): the FPGA has flushed its FIFOs and put a one-byte error code
  * (fpga_fail_code_t) in the answer FIFO instead; fpga.c reads it, and the
@@ -115,11 +122,17 @@
 #define READ_BOX_OPCODE         0x60u
 #define WRITE_SPRITE_OPCODE     0x70u
 
-/* Frames a second: the FPGA pulses SYNC once per finished frame. The game
- * steps on SYNC (or on a timer at this rate while there is none). */
-#ifndef FPGA_FRAME_HZ
-#define FPGA_FRAME_HZ           25u
+/* The FPGA pulses SYNC once per screen frame. Its video runs 640x480 @ 60 Hz
+ * VGA timing (800 x 525 pixel clocks a frame) on a 25 MHz clock instead of
+ * the standard 25.175 MHz: 420000 / 25 MHz = 16.8 ms a frame, 59.52 Hz
+ * (Bad Apple measured 59.5). The game times nothing by it: SYNC says when
+ * to draw, and is the FPGA's heartbeat (game.c). The fake FPGA and the
+ * emulator window run at this rate too. */
+#ifndef FPGA_FRAME_US
+#define FPGA_FRAME_US           16800u
 #endif
+/* Rounded (60), for logs. */
+#define FPGA_FRAME_HZ           ((1000000u + FPGA_FRAME_US / 2u) / FPGA_FRAME_US)
 
 /* The first memID the FPGA hands out (the real FPGA starts at 0). */
 #ifndef FPGA_MEMID_FIRST
@@ -154,7 +167,7 @@
 /* What an INFO answer may say. Anything outside is taken as a garbled
  * answer (FPGA_ERR_BAD_INFO), so the handshake tries again instead of going
  * on with nonsense. PROTOCOL: widen these if the FPGA really goes beyond. */
-#define FPGA_INFO_MAX_DIM       2048u   /* W and H, cells                     */
+#define FPGA_INFO_MAX_DIM       2048u   /* W and H, screen pixels             */
 #define FPGA_INFO_MIN_N         9u      /* a BOX header alone is 9 bytes      */
 #define FPGA_INFO_MAX_N         8192u   /* N, bytes                           */
 
@@ -184,6 +197,21 @@ typedef enum {                      /* = MatAir ... MatExplo on the FPGA     */
 } material_t;
 #define MAT_ID_MAX  15u             /* 4 bits: room for 16 materials         */
 
+/* Screen pixels per cell, each way: the FPGA shows a cell as a
+ * FPGA_SIM_SCALE x FPGA_SIM_SCALE block (4: 160x90 cells -> 640x360). */
+#ifndef FPGA_SIM_SCALE
+#define FPGA_SIM_SCALE 4
+#endif
+
+/* Screen pixel -> the cell it lies in, and a cell -> its top-left pixel.
+ * Rounds down, also for negative pixels (left of / above the screen). */
+static inline int32_t fpga_px_to_cell(int32_t px)
+{
+    return px >= 0 ? px / FPGA_SIM_SCALE
+                   : -((-px + FPGA_SIM_SCALE - 1) / FPGA_SIM_SCALE);
+}
+static inline int32_t fpga_cell_to_px(int32_t cell) { return cell * FPGA_SIM_SCALE; }
+
 /* PROTOCOL, not agreed yet: IDs per byte in CONS / BOX data.
  *   1 = one cell per byte, the material in the high 4 bits (N bytes = N cells)
  *   2 = two materials per byte, the first cell in the high nibble
@@ -210,6 +238,19 @@ static inline bool sim_is(uint8_t b, material_t m) { return SIM_MAT(b) == (uint8
 /* Low-bit states a new cell needs: SIM_CELL(MAT_LIFE) | SIM_LIFE_ALIVE. */
 #define SIM_LIFE_ALIVE      0x8u    /* game of life: a live cell (0 = dead)      */
 #define SIM_EXPLOSIVE_FULL  0xFu    /* explosive: full power, the sim burns it down */
+
+/* Stone and igneous rock are one material on the FPGA (MAT_STONE); bit 3
+ * of the low bits tells them apart:
+ *   stone         1xxx   xxx: the MCU's texture (texture.c)
+ *   igneous rock  0xxx   xxx: the FPGA's own state ("thickness")
+ * So stone is SIM_CELL(MAT_STONE) | SIM_STONE_BIT = 0x18, and a plain
+ * SIM_CELL(MAT_STONE) = 0x10 is igneous rock. sim_is(b, MAT_STONE) is true
+ * for both (both are solid). */
+#define SIM_STONE_BIT       0x8u
+static inline bool sim_is_igneous(uint8_t b)
+{
+    return sim_is(b, MAT_STONE) && !(b & SIM_STONE_BIT);
+}
 
 /* Material of cell k in packed CONS / BOX data, and setting it. sim_put()
  * clears the low bits / the other half as needed, so a buffer can be
@@ -278,21 +319,24 @@ typedef enum {
     FPGA_ERR_NOT_READY,     /* READY stayed low: nothing was sent      */
 } fpga_err_t;
 
-/* A box on the wire: x1,y1 = top-left pixel, x2 = W (pixels per row),
- * y2 = H (rows) -- see the table above. Make one with fpga_box(). */
+/* A box on the wire, in cells: x1,y1 = top-left cell, x2 = W (cells per
+ * row), y2 = H (rows) -- see the table above. Make one with fpga_box(). */
 typedef struct { uint16_t x1, y1, x2, y2; } fpga_box_t;
 
-/* The box w x h pixels with its top-left corner at x, y. */
+/* The box w x h cells with its top-left corner at cell x, y. */
 static inline fpga_box_t fpga_box(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
 {
     return (fpga_box_t){ .x1 = x, .y1 = y, .x2 = w, .y2 = h };
 }
 
-/* What INFO told us (or what the console set by hand). */
+/* What INFO told us (or what the console set by hand). INFO sends the
+ * screen; the grid is worked out from it. */
 typedef struct {
     bool     valid;         /* false until INFO has succeeded          */
-    uint16_t width;
+    uint16_t width;         /* screen, pixels: cursor, sprites, HUD    */
     uint16_t height;
+    uint16_t sim_w;         /* grid, cells: CONS / BOX, rooms, physics */
+    uint16_t sim_h;
     uint16_t max_cmd;       /* N: largest command in bytes, header included */
     uint32_t session;
 } fpga_info_t;
@@ -379,12 +423,14 @@ void          fpga_abort_all(void);     /* abort the running one, cancel the res
 
 /* The running command, or NULL. For debug output. */
 const fpga_cmd_t *fpga_current(void);
-const char   *fpga_current_step(void);  /* "write", "wait-irq", "read"     */
+const char   *fpga_current_step(void);  /* "write", "wait-irq", "read", "read-ready" */
 uint32_t      fpga_current_ms(void);    /* time spent in that step         */
 
 /* ---- link facts ----------------------------------------------------- */
 const fpga_info_t *fpga_link_info(void);
-void          fpga_set_link_info(const fpga_info_t *info);  /* debug / tests */
+/* Debug / tests. width / height are screen pixels; sim_w / sim_h are
+ * worked out from them here (whatever the caller put there is ignored). */
+void          fpga_set_link_info(const fpga_info_t *info);
 
 /* Most payload (tx bytes) one command with this opcode may carry, header
  * already subtracted. UINT16_MAX while N is not known yet. */

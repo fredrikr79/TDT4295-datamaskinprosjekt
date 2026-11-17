@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "hexU59: flash Release, log 0 (no debugger)",
+            "detail": "Release build without log messages, written over SWD; the board runs straight away",
+            "type": "shell",
+            "command": "./flash_release.sh 0",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "hexU59: flash Release, log 3 (no debugger)",
+            "detail": "the same with info messages on the console, for checking a Release build",
+            "type": "shell",
+            "command": "./flash_release.sh 3",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": "build",
+            "problemMatcher": ["$gcc"]
+        }
+    ]
+}

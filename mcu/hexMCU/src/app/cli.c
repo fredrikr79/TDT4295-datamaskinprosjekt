@@ -1,7 +1,8 @@
 /* ======================================================================
  * cli.c - portable serial console.
  *
- * On linux you could access virtual com thrue sudo minicom -b 115200 -D /dev/ttyACM0   
+ * On Linux: minicom -b 115200 -D /dev/ttyACM0 (with sudo, or join the
+ * dialout group). More in docs/README.md, "The debug console".
  * ====================================================================== */
 #define LOG_TAG "cli"
 
@@ -22,6 +23,11 @@
 #include "led.h"
 #include "storage.h"
 #include "game.h"
+#include "badapple.h"
+#include "assets.h"
+#include "sprite.h"
+#include "frame_sync.h"
+#include "settings.h"
 
 #define LINE_MAX      128        /* room for "fecho" + ~20 hex bytes */
 #define MAX_ARGS      24
@@ -155,10 +161,10 @@ static void print_hex(const uint8_t *b, uint16_t n)
 
 typedef enum { PEND_NONE, PEND_SEND, PEND_READ, PEND_FECHO, PEND_INFO,
                PEND_SPR_UPLOAD, PEND_SPR_NEW, PEND_SPR_MOVE, PEND_SPR_DEL,
-               PEND_SIM } pend_t;
+               PEND_SIM, PEND_GRID, PEND_GRID_WRITE } pend_t;
 static const char *const pend_names[] = { "-", "send", "read", "fecho", "info",
                "sprite upload", "sprite new", "sprite move", "sprite del",
-               "sim" };
+               "sim", "grid", "grid write" };
 
 static struct {
     pend_t      what;
@@ -166,6 +172,7 @@ static struct {
     bool        waiting;      /* queue was full: retrying from cli_poll()  */
     uint32_t    since;        /* when waiting started                      */
     uint16_t    len;          /* read / fecho byte count                   */
+    uint16_t    gx, gy, gw, gh; /* grid: the box read                      */
 
     /* fecho repeat. rounds == 1 is a normal one-shot. */
     uint32_t    rounds;       /* total rounds requested                    */
@@ -299,10 +306,32 @@ static void print_info(void)
     if (!in->valid)
         log_raw("fpga info: unknown (no INFO yet), size check off\r\n");
     else
-        log_raw("fpga info: %ux%u, N=%u bytes, session 0x%08lX\r\n",
-                in->width, in->height, in->max_cmd, (unsigned long)in->session);
+        log_raw("fpga info: screen %ux%u px, grid %ux%u cells (%ux%u px each), "
+                "N=%u bytes, session 0x%08lX\r\n",
+                in->width, in->height, in->sim_w, in->sim_h, FPGA_SIM_SCALE,
+                FPGA_SIM_SCALE, in->max_cmd, (unsigned long)in->session);
     cli_async_end();
 }
+
+/* grid: the cells read back, a row per line, with the cell numbers */
+static void print_grid(void)
+{
+    char line[16 + 3 * 32];
+    cli_async_begin();
+    int p = snprintf(line, sizeof line, "      ");
+    for (uint16_t x = 0; x < pend.gw; x++)
+        p += snprintf(line + p, sizeof line - (size_t)p, " %2u", (unsigned)((pend.gx + x) % 100u));
+    log_raw("%s   (x %% 100)\r\n", line);
+    for (uint16_t y = 0; y < pend.gh; y++) {
+        p = snprintf(line, sizeof line, "  %3u:", (unsigned)(pend.gy + y));
+        for (uint16_t x = 0; x < pend.gw; x++)
+            p += snprintf(line + p, sizeof line - (size_t)p, " %02X", rd_buf[y * pend.gw + x]);
+        log_raw("%s\r\n", line);
+    }
+    cli_async_end();
+}
+
+static void grid_read_around(void);
 
 /* Done callback for every console command, called from fpga_poll(). */
 static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
@@ -321,6 +350,10 @@ static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
         print_info();
     else if (what == PEND_READ)
         print_hex(rd_buf, pend.len);
+    else if (what == PEND_GRID)
+        print_grid();
+    else if (what == PEND_GRID_WRITE)
+        grid_read_around();                     /* where did it land? */
     else if (what == PEND_SPR_UPLOAD)
         LOG_INFO("sprite upload: memID %u", (unsigned)fpga_answer_id(cmd));
     else if (what == PEND_SPR_NEW)
@@ -512,7 +545,8 @@ static void cmd_fecho(int argc, char **argv)
 
 /* info                          show what we know about the FPGA
  * info query                    send INFO and show the answer
- * info set <w> <h> <n> [<sid>]  pretend INFO said this (debugging)
+ * info set <w> <h> <n> [<sid>]  pretend INFO said this (debugging);
+ *                               w, h in screen pixels, the grid follows
  * info clear                    forget it: no size check until next INFO */
 static void cmd_info(int argc, char **argv)
 {
@@ -552,6 +586,10 @@ static void cmd_info(int argc, char **argv)
  * sprite new <memID> <x> <y> <w> <h> [hide]    SPRITE_WRITE -> spriteID
  * sprite move <id> <x> <y> [hide]              SPRITE_UPDATE
  * sprite del <id>                              SPRITE_DELETE
+ * sprite lead [<us> | save]                    the game's sprite changes go out
+ *                                              this long before SYNC (sprite.c);
+ *                                              shows how the timing went; save:
+ *                                              keep it in settings.toml
  * For bringing up the FPGA's sprites by hand. These IDs are the same ones
  * the game's HUD uses, so mixing the two confuses both. */
 static void cmd_sprite(int argc, char **argv)
@@ -597,6 +635,30 @@ static void cmd_sprite(int argc, char **argv)
                    (uint16_t)a[1], (uint16_t)a[2]));
         return;
     }
+    if (strcmp(sub, "lead") == 0 && (argc == 2 || argc == 3)) {
+        if (argc == 3 && !strcmp(argv[2], "save")) {
+            if (settings_save("sprite.lead_us", (int32_t)sprite_sync_lead_us()))
+                log_raw("saved: sprite.lead_us = %lu in %s\r\n",
+                        (unsigned long)sprite_sync_lead_us(), SETTINGS_FILE);
+            return;
+        }
+        if (argc == 3) {
+            if (!parse_arg("lead", argv[2], SPRITE_SYNC_LEAD_MAX_US, &a[0])) return;
+            sprite_set_sync_lead_us((uint32_t)a[0]);
+        }
+        uint32_t lead = sprite_sync_lead_us(), n;
+        int32_t  latest;
+        if (lead) log_raw("sprite lead: changes go out %lu us before SYNC", (unsigned long)lead);
+        else      log_raw("sprite lead: 0, changes go out right after SYNC");
+        log_raw(" (SYNC every %lu us)\r\n", (unsigned long)frame_sync_period_us());
+        if (sprite_sync_stats(&latest, &n))
+            log_raw("  since last asked: %lu changes, the latest done %ld us %s %s\r\n",
+                    (unsigned long)n, (long)(latest < 0 ? -latest : latest),
+                    latest <= 0 ? "before" : "after", lead ? "the SYNC" : "SYNC");
+        else
+            log_raw("  since last asked: no changes\r\n");
+        return;
+    }
     if (strcmp(sub, "del") == 0 && argc == 3) {
         if (!parse_arg("id", argv[2], 0xFFFF, &a[0])) return;
         if (console_busy()) return;
@@ -606,7 +668,67 @@ static void cmd_sprite(int argc, char **argv)
     log_raw("usage: sprite upload <w> <h> <colour>\r\n"
             "       sprite new <memID> <x> <y> <w> <h> [hide]\r\n"
             "       sprite move <id> <x> <y> [hide]\r\n"
-            "       sprite del <id>\r\n");
+            "       sprite del <id>\r\n"
+            "       sprite lead [<us> | save]\r\n");
+}
+
+/* grid <x> <y> [<w> <h>]   READ_BOX: the cell bytes in a box of the grid
+ * (cells, not pixels; default 5 x 5), a row per line. To see what the FPGA
+ * really holds -- what was written, not what the screen shows.
+ * grid write <x> <y> <w> <h>   WRITE_BOX a numbered pattern there (sand,
+ * low bits 1, 2, 3 ... row by row, up to F, then 1 again), then read the
+ * box with a cell more all round: each byte should be where its number
+ * says. 'sim stop' first, or the sand falls. */
+#define GRID_MAX_W 32u
+
+/* After a grid write: the box and a cell all round (cut at the grid's top
+ * and left edges). */
+static void grid_read_around(void)
+{
+    uint16_t x = pend.gx ? (uint16_t)(pend.gx - 1u) : 0u;
+    uint16_t y = pend.gy ? (uint16_t)(pend.gy - 1u) : 0u;
+    uint16_t w = (uint16_t)(pend.gw + (pend.gx - x) + 1u), h = (uint16_t)(pend.gh + (pend.gy - y) + 1u);
+    if (w > GRID_MAX_W || (uint32_t)w * h > RD_BUF_SIZE) { log_raw("written\r\n"); return; }
+    log_raw("wrote %ux%u at %u, %u: 21 22 23 ... row by row. Read back, with a cell all round:\r\n",
+            pend.gw, pend.gh, pend.gx, pend.gy);
+    pend.gx = x; pend.gy = y; pend.gw = w; pend.gh = h;
+    pend_start(PEND_GRID, fpga_cmd_read_box(fpga_box(x, y, w, h), rd_buf, (uint16_t)(w * h)));
+}
+
+static void cmd_grid(int argc, char **argv)
+{
+    unsigned long x, y, w = 5, h = 5;
+    if (argc == 6 && !strcmp(argv[1], "write")) {
+        if (!parse_arg("x", argv[2], 0xFFFF, &x) || !parse_arg("y", argv[3], 0xFFFF, &y) ||
+            !parse_arg("w", argv[4], GRID_MAX_W - 2u, &w) || !parse_arg("h", argv[5], 0xFFFF, &h))
+            return;
+        if (w == 0 || h == 0 || (w + 2u) * (h + 2u) > RD_BUF_SIZE) {
+            log_raw("1..%u cells wide, (w+2) * (h+2) up to %u\r\n", GRID_MAX_W - 2u, RD_BUF_SIZE);
+            return;
+        }
+        if (console_busy()) return;             /* tx_buf may still be in use */
+        for (unsigned long k = 0; k < w * h; k++)
+            tx_buf[k] = (uint8_t)(SIM_CELL(MAT_SAND) | (k % 15u + 1u));
+        pend.gx = (uint16_t)x; pend.gy = (uint16_t)y; pend.gw = (uint16_t)w; pend.gh = (uint16_t)h;
+        pend_start(PEND_GRID_WRITE, fpga_cmd_write_box(fpga_box((uint16_t)x, (uint16_t)y,
+                   (uint16_t)w, (uint16_t)h), tx_buf, (uint16_t)(w * h)));
+        return;
+    }
+    if (argc != 3 && argc != 5) {
+        log_raw("usage: grid <x> <y> [<w> <h>]  |  grid write <x> <y> <w> <h>   (cells)\r\n");
+        return;
+    }
+    if (!parse_arg("x", argv[1], 0xFFFF, &x) || !parse_arg("y", argv[2], 0xFFFF, &y)) return;
+    if (argc == 5 && (!parse_arg("w", argv[3], GRID_MAX_W, &w) || !parse_arg("h", argv[4], 0xFFFF, &h)))
+        return;
+    if (w == 0 || h == 0 || w * h > RD_BUF_SIZE) {
+        log_raw("1..%u cells wide, up to %u cells in all\r\n", GRID_MAX_W, RD_BUF_SIZE);
+        return;
+    }
+    if (console_busy()) return;
+    pend.gx = (uint16_t)x; pend.gy = (uint16_t)y; pend.gw = (uint16_t)w; pend.gh = (uint16_t)h;
+    pend_start(PEND_GRID, fpga_cmd_read_box(fpga_box((uint16_t)x, (uint16_t)y, (uint16_t)w,
+                                                      (uint16_t)h), rd_buf, (uint16_t)(w * h)));
 }
 
 /* sim start | stop */
@@ -664,7 +786,7 @@ static void cmd_abort(int argc, char **argv)
     if (n) log_raw("aborted %u fpga command%s\r\n", n, n == 1 ? "" : "s");
 }
 
-/* trace [on|off] -- one debug line per FPGA transfer and step */
+/* demo [<test> | stop] -- FPGA tests and demos (demo.c); no argument lists them */
 static void cmd_demo(int argc, char **argv)
 {
     if (argc == 1)                          { demo_list(); return; }
@@ -801,7 +923,9 @@ static void cmd_button(int argc, char **argv)
 }
 
 /* sd                status: mounted?, size, free, the last thing that happened
- * sd ls [<folder>]  what's in a folder (the root if none) */
+ * sd ls [<folder>]  what's in a folder (the root if none)
+ * sd del <file>     delete a file
+ * sd del <folder>/  delete a folder and everything in it (sd del save/) */
 static void print_bytes(const char *what, uint64_t b)
 {
     if (b >= 1024ull * 1024 * 1024)
@@ -831,8 +955,31 @@ static void cmd_sd(int argc, char **argv)
             log_raw("%u %s in '%s'\r\n", n, n == 1 ? "entry" : "entries", *dir ? dir : "/");
         return;
     }
+    if (argc == 3 && !strcmp(argv[1], "del")) {
+        const char *path = argv[2];
+        size_t n = strlen(path);
+        storage_status_t st;
+        if (n && path[n - 1] == '/') {              /* a folder: everything in it */
+            uint32_t files = 0;
+            st = storage_delete_dir(path, &files);
+            if (st == STORAGE_OK)
+                log_raw("deleted '%s' (%lu file%s)\r\n", path, (unsigned long)files,
+                        files == 1 ? "" : "s");
+            else
+                log_raw("sd del '%s': %s (%lu file%s deleted)\r\n", path, storage_status_str(st),
+                        (unsigned long)files, files == 1 ? "" : "s");
+            return;
+        }
+        st = storage_delete(path);
+        if (st == STORAGE_OK)
+            log_raw("deleted '%s'\r\n", path);
+        else
+            log_raw("sd del '%s': %s%s\r\n", path, storage_status_str(st),
+                    st == STORAGE_ERROR ? " (a folder? end it with /: sd del save/)" : "");
+        return;
+    }
     if (argc != 1) {
-        log_raw("usage: sd [ls [<folder>]]\r\n");
+        log_raw("usage: sd [ls [<folder>] | del <file> | del <folder>/]\r\n");
         return;
     }
     storage_info_t in;
@@ -847,12 +994,30 @@ static void cmd_sd(int argc, char **argv)
         log_raw("  error: %s\r\n", storage_status_str(st));
 }
 
+/* reset [-b] [fpga | mcu]   no argument: both. -b: the FPGA through PROGRAM_B
+ * (it loads its design from flash again) instead of its reset pin. */
 static void cmd_reset(int argc, char **argv)
 {
-    if (argc == 1)                          game_reset_all();
-    else if (argc == 2 && !strcmp(argv[1], "fpga")) game_reset_fpga();
-    else if (argc == 2 && !strcmp(argv[1], "mcu"))  game_reset_mcu();
-    else log_raw("usage: reset [fpga | mcu]   (no argument: both)\r\n");
+    bool b = false;
+    const char *what = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-b")) b = true;
+        else if (!what) what = argv[i];
+        else what = "";                         /* too many: usage below */
+    }
+    if (!what) {
+        if (b) game_reprogram_all();
+        else   game_reset_all();
+    } else if (!strcmp(what, "fpga")) {
+        if (b) game_reprogram_fpga();
+        else   game_reset_fpga();
+    } else if (!strcmp(what, "mcu")) {
+        if (b) log_raw("-b only affects the FPGA: nothing done ('reset mcu' resets the MCU)\r\n");
+        else   game_reset_mcu();
+    } else {
+        log_raw("usage: reset [-b] [fpga | mcu]   (no argument: both; -b: the FPGA "
+                "through PROGRAM_B, it loads its design again)\r\n");
+    }
 }
 
 static void cmd_loading(int argc, char **argv)
@@ -869,6 +1034,7 @@ static void cmd_loading(int argc, char **argv)
     log_raw("loading: %s\r\n", game_loading() ? "on" : "off (the game holds, no probing)");
 }
 
+/* trace [on|off] -- one debug line per FPGA transfer and step */
 static void cmd_trace(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "on") == 0)       transport_set_trace(true);
@@ -913,6 +1079,88 @@ void cli_quit(const char *why)
     cli_async_end();
 }
 
+/* BADAPPLE
+ * badapple [-l] [-s <dark><light>] [<file>]   play; -l loops, -s 34: Water
+ *                                             for 0 pixels, Lava for 1
+ * badapple -s                                 list the materials
+ * badapple delay [<us> | save]               wait this long after each SYNC
+ *                                             before writing (0..16800; also
+ *                                             while playing): moves the tear;
+ *                                             save: keep it in settings.toml
+ * badapple stop */
+
+static void cmd_badapple(int argc, char **argv)
+{
+    bool        loop  = false;
+    material_t  dark  = MAT_AIR, light = MAT_STONE;
+    const char *file  = NULL;
+ 
+    if (argc == 2 && !strcmp(argv[1], "stop")) { badapple_stop(); return; }
+    if (argc >= 2 && !strcmp(argv[1], "delay")) {
+        unsigned long us;
+        if (argc > 3) { log_raw("usage: badapple delay [<us> | save]\r\n"); return; }
+        if (argc == 3 && !strcmp(argv[2], "save")) {
+            if (settings_save("badapple.delay_us", (int32_t)badapple_sync_delay()))
+                log_raw("saved: badapple.delay_us = %lu in %s\r\n",
+                        (unsigned long)badapple_sync_delay(), SETTINGS_FILE);
+            return;
+        }
+        if (argc == 3) {
+            if (!parse_arg("delay", argv[2], BADAPPLE_DELAY_MAX_US, &us)) return;
+            badapple_set_sync_delay((uint32_t)us);
+        }
+        log_raw("badapple: writes start %lu us after each SYNC (SYNC every %lu us)\r\n",
+                (unsigned long)badapple_sync_delay(), (unsigned long)frame_sync_period_us());
+        return;
+    }
+ 
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-l")) { loop = true; continue; }
+        if (!strcmp(argv[i], "-s")) {
+            const char *m = i + 1 < argc ? argv[i + 1] : "";
+            if (strlen(m) != 2 ||
+                m[0] < '0' || m[0] >= '0' + MAT_COUNT ||
+                m[1] < '0' || m[1] >= '0' + MAT_COUNT) {
+                log_raw("badapple -s <dark><light>, e.g. -s %u%u (the default):\r\n",
+                        (unsigned)MAT_AIR, (unsigned)MAT_STONE);
+                for (unsigned k = 0; k < MAT_COUNT; k++)
+                    log_raw("  %u  %s\r\n", k, material_name((material_t)k));
+                return;
+            }
+            dark  = (material_t)(m[0] - '0');
+            light = (material_t)(m[1] - '0');
+            i++;
+            continue;
+        }
+        if (argv[i][0] == '-' || file) {
+            log_raw("usage: badapple [-l] [-s <dark><light>] [<file>] | badapple delay [<us> | save] | "
+                    "badapple stop\r\n");
+            return;
+        }
+        file = argv[i];
+    }
+    badapple_start(file ? file : "badapple.bin", loop, dark, light);
+}
+
+/* settings          the values settings.toml holds (read at start)
+ * settings reload   read the file again (values already in use don't change
+ *                   until their module asks again, e.g. after a reset) */
+static void settings_line(void *ctx, const char *key, int32_t value)
+{
+    unsigned *n = ctx;
+    (*n)++;
+    log_raw("  %-24s %ld\r\n", key, (long)value);
+}
+
+static void cmd_settings(int argc, char **argv)
+{
+    if (argc == 2 && !strcmp(argv[1], "reload")) settings_reload();
+    else if (argc != 1) { log_raw("usage: settings [reload]\r\n"); return; }
+    unsigned n = 0;
+    settings_list(settings_line, &n);
+    log_raw("%u value%s in %s\r\n", n, n == 1 ? "" : "s", SETTINGS_FILE);
+}
+
 static void cmd_exit(int argc, char **argv)
 {
     (void)argc; (void)argv;
@@ -923,20 +1171,23 @@ static const cli_cmd_t cmds[] = {
     { "send",    cmd_send,     "send <op> [<x> <y> [<n> | <w> <h>]]  header only, e.g. send 0xB0" },
     { "read",    cmd_read,     "read <len>          e.g. read 4" },
     { "fecho",   cmd_fecho,    "fecho [-r N] <n> | <b0> <b1> ...  echo random / given bytes, N rounds" },
-    { "sprite",  cmd_sprite,   "sprite upload|new|move|del ...  sprite commands by hand" },
+    { "sprite",  cmd_sprite,   "sprite upload|new|move|del ... | lead [<us>|save]  sprite commands by hand / when changes go out" },
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
+    { "grid",    cmd_grid,     "grid <x> <y> [<w> <h>] | write <x> <y> <w> <h>  read the cells there / write a test pattern and read it back" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
-    { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]" },
+    { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]  (w h: screen px)" },
     { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
     { "button",  cmd_button,   "button [watch]      the board button now / watch it for 15 s" },
-    { "sd",      cmd_sd,       "sd [ls [<folder>]]  SD card status (mounts now if it can) / list a folder" },
-    { "reset",   cmd_reset,    "reset [fpga|mcu]    reset both / the FPGA (reset pin) / the MCU" },
+    { "sd",      cmd_sd,       "sd [ls [<folder>] | del <file> | del <folder>/]  SD card status / list / delete" },
+    { "reset",   cmd_reset,    "reset [-b] [fpga|mcu]  reset both / the FPGA (reset pin; -b: PROGRAM_B, reloads its design) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
     { "demo",    cmd_demo,     "demo [<test> | stop]  FPGA tests and demos, no arg lists them" },
     { "abort",   cmd_abort,    "abort all queued fpga commands" },
     { "log",     cmd_loglevel, "log [0-4]           get/set log level" },
     { "trace",   cmd_trace,    "trace [on|off]      per-transfer debug lines" },
     { "exit",    cmd_exit,     "exit the emulator (host only)" },
+    { "badapple", cmd_badapple, "badapple [-l] [-s <dark><light>] [<file>] | delay [<us>|save] | stop  video on the grid (-s alone: materials)" },
+    { "settings", cmd_settings, "settings [reload]   what settings.toml holds (tuning commands store with save)" },
 };
 #define NUM_CMDS (sizeof cmds / sizeof cmds[0])
 

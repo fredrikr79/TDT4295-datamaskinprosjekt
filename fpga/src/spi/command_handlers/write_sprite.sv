@@ -26,16 +26,22 @@ module write_sprite #(
   import hud_pkg::*;
   import spi_pck::*;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   logic [15:0] total_bytes = 16'd0;
-  logic [7:0] written_bytes = 16'd0;
+  logic [15:0] written_bytes = 16'd0;
   logic [15:0] tx_index = 16'd0;
-  logic [15:0] gridX, gridY;
 
-  mem_driver_pkg::mem_states_e state = MEM_START;
+  mem_map_pkg::mem_states_e state = MEM_START;
   hud_pkg::sprite_mem_id next_id = 0;
+
+  logic do_r_en;
+  logic data_pop;
+
+  assign data_pop = send_write_sprite && (state == MEM_DATA) && mem_data_on_wire;
+  assign write_sprite_r_en = do_r_en | data_pop;
+  assign mem_in = in_fifo;
 
   always_ff @(posedge clk) begin
 
@@ -43,8 +49,10 @@ module write_sprite #(
       tx_index <= 16'd0;
       write_sprite_fifo <= 8'd0;
       state <= MEM_START;
+      written_bytes <= 16'b0;
+      next_id <= 1'b0;
     end else begin
-      write_sprite_r_en  <= 1'b0;
+      do_r_en  <= 1'b0;
       write_sprite_w_en  <= 1'b0;
       write_sprite_done  <= 1'b0;
       write_sprite_valid <= 1'b0;
@@ -59,23 +67,24 @@ module write_sprite #(
               error_valid <= 1'b1;
               error_code <= RESOURCE_EXHAUSTED_ERROR;
             end else begin
-              write_sprite_r_en <= 1'b1;
+              do_r_en <= 1'b1;
               state <= MEM_GET_MSG_LENGTH_TOP;
             end
           end
           MEM_GET_MSG_LENGTH_TOP: begin
-            write_sprite_r_en <= 1'b1;
+            do_r_en <= 1'b1;
             total_bytes[15:8] <= in_fifo;
             state <= MEM_GET_MSG_LENGTH_BOTTOM;
           end
           MEM_GET_MSG_LENGTH_BOTTOM: begin
             total_bytes[7:0] <= in_fifo;
             // Latched before the first burst
-            sprite_base_addr <= mem_addr;
-            state <= MEM_INIT_REQ;
             if(in_empty) begin
               error_valid <= 1'b1;
               error_code <= MISSING_PARAMETER_ERROR;
+            end else begin
+              sprite_base_addr <= mem_addr;
+              state <= MEM_INIT_REQ;
             end
           end
           MEM_INIT_REQ: begin
@@ -90,14 +99,11 @@ module write_sprite #(
           end
           MEM_DATA: begin
             // Read N bytes from in_queue to mem_in
-            if(write_sprite_r_en) begin
-              mem_in <= in_fifo;
+            if(mem_data_on_wire) begin
               written_bytes <= written_bytes + 16'd1;
               tx_index <= tx_index + 16'd1;
 
               if (tx_index >= total_bytes - 1) begin
-                // Clean up transaction state
-                write_sprite_r_en <= 1'b0;
                 written_bytes <= 16'd0;
                 tx_index <= 16'd0;
                 write_sprite_valid <= 1'b1;
@@ -106,16 +112,9 @@ module write_sprite #(
 
               end else if (written_bytes >= 16'(memory_pkg::MaxMessageLength - 1)) begin
                 mem_addr <= mem_addr + 32'(memory_pkg::MaxMessageLength);
-                write_sprite_r_en <= 1'b0;
                 written_bytes <= 16'd0;
                 state <= MEM_INIT_REQ;
               end
-
-              else begin
-                write_sprite_r_en <= mem_data_on_wire;
-              end
-            end else if (mem_data_on_wire) begin
-              write_sprite_r_en <= 1'b1;
             end
           end
           MEM_RETURN_TOP: begin

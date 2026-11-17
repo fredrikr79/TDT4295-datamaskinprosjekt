@@ -26,6 +26,9 @@ storage_status_t storage_size(const char *path, uint32_t *size);
 storage_status_t storage_write(const char *path, const void *data, uint32_t len);
 storage_status_t storage_append(const char *path, const void *data, uint32_t len);
 storage_status_t storage_delete(const char *path);
+storage_status_t storage_rename(const char *from, const char *to);
+storage_status_t storage_info(storage_info_t *info);  /* mounted? size, free, last event */
+storage_status_t storage_list(const char *dir, storage_list_fn fn, void *ctx);
 storage_status_t storage_init(void);     /* optional: mount now */
 bool             storage_ready(void);    /* mounted right now?  */
 const char      *storage_status_str(storage_status_t st);
@@ -134,7 +137,7 @@ Every FileX status goes through `result()`:
   relative to where the program runs). It's easiest to give CMake an absolute
   path:
   ```cmake
-  target_compile_definitions(hexmcu_host_common PRIVATE
+  target_compile_definitions(hexmcu_host PRIVATE
       STORAGE_HOST_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/sd")
   ```
 - Lay it out like the card: `sd/rom/…`, `sd/save/…`, `sd/sprites/…`.
@@ -151,17 +154,24 @@ Every FileX status goes through `result()`:
   and decodes the run-length data into tile IDs. If neither can be read, it logs
   an error and gives an empty room (all tile 0), so the game goes on.
 - `save_room()` encodes and writes `save/x,y.dat`. `delete_save()` removes it.
-- The encoded file is at most `DATA_MAX_SIZE` (~4.9 KB for the 40 × 60 test room),
-  held in one static buffer.
+- The encoded file is at most `DATA_MAX_SIZE` (`1 + 14 × MAX_PORTALS +
+  ROOM_X × ROOM_Y × 2`), held in one static buffer. With the 160 × 90 grid that's
+  about 28 KB; `rooms.h` still says 640 × 360 (about 450 KB) until it's changed
+  to the grid size.
+
+The console's `sd` shows the card's state (`storage_info`), and `sd ls [folder]`
+lists a folder (`storage_list`; not on MSVC builds of the host).
 
 **`sprite.c`:** reads an 8-byte header when an image is registered, then the
 pixels 1 KB at a time while uploading ([sprite.md](sprite.md)).
 
-## Later: streaming full-size rooms
+## Later: streaming rooms (probably not needed now)
 
-The real rooms will be a whole frame of simulation cells. At 640 × 360 and one
-byte per cell that's ~225 KB decoded, nearly all of the U545's RAM, so a room
-can't be held in memory whole. The plan:
+A room is a whole grid of simulation cells. This plan was made when the grid
+was going to be 640 × 360 (~225 KB decoded, nearly all of the U545's RAM). The
+grid is now 160 × 90: 14.4 KB decoded, which fits in RAM whole even on the
+U545, so the simple whole-room buffer is fine. The plan is kept in case rooms
+grow again:
 
 - **Two buffers taking turns:** fill one from the card while the FPGA DMA sends
   the other. A buffer is free again in its command's done callback.

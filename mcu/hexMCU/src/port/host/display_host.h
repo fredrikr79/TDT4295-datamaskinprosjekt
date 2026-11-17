@@ -11,7 +11,10 @@
  *
  * Both are DISPLAY_W x DISPLAY_H, row-major, one uint16_t per pixel
  * (RRRRRGGG GGGBBBBB). Write into them directly through display_layer();
- * the window picks the changes up at its next frame (30 Hz).
+ * the window picks the changes up at its next frame (25 Hz).
+ *
+ * The SIM layer is already upscaled here: the fake FPGA paints every grid
+ * cell as an FPGA_SIM_SCALE x FPGA_SIM_SCALE block (fake_fpga.c).
  * ====================================================================== */
 
 #include <stdbool.h>

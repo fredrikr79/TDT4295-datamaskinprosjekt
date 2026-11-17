@@ -14,6 +14,60 @@ uint32_t plat_millis(void)
     return HAL_GetTick();
 }
 
+/* Microseconds: the 1 ms tick, plus how far SysTick has counted into the
+ * current millisecond. SysTick drives HAL_GetTick(), so it always runs.
+ * (The first version used the DWT cycle counter. That is debug hardware,
+ * and it may not count without a debugger attached: then everything timed
+ * in us stood still.)
+ * SysTick counts down from LOAD to 0, then the tick interrupt adds 1 ms.
+ * Called with that interrupt pending but not run yet (from a higher
+ * priority interrupt, such as the SYNC one, or with interrupts off), the
+ * tick is a millisecond behind while SysTick has started over: then the
+ * millisecond is added here. Wraps after 71 minutes, like plat_micros()
+ * says. If the HAL's tick comes from another timer (SysTick off), it falls
+ * back to the cycle counter. */
+static uint32_t micros_dwt(void)
+{
+    static uint32_t last_cyc, us, rem;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (!(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) {
+#ifdef DCB                                      /* newer CMSIS names it DCB */
+        DCB->DEMCR |= DCB_DEMCR_TRCENA_Msk;
+#else
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+#endif
+        DWT->CYCCNT = 0;
+        DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+        last_cyc = 0;
+    }
+    uint32_t cyc = DWT->CYCCNT, per_us = SystemCoreClock / 1000000u;
+    rem += cyc - last_cyc;
+    last_cyc = cyc;
+    us  += rem / per_us;
+    rem %= per_us;
+    __set_PRIMASK(primask);
+    return us;
+}
+
+uint32_t plat_micros(void)
+{
+    if (!(SysTick->CTRL & SysTick_CTRL_ENABLE_Msk)) return micros_dwt();
+
+    uint32_t load = SysTick->LOAD + 1u;         /* cycles per tick (1 ms) */
+    uint32_t ms, val, pending;
+    do {                                        /* a tick in between: again */
+        ms      = HAL_GetTick();
+        val     = SysTick->VAL;
+        pending = SCB->ICSR & SCB_ICSR_PENDSTSET_Msk;
+    } while (ms != HAL_GetTick());
+    /* SysTick started over, but its interrupt hasn't added the ms yet: VAL
+     * is near the top again (it only just restarted) */
+    if (pending && val > load / 2u) ms++;
+    uint32_t into = load - 1u - val;            /* cycles into this ms */
+    return ms * 1000u + (uint32_t)((uint64_t)into * 1000u / load);
+}
+
 /* ---- LED ------------------------------------------------------------------
  * Only led.c calls these. Nucleo: the green LED (high = on). PCB: an RGB LED
  * with a common anode on 3V3, so each colour lights when its pin is LOW.

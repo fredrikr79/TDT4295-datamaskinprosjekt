@@ -34,6 +34,12 @@ uint32_t plat_millis(void)
     return (uint32_t)((now_ns() - t0_ns) / 1000000ull);
 }
 
+uint32_t plat_micros(void)
+{
+    if (t0_ns == 0) t0_ns = now_ns();
+    return (uint32_t)((now_ns() - t0_ns) / 1000ull);
+}
+
 /* ---- LED: nothing to light on the PC (yet); the state is kept so the SDL
  * window could show it some day. No LOG_* here -- log_emit calls
  * plat_millis, keep these dependency-free. */

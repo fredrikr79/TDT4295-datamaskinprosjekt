@@ -78,7 +78,17 @@ set_property -dict {PACKAGE_PIN N11 IOSTANDARD LVCMOS33} [get_ports clk_in]
 create_clock -period 50.000 [get_ports clk_in]
 
 # MCU clock
+
+# Keep it like this, group is wrong, but keeping them close on chip is necessary. 
 create_clock -period 40.000 -name ck_sck [get_ports ck_sck]
 set_clock_groups -asynchronous \
     -group [get_clocks -of_objects [get_ports clk_in]] \
     -group [get_clocks ck_sck]
+
+set_property CFGBVS VCCO [current_design]
+set_property CONFIG_VOLTAGE 3.3 [current_design]
+set_property CONFIG_MODE SPIx4 [current_design]
+set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
+
+set_max_delay -datapath_only -from [get_clocks ck_sck] -to [get_clocks -include_generated_clocks -of_objects [get_ports clk_in]] 10.000
+set_max_delay -datapath_only -from [get_clocks -include_generated_clocks -of_objects [get_ports clk_in]] -to [get_clocks ck_sck] 10.000

@@ -23,8 +23,8 @@ velocity_box_t create_velocity_box(
     int dy = VELOCITY_BOX_Y;
     int rel_x = (dx - size_x) / 2;
     int rel_y = (dy - size_y) / 2;
-    if (vel_y < -5) rel_y += rel_y / 2;
-    else if (5 < vel_y) rel_y /= 2;
+    if (vel_y < SPEED(-5)) rel_y += rel_y / 2;
+    else if (SPEED(5) < vel_y) rel_y /= 2;
 
     // Player position
     int x = floorf(pos_x + 0.5);
@@ -121,14 +121,15 @@ bool perform_object_movement(
                 {
                     if (y_is_down && sim_is(id, MAT_SAND))
                     {
-                        if (x < slide_ease)
+                        if (x - x_start < slide_ease)
                         {
-                            slide_start = x + 1;
+                            slide_start = x - x_start + 1;
                             continue;
                         }
-                        else if (x_target - x - 1 < slide_ease && slide_end < x_target - x)
+                        else if (x_target - x - 2 < slide_ease)
                         {
-                            slide_end = x_target - x;
+                            if (slide_end < x_target - x)
+                                slide_end = x_target - x;
                             continue;
                         }
                     }
@@ -156,7 +157,7 @@ bool perform_object_movement(
                     uint8_t x_end;
                     if (slide_start)
                     {
-                        x += PLAYER_SIZE_X;
+                        x += PLAYER_SIZE_X + 1;
                         x_end = x + slide_start;
                     }
                     else x_end = x - slide_end;
@@ -176,13 +177,17 @@ bool perform_object_movement(
                     }
                     if (0 < slide_amount)
                     {
-                        if ((slide_end && x_is_right) || (!slide_end && !x_is_right)) {
+                        if ((slide_end && x_is_right) || (!slide_end && *velocity_x < 0)) {
                             horizontal_done = true;
                             horizontal_collision = true;
                         }
                         horizontal_progress += slide_start ? slide_amount : -slide_amount;
                         horizontal_movement_after_force = false;
                     }
+                    // LOG_DBG(
+                    //     "slide start %u. slide end %u",
+                    //     slide_start, slide_end
+                    // );
                     // LOG_DBG(
                     //     "Tried to slide %u. Slided %u. Hit wall: %u",
                     //     slide_start + slide_end, slide_amount, hit_wall
@@ -213,14 +218,20 @@ bool perform_object_movement(
             {
                 if (tile_has_collision(box[base_x + horizontal_progress + y*velocity_box.box.x2]))
                 {
-                    if (y < step_allowance)
+                    // Fix: was y < step_allowance, but y is the row in the box, not in the
+                    // player: only true near the room's top, where the player could then
+                    // walk through a wall at head height
+                    if (y - y_start < step_allowance)
                     {
-                        step_start = y + 1;
+                        step_start = y - y_start + 1;
                         continue;
                     }
-                    else if (y_target - y - 1 < step_allowance && step_end < y_target - y)
+                    // Fix: was "&& step_end < y_target - y" in the condition: the rows below
+                    // the step's top then failed it (step_end already held the bigger height)
+                    // and counted as a wall, so only steps 1 cell high could be climbed
+                    else if (y_target - y - 1 < step_allowance)
                     {
-                        step_end = y_target - y;
+                        if (step_end < y_target - y) step_end = y_target - y;
                         continue;
                     }
                     horizontal_done = true;
@@ -237,6 +248,43 @@ bool perform_object_movement(
                     horizontal_collision = true;
                     horizontal_progress -= dir_x;
                 }
+                else if (0 < step_start && step_end == 0)
+                {
+                    // Fix: only the head hits (a sloping roof). Before, nothing happened:
+                    // the player walked on into the roof, took damage and was pushed out
+                    // sideways every step (shaking). Now the mirror of stepping up: down by
+                    // that much if there's room under the feet (flying along a slope),
+                    // else it's a wall.
+                    bool blocked = false;
+                    uint8_t x_start = velocity_box.rel_x + horizontal_progress - 1;
+                    uint8_t x_end = x_start + size_x;
+                    if (x_is_right)
+                    {
+                        x_start += 2;
+                        x_end += 2;
+                    }
+                    int y_first = velocity_box.rel_y + size_y + vertical_progress;  // under the feet
+                    int y_end = y_first + step_start;
+                    if (y_end > velocity_box.box.y2) blocked = true;   // outside the box read
+                    for (int y = y_first; !blocked && y < y_end; y++)
+                        for (uint8_t x = x_start; x < x_end; x++)
+                            if (tile_has_collision(box[x + y*velocity_box.box.x2]))
+                            {
+                                blocked = true;
+                                break;
+                            }
+                    if (blocked)
+                    {
+                        horizontal_done = true;
+                        horizontal_collision = true;
+                        horizontal_progress -= dir_x;
+                    }
+                    else
+                    {
+                        vertical_progress += step_start;
+                        vertical_movement_after_force = false;
+                    }
+                }
                 else if (step_start == 0 && 0 < step_end)
                 {
                     uint8_t step_amount = 0;
@@ -248,10 +296,17 @@ bool perform_object_movement(
                         x_start += 2;
                         x_end += 2;
                     }
-                    uint8_t y = velocity_box.rel_x - 1 + vertical_progress;
-                    uint8_t y_end = y - step_end;
+                    // Fix: was rel_x (a column) for the row above the head, and uint8_t,
+                    // which wrapped to 255 (far past box[]) at the room's top
+                    int y = velocity_box.rel_y - 1 + vertical_progress;
+                    int y_end = y - step_end;
                     while (y > y_end)
                     {
+                        if (y < 0)              // the room's top: no room to step up
+                        {
+                            hit_roof = true;
+                            break;
+                        }
                         for (uint8_t x = x_start; x < x_end; x++)
                         {
                             if (tile_has_collision(box[x + y*velocity_box.box.x2]))
@@ -264,7 +319,18 @@ bool perform_object_movement(
                         y--;
                         step_amount++;
                     }
-                    if (0 < step_amount)
+                    if (hit_roof)
+                    {
+                        // Fix: the roof leaves no room to get all the way over the step, so
+                        // it's a wall. Before, the player went up as far as the roof let it
+                        // and still moved on, ending up inside the step: damage every step,
+                        // and the push-out fighting the roof (pressing into a wall under an
+                        // overhang). The step back is undone by the += dir_x below.
+                        horizontal_done = true;
+                        horizontal_collision = true;
+                        horizontal_progress -= dir_x;
+                    }
+                    else if (0 < step_amount)
                     {
                         if (y_is_down)
                         {
@@ -326,6 +392,7 @@ bool perform_object_movement(
     else if (!horizontal_movement_after_force)
     {
         *pos_x += horizontal_progress;
+        *velocity_y *= 0.3;
     }
     else *pos_x += *velocity_x;
     if (vertical_collision)
@@ -350,14 +417,15 @@ bool perform_object_movement(
         *pos_y = 0;
         *velocity_y = 0;
     }
-    if (ROOM_X - 1 <= *pos_x + size_x)
+    // Fix: was ROOM_X - 1 - size_x: one cell short of the room's last column / row
+    if (ROOM_X <= *pos_x + size_x)
     {
-        *pos_x = ROOM_X - 1 - size_x;
+        *pos_x = ROOM_X - size_x;
         *velocity_x = 0;
     }
-    if (ROOM_Y - 1 <= *pos_y + size_y)
+    if (ROOM_Y <= *pos_y + size_y)
     {
-        *pos_y = ROOM_Y - 1 - size_y;
+        *pos_y = ROOM_Y - size_y;
         *velocity_y = 0;
     }
 

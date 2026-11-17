@@ -30,7 +30,7 @@ module memory_onboard #(
     // Internal byte-addressable memory
     // ----------------------------------------
     (* ram_style = "block" *)
-    logic [7:0] memory [0:MEM_SIZE-1];
+    logic [7:0] memory [MEM_SIZE];
 
     // ----------------------------------------
     // State machine

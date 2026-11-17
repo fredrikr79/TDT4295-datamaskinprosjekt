@@ -23,7 +23,7 @@ module read_cons #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   logic [15:0] read_bytes = 16'd0;
@@ -31,10 +31,7 @@ module read_cons #(
   logic [15:0] rx_index = 16'd0;
   logic [15:0] gridX, gridY;
 
-  mem_driver_pkg::mem_states_e state = MEM_START;
-
-  logic data_valid = 1'b0;
-  always @(posedge clk) data_valid <= mem_data_on_wire;
+  mem_map_pkg::mem_states_e state = MEM_START;
 
   always_ff @(posedge clk) begin
 
@@ -86,11 +83,12 @@ module read_cons #(
               state <= MEM_GET_MSG_LENGTH_BOTTOM;
             end
           MEM_GET_MSG_LENGTH_BOTTOM: begin
-              total_bytes[7:0] <= in_fifo;
-              state <= MEM_GET_MEM_ADDR;
               if(in_empty) begin
                 error_valid <= 1'b1;
                 error_code <= MISSING_PARAMETER_ERROR;
+              end else begin
+                total_bytes[7:0] <= in_fifo;
+                state <= MEM_GET_MEM_ADDR;
               end
           end
           MEM_GET_MEM_ADDR: begin
@@ -108,7 +106,7 @@ module read_cons #(
             end
           end
           MEM_DATA: begin
-            if (data_valid) begin
+            if (mem_data_on_wire) begin
               // Capture data once write_cons is visible to fifo.
               read_cons_fifo <= mem_out;
               read_cons_w_en <= 1'b1;

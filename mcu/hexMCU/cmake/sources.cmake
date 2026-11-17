@@ -8,6 +8,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/transport_core.c
     ${APP_ROOT}/src/app/fpga.c
     ${APP_ROOT}/src/app/frame_sync.c
+    ${APP_ROOT}/src/app/settings.c
     ${APP_ROOT}/src/app/game.c
     ${APP_ROOT}/src/app/player.c
     ${APP_ROOT}/src/app/collision.c
@@ -21,7 +22,9 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/render/demo.c
     ${APP_ROOT}/src/app/render/menu.c
     ${APP_ROOT}/src/app/render/draw.c
-    
+    ${APP_ROOT}/src/app/render/hud.c
+    ${APP_ROOT}/src/app/render/badapple.c
+    ${APP_ROOT}/src/app/render/texture.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

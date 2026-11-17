@@ -39,8 +39,7 @@ Without them, the USB code and the host build won't compile.
 - **Linux:** run *Install ST-Link udev rules* from the extension once.
   Without the rules, flashing fails with a permission error.
 - **For the host emulator:** gcc, CMake, Ninja and gdb, plus Microsoft's
-  **C/C++** extension for debugging it in VS Code. The card image tasks need
-  `dosfstools` and `mtools`, the test picture needs ImageMagick.
+  **C/C++** extension for debugging it in VS Code.
 - **STM32CubeMX**, to generate the CubeMX code (next step) and to change pins
   or peripherals.
 
@@ -91,8 +90,7 @@ Pick a configuration in the list at the top and press F5:
 | MCU: ST-Link (flash + debug) **(hexU59 …)** | builds the final board, flashes it, stops at `main()` |
 | MCU: ST-Link (flash + debug) **(hexU54 …)** | the same for the Nucleo |
 | Host: game (gdb) **(host …)** | builds the emulator and runs the game under gdb |
-| Host: test_host (gdb) | the example program on top of `fpga.c` |
-| Host: test_host, 2 % errors (gdb) | the same with 2 % failed transfers, to watch the resync |
+| Host: game, 2 % errors (gdb) | the same with 2 % failed transfers, to watch the resync |
 
 Press F5 again (continue) to run after it stops at `main()`.
 
@@ -129,7 +127,7 @@ looks like this:
 mcu/
 ├── README.md               points here
 ├── mcu.code-workspace      open this in VS Code
-├── docs/                   this file; README2.md (the older docs index); io/*.md
+├── docs/                   this file, and a page per part: fpga, transport, sprite, storage, usb
 ├── tools/                  png2spr.py, spr_viewer.html, ttf2c.py
 └── hexMCU/
     ├── .clangd             go-to-definition for src/ (uses hexU59's build)    [hidden]
@@ -144,7 +142,7 @@ mcu/
     │   ├── hexU59/         final board: hexU59.ioc, Core/, Drivers/, CMakeLists.txt
     │   ├── hexU54/         Nucleo: hexU54.ioc, Core/, Drivers/, CMakeLists.txt
     │   └── n6test/         USB test on the Nucleo-N657X0-Q                [not in the workspace]
-    ├── host/               host CMakeLists.txt, .vscode/ (tasks, debug), card.img
+    ├── host/               host CMakeLists.txt, .vscode/ (tasks, debug)
     ├── third_party/        git submodules: tinyusb, SDL                   [hidden]
     └── build/              host build output                             [hidden]
 ```
@@ -290,18 +288,38 @@ The highest level that can be shown is set at build time with
 | `loading off` / `loading on` | Off: the game stops, along with the handshake retries, and the FPGA is yours to test by hand. On: handshake again, then carry on. |
 | `demo` | Lists the FPGA tests; `demo echo`, `demo cons`, `demo box`, `demo sprite`, `demo scene`, `demo clear` runs one (PASS/FAIL in the log) |
 | `fecho -r 100 64` | 100 rounds of a 64-byte random ECHO: a quick link test |
-| `info` | Ask the FPGA for screen size, N and session |
+| `info` | Ask the FPGA for screen size (and the grid it gives), N and session |
 | `readrdy` | READY pin, ACK, and the command queue right now |
 | `sd`, `sd ls [folder]` | SD card status (mounts it if it can), and what's on it |
+| `sd del <file>`, `sd del <folder>/` | Delete a file, or a folder and everything in it: `sd del save/` clears all saved rooms |
 | `led list`, `led show <state>`, `led cycle`, `led r` … `led auto` | Test the status LED, no FPGA needed |
 | `led pins` | The LED pins read back from the GPIO registers: mode, what is driven, what the pin reads |
 | `button`, `button watch` | The board button now / watch it for 15 s and say whether pin and interrupt work |
 | `reset fpga` / `reset mcu` / `reset` | Reset the FPGA (reset pin), the MCU, or both |
+| `reset -b fpga` / `reset -b` | The same with PROGRAM_B: the FPGA wipes its design and loads it from flash again (the handshake waits for DONE); without `fpga`, the MCU is reset after |
 | `abort` | Drop every queued FPGA command |
+| `sprite lead [<µs>]` | Sprite changes go out this long before SYNC, to land in the screen's blanking (default 1000); also shows the measured SYNC period and when the last changes really finished |
+| `badapple delay [<µs>]` | Bad Apple's writes start this long after each SYNC |
+| `sprite lead save`, `badapple delay save` | Keep the current value in `settings.toml` on the SD card, so it's used from the next start |
+| `settings`, `settings reload` | What `settings.toml` holds / read it again |
 
 ---
 
 ## Using the board
+
+### Keys while playing
+
+| Key | |
+|---|---|
+| A / D, ← / →, d-pad left / right | Move |
+| Space, ↑, d-pad up, cross (A) | Jump; held in the air, the jetpack |
+| Esc, PS button | Pause menu |
+| F1 | Bad Apple: start / stop |
+| F5 | Restart this room as designed (its save is deleted) |
+| F6 | Clear the room: the whole grid air (the room file only changes if the room is saved after) |
+| F7 | Back to the start: room 0,0, the player at its starting place (saved rooms are kept) |
+| F8 | The player to the top of the screen, same x |
+| F9 | Delete every saved room (`sd del save/`); F9 then F7 is a whole new game |
 
 ### Boot order
 
@@ -346,7 +364,24 @@ FAT32. Laid out like this:
 ```
 rom/x,y.dat        the rooms as shipped (x,y = room coordinates)
 save/x,y.dat       saved rooms; read before rom/ if they exist
+save/seed          the world seed for the texture (texture.md); a new one when save/ is deleted
 sprites/*.spr      images and animations (`tools/png2spr.py`)
+settings.toml      tuned values, kept between runs (written by "... save")
+```
+
+`settings.toml` is a small part of TOML: comments, `[section]` lines, and
+`name = number` (decimal or `0x` hex). Anything else is logged and skipped. It's
+read once, the first time a setting is needed; with no file or card, the
+defaults count. The console's tuning commands store their value with `save`,
+which writes the whole file again, so comments in it are lost. It can also be
+edited on the PC (in `$HEXMCU_SD` for the emulator).
+
+```toml
+[sprite]
+lead_us = 1000      # sprite changes go out this long before SYNC
+
+[badapple]
+delay_us = 15500    # Bad Apple's writes start this long after SYNC
 ```
 
 ---
@@ -363,31 +398,33 @@ first. The same without VS Code, from `mcu/hexMCU`:
 ```bash
 cmake -S host -B build/host -G Ninja
 cmake --build build/host
-./build/host/hexmcu_host          # the game
-./build/host/test_host host/test565.bmp   # the example program (--errors=N to fail N % of transfers)
+./build/host/hexmcu_host              # the game
+./build/host/hexmcu_host --errors=2   # the same, 2 % of transfers fail (resync test)
+./build/host/hexmcu_host --help       # also --mhz=N and --lanes=N for the link
 ```
 
 - **The SD card:** the folder in `$HEXMCU_SD` (the debug configuration sets it
   to `hexMCU/sd/`). Lay it out like the card: `sd/rom/`, `sd/save/`,
   `sd/sprites/`. No folder behaves like no card.
-- **Tasks** (*Terminal → Run Task*): `build host`, `card image` (makes
-  `host/card.img`, a 512 MB FAT32 image), `card image: reset`,
-  `card image: list`, `test picture` (makes `host/test565.bmp` from
-  `host/test.bmp`).
+- **Tasks** (*Terminal → Run Task*): `build host`.
 - **The link:** modelled at 20 MHz × 8 lanes, with a READY 200 µs after each
-  command and SYNC at 25 Hz. A share of transfers can be made to fail on
+  command and SYNC every 16.8 ms (59.5 Hz, like the real FPGA's VGA timing on
+  a 25 MHz clock). A share of transfers can be made to fail on
   purpose, to test the resync.
+- **The picture:** like the real FPGA, a 640x360 screen with the simulation
+  grid at 160x90 cells, each cell shown as a 4x4 block (`FPGA_SIM_SCALE` in
+  `fpga.h`). CONS and BOX commands count cells; sprites and the mouse count
+  screen pixels. INFO reports the screen (640x360).
 
-See [io/transport.md](io/transport.md) for what the fake FPGA does.
+See [transport.md](transport.md) for what the fake FPGA does.
 
 ---
 
 ## Documentation
 
-- [README2.md](README2.md): the older docs index
-- [io/README.md](io/README.md): overview and the main loop
-- [io/fpga.md](io/fpga.md): the command queue, protocol, error recovery
-- [io/transport.md](io/transport.md): OCTOSPI, READY/ACK, the fake FPGA
-- [io/sprite.md](io/sprite.md): images and sprites on the HUD
-- [io/storage.md](io/storage.md): the SD card
-- [io/usb.md](io/usb.md): keyboard, mouse and controller
+- [fpga.md](fpga.md): the command queue, protocol, grid and screen sizes, error recovery
+- [transport.md](transport.md): OCTOSPI, READY/ACK, the fake FPGA
+- [sprite.md](sprite.md): images and sprites on the HUD
+- [storage.md](storage.md): the SD card
+- [texture.md](texture.md): noise in the cells' low bits, and what room saves keep
+- [usb.md](usb.md): keyboard, mouse and controllers

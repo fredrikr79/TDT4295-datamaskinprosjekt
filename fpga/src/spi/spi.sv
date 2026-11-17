@@ -4,7 +4,7 @@ module spi #(
     input wire clk,
     input wire ck_ss,
     input wire ck_sck,
-    input wire ck_rst,
+    input wire reset_in,
     input wire error_critical,
 
     // Octal SPI data bus
@@ -26,7 +26,7 @@ module spi #(
     // Memory
     input logic [7:0] mem_out,
     output logic [7:0] mem_in,
-    output logic [15:0] mem_len,
+    output logic [6:0] mem_len,
     input logic mem_busy,
     mem_data_on_wire,
     mem_allow,  // from mem_access_policy
@@ -36,7 +36,7 @@ module spi #(
     // Sprite LUT
     input logic sprite_id_found,
     input hud_pkg::sprite_lut_id sprite_available_id,
-    input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
+    // input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output hud_pkg::sprite_inst_entry_t sprite_req_body,
     output hud_pkg::sprite_op_e sprite_req_op,
     output hud_pkg::sprite_mem_id write_sprite_mem_id,
@@ -93,7 +93,7 @@ module spi #(
 
   // RESET
   reg rst_en = 1'b0;  // programatic reset
-  wire reset = ~ck_rst || rst_en;
+  wire reset = reset_in || rst_en;
   wire reset_s = ~ck_rst_s || rst_en;
 
  // READY
@@ -162,7 +162,7 @@ module spi #(
       out_empty_sync <= 3'b111;
     end else begin
       ck_ss_sync <= {ck_ss_sync[1:0], ck_ss};
-      ck_rst_sync <= {ck_rst_sync[1:0], ck_rst};
+      ck_rst_sync <= {ck_rst_sync[1:0], ~reset_in};
       out_empty_sync <= {out_empty_sync[1:0], out_empty};
     end
   end
@@ -177,7 +177,7 @@ module spi #(
       .boot_done(boot_done),
       .ck_ss_s(ck_ss_s),
       .in_empty(in_empty),
-      .out_full(out_full),
+      .out_empty(out_empty),
       .state(state),
       .proc_done(proc_done),
       .error_event(error_event),
@@ -232,6 +232,7 @@ module spi #(
       .clk(clk),
       .state(state),
       .in_fifo(in_fifo),
+      .out_empty(out_empty),
       .out_full(out_full),
       .in_empty(in_empty),
       .reset_s(reset_s),
@@ -253,7 +254,8 @@ module spi #(
       .sprite_req_valid(sprite_req_valid),
       .sprite_req_body(sprite_req_body),
       .sprite_req_op(sprite_req_op),
-      .sprite_id_bitmap(sprite_id_bitmap),
+      .mem_allow(mem_allow),
+      // .sprite_id_bitmap(sprite_id_bitmap),
       .write_sprite_valid(write_sprite_valid),
       .write_sprite_mem_id(write_sprite_mem_id),
       .write_sprite_base_addr(write_sprite_base_addr),
@@ -265,8 +267,8 @@ module spi #(
   );
 
   // DEBUG
-  assign led_r_n = state[2];
-  assign led_g_n = state[1];
-  assign led_b_n = state[0];
+  assign led_r_n = ~error_valid;
+  assign led_g_n = error_valid;
+  assign led_b_n = ~(state == spi_pck::ST_BOOT);
 
 endmodule

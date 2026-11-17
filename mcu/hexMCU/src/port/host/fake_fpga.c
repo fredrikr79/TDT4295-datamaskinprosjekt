@@ -245,8 +245,10 @@ static int32_t box_cell(uint16_t x, uint16_t y, uint16_t w, uint32_t k)
 /* FAKE_FPGA_PAIRS=1 in the environment: act like the FPGA build that
  * had the cell-pair bug, to try 'demo align' and workarounds on. Its grid
  * memory is two cells wide: a box at odd X starts a cell to the left, and
- * a write always fills whole pairs, the last cell twice when the row ends
- * in the middle of one (so 1x1 at even X writes 2 cells). */
+ * a write always fills whole pairs: when a row ends in the middle of one,
+ * the pad cell gets the next byte (the next row's first cell), or the last
+ * byte again on the last row (so 1x1 at even X writes 2 cells). Checked
+ * against 'demo align' on the board. */
 static bool pair_bug(void)
 {
     static int on = -1;
@@ -272,7 +274,10 @@ static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
         uint16_t x0 = (uint16_t)(x & ~1u), end = (uint16_t)(x0 + ((w + 1u) & ~1u));
         for (uint32_t r = 0; r < h && r * w < n; r++)
             for (uint16_t cx = x0; cx < end; cx++) {
-                uint32_t k = r * w + ((uint32_t)(cx - x0) < w ? (uint32_t)(cx - x0) : w - 1u);   /* last one twice */
+                /* the pad cell at a row's end takes the next byte of the stream
+                 * (the next row's first), or the last one again on the last row */
+                uint32_t k = r * w + (uint32_t)(cx - x0);
+                if (k >= n) k = n - 1u;
                 if (cx >= GRID_W || y + r >= GRID_H) { oob++; continue; }
                 cell_set((y + r) * GRID_W + cx, packed_cell(data, k));
             }

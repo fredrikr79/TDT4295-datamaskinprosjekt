@@ -39,6 +39,7 @@ end
 
 // Allocate LUT for SpriteMemDepth number of sprite id <-> base pointer pairs
 logic [31:0] sprite_mem_lut [SpriteMemDepth];
+logic read_allocated;
 
 always_ff @(posedge clk) begin
     if(write_sprite_valid) begin
@@ -56,8 +57,8 @@ hud_pkg::dynamic_sprite_data_t dynamic_w_data;
 hud_pkg::static_sprite_data_t static_r_data;
 hud_pkg::dynamic_sprite_data_t dynamic_r_data;
 
-hud_pkg::static_sprite_data_t static_data_mem [hud_pkg::SpriteLutDepth];
-hud_pkg::dynamic_sprite_data_t dynamic_data_mem [hud_pkg::SpriteLutDepth];
+(* ram_style = "block" *) hud_pkg::static_sprite_data_t static_data_mem [hud_pkg::SpriteLutDepth];
+(* ram_style = "block" *) hud_pkg::dynamic_sprite_data_t dynamic_data_mem [hud_pkg::SpriteLutDepth];
 
 
 assign dynamic_w_data = op == hud_pkg::LUT_DELETE
@@ -78,7 +79,7 @@ hud_pkg::sprite_lut_id read_req_id;
 
 always_comb begin
     sprite_read_entry = '0;
-    sprite_read_entry.active = dynamic_r_data.active & sprite_id_bitmap[sprite_lut_read_id];
+    sprite_read_entry.active = dynamic_r_data.active & read_allocated;
     sprite_read_entry.id = read_req_id;
     sprite_read_entry.mem_id = static_r_data.mem_id;
     sprite_read_entry.x = dynamic_r_data.x;
@@ -88,26 +89,27 @@ always_comb begin
 end
 
 always_ff @(posedge clk) begin
-    // Write data
-    if(reset) begin
+    if(op == hud_pkg::LUT_WRITE)
+        static_data_mem[sprite_req_body.id] <= static_w_data;
+    static_r_data <= static_data_mem[sprite_lut_read_id];
+end
+
+always_ff @(posedge clk) begin
+    if(reset)
         sprite_id_bitmap <= 1'b0;
-    end else begin
-        read_req_id <= sprite_lut_read_id;
-        if(op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE, hud_pkg::LUT_DELETE}) begin
-            dynamic_data_mem[sprite_req_body.id] <= dynamic_w_data;
-            if(op == hud_pkg::LUT_WRITE) begin
-                sprite_id_bitmap[sprite_req_body.id] <= 1'b1;
-                static_data_mem[sprite_req_body.id] <= static_w_data;
-            end else if (op == hud_pkg::LUT_DELETE) begin
-                sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
-            end
-        end
+    else if (op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE})
+        sprite_id_bitmap[sprite_req_body.id] <= 1'b1;
+    else if (op == hud_pkg::LUT_DELETE)
+        sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
+end
 
-        // Read data
-        static_r_data <= static_data_mem[sprite_lut_read_id];
-        dynamic_r_data <= dynamic_data_mem[sprite_lut_read_id];
-    end
-
+always_ff @(posedge clk) begin
+    read_req_id <= sprite_lut_read_id;
+    read_allocated <= sprite_id_bitmap[sprite_lut_read_id[PtrW-1:0]];
+    if(op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE, hud_pkg::LUT_DELETE})
+        dynamic_data_mem[sprite_req_body.id] <= dynamic_w_data;
+    // Read data
+    dynamic_r_data <= dynamic_data_mem[sprite_lut_read_id];
 end
 
 endmodule

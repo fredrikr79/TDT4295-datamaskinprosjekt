@@ -25,6 +25,8 @@
 #define STEPS(n) (((n) * PHYS_HZ + TUNED_HZ / 2) / TUNED_HZ)
 #define FRICTION(f) powf((float)(f), TUNED_K)
 
+#define PROJECTILE_SPEED 4
+
 #define EXPLOSIVE_SIZE_X 2
 #define EXPLOSIVE_SIZE_Y 2
 #define EXPLOSION_SIZE_X 1

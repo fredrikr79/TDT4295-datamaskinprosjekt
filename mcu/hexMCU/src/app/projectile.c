@@ -137,16 +137,13 @@ void set_projectile(
     projectile->size_x = 1;
     projectile->size_y = 1;
 
-    LOG_DBG("MAU %u", projectile->type);
     if (projectile->type == EXPLOSIVE)
     {
-        LOG_DBG("Mooooooooo");
         projectile->size_x = EXPLOSIVE_SIZE_X;
         projectile->size_y = EXPLOSIVE_SIZE_Y;
     }
     else if (projectile->type == GOL)
     {
-        LOG_DBG("Nyu lai");
         projectile->size_x = GOL_PROJ_SIZE_X;
         projectile->size_y = GOL_PROJ_SIZE_Y;
     }

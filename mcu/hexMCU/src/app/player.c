@@ -156,7 +156,9 @@ static void shoot_projectile(player_t *player)
     // Aim the projectile
     float vel_x = shoot_target_x - player->x - PLAYER_SIZE_X / 2;
     float vel_y = shoot_target_y - player->y - PLAYER_SIZE_Y / 2;
-    LOG_DBG("Shooting with vel_x %f & vel_y %f", vel_x, vel_y);
+    float magnitude = sqrtf(vel_x*vel_x + vel_y*vel_y);
+    vel_x *= PROJECTILE_SPEED / magnitude;
+    vel_y *= PROJECTILE_SPEED / magnitude;
 
     set_projectile(
         &(player->projectile),

@@ -145,7 +145,7 @@ module simulator #(
       // The two random decisions come from this core's LFSR (each ~1/4 chance).
       explo_p[core] <= sim_rules::explosion_rules_a(
           setup_stage.nb[core],
-          noise_lfsr[core][3] & noise_lfsr[core][11],
+          noise_lfsr[core][3] & noise_lfsr[core][11] & noise_lfsr[core][13],
           noise_lfsr[core][6] & noise_lfsr[core][14]
       );
       gol_noise_p[core] <= noise_lfsr[core][0];

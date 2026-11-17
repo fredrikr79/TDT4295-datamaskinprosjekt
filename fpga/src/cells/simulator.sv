@@ -258,6 +258,8 @@ module simulator #(
 
       gravity_movement = sim_pkg::DownNone;
       fluid_movement = '0;
+      stone_generator_update = 'hFF;
+
       if (!is_sending_row && !is_unmatched_boundry_row) begin
         gravity_movement = sim_rules::gravity_rules(out_upper, out_lower, nb, lfsr[0]);
         fluid_movement = sim_rules::fluid_rules(out_upper, out_lower, nb, lfsr[0], is_sending_row,
@@ -276,10 +278,13 @@ module simulator #(
       end else if (gol_r[core] != 8'hFF) begin
         sending_en.center  = 1'b1;
         sending_val.center = gol_r[core];
-      end else if (stone_generator_update != 8'hFF) begin
+      end else if (stone_generator_update != 8'hFF
+        && out_upper.center == nb.top &&
+        out_lower.center == nb.center
+      ) begin
         sending_en.center = 1'b1;
         sending_val.center = stone_generator_update;
-        receiving_en.center = 1'b1;
+        receiving_en.center = {nb.top.material == sim_pkg::MatWater};
         receiving_val.center = {sim_pkg::MatAir, 4'b0000};
       end else if (gravity_movement == sim_pkg::DownRight) begin
         sending_en.center   = 1'b1;

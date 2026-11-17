@@ -10,7 +10,7 @@
  * colour (the FPGA's colour table shows them as shades):
  *
  *   material       low bits  texture             saved in a room file
- *   air            xxxx      soft, large blobs   no: made again on load
+ *   air            -         none                no: 0
  *   sand           xxxx      grainy              yes: a grain keeps its shade
  *                                                as it falls about
  *   stone          1xxx      blotchy             the 1 only: the texture is
@@ -20,15 +20,12 @@
  *   life, explosive xxxx     - (alive / power)   yes, all of it
  *
  * The tables at the top of texture.c say this; change them there.
- * Air's texture can be switched off without a rebuild, in settings.toml:
- *   [texture]
- *   air = 0
  *
  * The noise: value noise (random values on a coarse lattice, smoothly
  * blended between) for the larger shapes, mixed with per-cell noise for
  * grain. All of it comes from (x, y, room seed), so the same room gets the
- * same texture every time it's loaded, and that's why stone and air don't
- * need theirs saved. room seed = hash(world seed, room x, y): each room
+ * same texture every time it's loaded, and that's why stone doesn't need
+ * its saved. room seed = hash(world seed, room x, y): each room
  * looks different. The world seed is made the first time it's needed and
  * kept in save/seed; deleting save/ (F9, dying) makes a new one, a new
  * world. Without a card it lasts until the MCU restarts.
@@ -40,10 +37,6 @@
  * ====================================================================== */
 
 #include <stdint.h>
-
-#ifndef TEXTURE_AIR
-#define TEXTURE_AIR 1               /* default; settings.toml texture.air overrides */
-#endif
 
 /* A room's cells (row after row, w per row) just read from its file:
  * texture where it belongs. Also makes this the current room for

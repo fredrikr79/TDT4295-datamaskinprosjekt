@@ -1,20 +1,20 @@
 # Texture
 
 The FPGA colours each cell by its material, shaded by the cell byte's low 4 bits.
-For some materials those bits are the FPGA's own state; for air, sand and stone
-they are free, and the MCU fills them with noise, so a material isn't one flat
-colour. This is `texture.c` / `texture.h`.
+For some materials those bits are the FPGA's own state; for sand and stone they
+are free, and the MCU fills them with noise, so a material isn't one flat
+colour. Air has no texture. This is `texture.c` / `texture.h`.
 
-![A room textured: air, a sand pile, stone, water and igneous rock, with the fake FPGA's shading](texture.png)
+![A room textured: a sand pile, stone, water and igneous rock, with the fake FPGA's shading](texture.png)
 
-The picture shows the fake FPGA's stand-in shading, with air's boosted so it
-shows; the real look is the FPGA's colour table.
+The picture shows the fake FPGA's stand-in shading; the real look is the FPGA's
+colour table.
 
 ## Which bits are whose
 
 | Material | Low bits | Texture | Saved in a room file |
 |---|---|---|---|
-| Air | `xxxx` | soft: large blobs, 4 darkest shades | no: made again on load |
+| Air | – | none | no: 0 |
 | Sand | `xxxx` | grainy: speckle over faint patches, shades 1–15 | yes: a grain keeps its shade as it falls about |
 | Stone | `1xxx` | blotchy: patches with some grit, 8 shades | only the `1`: the texture is made again on load |
 | Igneous rock | `0xxx` | none: the FPGA's thickness | yes, all of it |
@@ -24,14 +24,9 @@ shows; the real look is the FPGA's colour table.
 Stone and igneous rock are one material on the FPGA (`MAT_STONE`), told apart
 by bit 3 (`SIM_STONE_BIT`): stone is 0x18 and up, igneous rock 0x10 and up.
 
-The tables at the top of `texture.c` hold all of this: `tex_air`, `tex_sand`
-and `tex_stone` say how each texture looks, `save_keep[]` which low bits a save
-keeps. Air's texture can be switched off without a rebuild, in `settings.toml`:
-
-```toml
-[texture]
-air = 0
-```
+The tables at the top of `texture.c` hold all of this: `tex_sand` and
+`tex_stone` say how each texture looks, `save_keep[]` which low bits a save
+keeps.
 
 ## The noise
 
@@ -45,8 +40,8 @@ weighted per material:
 
 The mix is stretched (`contrast`) and cut into the material's shades. Everything
 comes from a hash of (x, y, room seed), so it's the same every time a room is
-loaded. That's why stone and air don't need their texture saved: it comes back
-the same. Sand is saved, because its grains move.
+loaded. That's why stone doesn't need its texture saved: it comes back the
+same. Sand is saved, because its grains move.
 
 **Seeds:** room seed = hash(world seed, room x, room y), so each room looks
 different. The world seed is made the first time a room loads and kept in

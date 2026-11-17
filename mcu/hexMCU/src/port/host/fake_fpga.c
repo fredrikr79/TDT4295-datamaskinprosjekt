@@ -14,7 +14,7 @@
  *   - The grid holds a byte per cell: the material (MAT_AIR, MAT_SAND...,
  *     fpga.h) in the high 4 bits, shown through a colour lookup table
  *     (sim_rgb, cell_colour()) like the real FPGA's; the texture bits of
- *     air, sand and stone shade it (texture.h). The low 4 bits are kept as
+ *     sand and stone shade it (texture.h). The low 4 bits are kept as
  *     written and read back unchanged (the real FPGA uses some for its own
  *     state; this one doesn't simulate). WRITE/READ_CONS move cells: N bytes from
  *     cell (X, Y) on, row after row, one or two per byte
@@ -142,9 +142,9 @@ static bool param_count(uint16_t len, uint16_t n, uint8_t *status, const char *w
 
 /* PROTOCOL: the FPGA team's colours aren't known; these are stand-ins.
  * The texture bits (texture.h) shade them, roughly as the FPGA might, so
- * the texture can be judged here: air gets a little lighter, sand and
- * stone lighter or darker around their colour. Igneous rock (MAT_STONE
- * with bit 3 clear) has a colour of its own. */
+ * the texture can be judged here: sand and stone lighter or darker around
+ * their colour. Igneous rock (MAT_STONE with bit 3 clear) has a colour of
+ * its own. */
 typedef struct { uint8_t r, g, b; } rgb_t;
 static const rgb_t sim_rgb[MAT_ID_MAX + 1] = {
     [MAT_AIR]       = {   0,   0,   0 },
@@ -164,15 +164,13 @@ static uint8_t clamp8(int v) { return (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v); 
 static uint16_t cell_colour(uint8_t v)
 {
     rgb_t c = sim_is_igneous(v) ? igneous_rgb : sim_rgb[SIM_MAT(v)];
-    int add = 0, pct = 100;                         /* c * pct / 100 + add */
+    int pct = 100;                                  /* c * pct / 100 */
     switch (SIM_MAT(v)) {
-    case MAT_AIR:   add = (v & 0xF) * 6;                     break;  /* 0 .. 90  */
     case MAT_SAND:  pct = 80 + (v & 0xF) * 3;                break;  /* 80 .. 125 % */
     case MAT_STONE: if (v & SIM_STONE_BIT) pct = 75 + (v & 0x7) * 7; break;  /* 75 .. 124 % */
     default:        break;
     }
-    return LUT565(clamp8(c.r * pct / 100 + add), clamp8(c.g * pct / 100 + add),
-                  clamp8(c.b * pct / 100 + add));
+    return LUT565(clamp8(c.r * pct / 100), clamp8(c.g * pct / 100), clamp8(c.b * pct / 100));
 }
 
 static uint8_t cells[GRID_W * GRID_H];      /* one cell byte each, row after row */

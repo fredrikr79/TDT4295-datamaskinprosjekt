@@ -427,11 +427,11 @@ void badapple_stop(void)
     finish("stopped");
 }
 
-/* A material's cell byte for the video: all four low bits set. For air,
- * sand and stone that's the lightest shade of their texture (texture.h),
- * so the video stands out from a textured room behind it -- plain air
- * (0x00) is the background's own colour. It's still stone, not igneous
- * rock (bit 3 set, fpga.h), live game of life and full-power explosive. */
+/* A material's cell byte for the video: all four low bits set. For sand
+ * and stone that's the lightest shade of their texture (texture.h), so the
+ * video stands out from a textured room behind it. It's still stone, not
+ * igneous rock (bit 3 set, fpga.h), live game of life and full-power
+ * explosive. */
 static uint8_t cell_of(material_t m)
 {
     return (uint8_t)(SIM_CELL(m) | 0x0Fu);

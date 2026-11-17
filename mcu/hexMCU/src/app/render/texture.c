@@ -18,7 +18,6 @@
 #include "texture.h"
 #include "fpga.h"
 #include "storage.h"
-#include "settings.h"
 #include "platform.h"
 #include "frame_sync.h"
 #include "log.h"
@@ -43,11 +42,6 @@ typedef struct {
     uint8_t salt;           /* so materials get different patterns              */
 } tex_t;
 
-/* Air: soft. Large blobs only, no speckle, and only the 4 darkest shades,
- * so it's a gentle variation, not a pattern. */
-static const tex_t tex_air   = { .mask = 0xF, .first = 0, .levels = 4,
-                                 .scale = 16, .smooth = 1, .grain = 0,
-                                 .contrast = 16, .salt = 1 };
 /* Sand: grains. Mostly per-cell speckle over faint patches. Shades 1..15:
  * 0 is kept for "not textured yet", so a saved grain is never redone. */
 static const tex_t tex_sand  = { .mask = 0xF, .first = 1, .levels = 15,
@@ -64,7 +58,7 @@ static const tex_t tex_stone = { .mask = 0x7, .first = 0, .levels = 8,
  * rock share MAT_STONE, see texture_strip(). Materials not listed (not in
  * use yet): kept. */
 static const uint8_t save_keep[16] = {
-    [MAT_AIR]       = 0x0,      /* texture: made again                        */
+    [MAT_AIR]       = 0x0,      /* nothing: air is just air                   */
     [MAT_STONE]     = 0x8,      /* stone: the 1 in 1xxx (igneous: see below)  */
     [MAT_SAND]      = 0xF,      /* texture, saved: grains keep their shade    */
     [MAT_WATER]     = 0x0,      /* the FPGA's: how fast it moves              */
@@ -75,18 +69,10 @@ static const uint8_t save_keep[16] = {
     [MAT_COUNT ... 15] = 0xF,
 };
 
-static bool air_on(void)
-{
-    static int8_t on = -1;      /* read from settings.toml once */
-    if (on < 0) on = settings_get("texture.air", TEXTURE_AIR) ? 1 : 0;
-    return on;
-}
-
 /* The texture of this cell's material, or NULL: its low bits aren't ours. */
 static const tex_t *tex_of(uint8_t cell)
 {
     switch (SIM_MAT(cell)) {
-    case MAT_AIR:   return air_on() ? &tex_air : NULL;
     case MAT_SAND:  return &tex_sand;
     case MAT_STONE: return (cell & SIM_STONE_BIT) ? &tex_stone : NULL;    /* igneous: FPGA's */
     default:        return NULL;
@@ -258,7 +244,7 @@ static void world_seed_check(void)
  * the lattice values are hashed once for the room, and each column's and
  * row's lattice cell and fraction go in tables, so a cell is a few
  * lookups and blends instead of hashes and divisions. ~3 KB per octave,
- * two octaves for each of the three textures. */
+ * two octaves for each of the two textures. */
 #define FAST_W_MAX   256u               /* the grid is 160 x 90 */
 #define FAST_H_MAX   256u
 #define FAST_LAT_MAX 2048u              /* lattice values per octave (scale 3: 55 x 32) */
@@ -276,8 +262,9 @@ typedef struct {
     octave_t oct[2];
 } plane_t;
 
-static const tex_t *const fast_tex[3] = { &tex_air, &tex_sand, &tex_stone };
-static plane_t planes[3];
+#define FAST_TEX 2u
+static const tex_t *const fast_tex[FAST_TEX] = { &tex_sand, &tex_stone };
+static plane_t planes[FAST_TEX];
 
 static bool octave_build(octave_t *o, uint32_t s, uint32_t seed, unsigned w, unsigned h)
 {
@@ -315,8 +302,8 @@ static uint32_t octave_at(const octave_t *o, unsigned x, unsigned y)
 static const plane_t *plane_of(const tex_t *t, unsigned w, unsigned h)
 {
     unsigned i = 0;
-    while (i < 3u && fast_tex[i] != t) i++;
-    if (i == 3u) return NULL;
+    while (i < FAST_TEX && fast_tex[i] != t) i++;
+    if (i == FAST_TEX) return NULL;
     plane_t *p = &planes[i];
     if (!p->ready) {
         p->seed = mix(room_seed + t->salt);
@@ -343,7 +330,7 @@ void texture_room(uint8_t *cells, unsigned w, unsigned h, int room_x, int room_y
 {
     world_seed_check();
     room_seed = hash2((uint32_t)room_x, (uint32_t)room_y, world_seed);
-    for (unsigned i = 0; i < 3u; i++) planes[i].ready = false;     /* a new room's */
+    for (unsigned i = 0; i < FAST_TEX; i++) planes[i].ready = false;   /* a new room's */
 
     uint32_t t0 = plat_micros();
     for (unsigned y = 0; y < h; y++)

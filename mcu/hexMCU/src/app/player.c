@@ -9,6 +9,7 @@
 
 static float move_direction = 0;
 static bool jump_next_frame = false;
+static bool shoot_next_frame = false;
 
 static sprite_t *spr;                   /* the picture, at the player's top-left */
 
@@ -141,6 +142,21 @@ static bool take_damage(
     if (on_radiation && damage_player(player, 2)) return true;
     if (player->breath_meter == 0 && damage_player(player, 5)) return true;
     return false;
+}
+
+static void shoot_projectile(player_t *player)
+{
+    if (player->projectile.active) return;
+
+    // TODO: Check if there's room in the fpga command queue to not break more important functions
+
+    // TODO: Add cursor aim
+
+    player->projectile = get_new_projectile(
+        player->x + PLAYER_SIZE_X / 2, player->y + PLAYER_SIZE_Y / 2, 
+        4, 0,
+        EXPLOSIVE
+    );
 }
 
 static void next_step(player_t *player)
@@ -300,6 +316,24 @@ void update_player(
     player->velocity_y += force_y / 2;
     //LOG_DBG("4 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
+    // Update the player's projectile
+    if (player->projectile.active)
+    {
+        LOG_DBG(
+            "brrrr, x: %f, y: %f",
+            player->projectile.x,
+            player->projectile.y
+        );
+        bool crashed = update_projectile(&(player->projectile));
+        if (crashed) player->projectile.active = false;
+        // TODO: Maybe some cleaning
+    }
+    if (shoot_next_frame && !(player->projectile.active))
+    {
+        shoot_projectile(player);
+    }
+    shoot_next_frame = false;
+
     // Heal
     if (ticks_since_last_damage) ticks_since_last_damage--;
     else if (ticks_since_last_heal) ticks_since_last_heal--;
@@ -403,6 +437,12 @@ void start_jump()
     jump_next_frame = true;
 }
 
+void queue_shot()
+{
+    shoot_next_frame = true;
+}
+
+
 void player_set_default(player_t *player)
 {
     player->x = 78;
@@ -421,6 +461,9 @@ void player_set_default(player_t *player)
 
     ticks_since_last_damage = 0;
     ticks_since_last_heal = 0;
+
+    // TODO: Handle pre-existing projectile
+    player->projectile.active = false;
 }
 
 void player_init()

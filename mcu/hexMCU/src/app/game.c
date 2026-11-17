@@ -77,6 +77,7 @@ static enum { AFTER_SAVE_NEXT_ROOM, AFTER_SAVE_RUN } after_save = AFTER_SAVE_NEX
 static player_t player;
 
 static uint8_t box[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
+static uint8_t box_player_projectile[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
 static velocity_box_t velocity_box;
 
 static void run_enter(void);
@@ -423,6 +424,7 @@ static void room_enter(void)
 void set_player(player_t plr)
 {
     player = plr;
+    player.projectile.box = box_player_projectile;
 }
 
 /* Set the next velocity box */
@@ -605,7 +607,10 @@ static void handle_movement_keys(input_t in)
                          any_pad_held(&in, PAD_LEFT);
     bool right_pressed = key_held(&in, KEY_D) || key_held(&in, KEY_RIGHT) ||
                          any_pad_held(&in, PAD_RIGHT);
+    bool lol = key_held(&in, KEY_F) || key_held(&in, KEY_RIGHT) ||
+                         any_pad_held(&in, PAD_RIGHT);
 
+    if (lol)      queue_shot();
     if (left_pressed && !right_pressed)      move_left();
     else if (right_pressed && !left_pressed) move_right();
     else                                     move_stop();

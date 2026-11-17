@@ -11,6 +11,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/settings.c
     ${APP_ROOT}/src/app/game.c
     ${APP_ROOT}/src/app/player.c
+    ${APP_ROOT}/src/app/projectile.c
     ${APP_ROOT}/src/app/collision.c
     ${APP_ROOT}/src/app/usb_input.c
     ${APP_ROOT}/src/app/rooms.c

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fpga.h"
+#include "projectile.h"
 #include "rooms.h"
 #include "collision.h"
 #include <stdint.h>
@@ -88,6 +89,8 @@ typedef struct
     uint16_t breath_meter;
     uint16_t burn_timer;
     uint8_t still_in_portal;
+
+    projectile_t projectile;
 } player_t;
 
 void update_player(
@@ -98,6 +101,7 @@ void move_left();
 void move_right();
 void move_stop();
 void start_jump();
+void queue_shot();
 
 void player_init();
 void player_set_default(player_t *player);

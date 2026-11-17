@@ -33,7 +33,9 @@ module mem_txn_read (
           else out.next_state = memory_pkg::WAITING_ON_LATENCY;
         end
         memory_pkg::WAITING_ON_LATENCY: begin
-          if (memory_pkg::waiting_is_finished(bytes_this_state - address % 2, double_latency)) begin
+          // [ODD ADDR] The CA address is even; for an odd address wait one tick longer so
+          // READING starts on the second byte of the word.
+          if (memory_pkg::waiting_is_finished_after(bytes_this_state, double_latency, address[0])) begin
             out.next_state = memory_pkg::READING;
             out.read_data  = dq_in;
           end

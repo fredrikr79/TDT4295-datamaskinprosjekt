@@ -2,7 +2,8 @@
 
 [← back to the overview](README.md)
 
-`sprite.c` manages everything on the FPGA's HUD layer: it uploads images
+`sprite.c` manages everything on the FPGA's HUD layer (640 × 360 screen
+pixels, not grid cells; see [fpga.md](fpga.md)): it uploads images
 (including from the SD card), places them as sprites, moves, hides and deletes
 them, runs animations, and puts it all back after an error or an FPGA restart.
 It replaced `hud.c` and `text.c`.
@@ -39,7 +40,7 @@ sprite_set(cur, x, y, true);                      /* all three at once */
 sprite_delete(cur);                               /* handle invalid after this */
 
 /* the game loop: */
-sprite_frame(n);                                  /* each game frame: animations step */
+sprite_frame();                                   /* each game frame: animations step */
 if (!sprite_poll()) resync();                     /* each poll: sends what's needed */
 
 /* error handling: */
@@ -136,7 +137,8 @@ Only file images touch storage at registration, and only to read the header.
 
 - **Chunk size** = `min(fpga_max_payload(WRITE_SPRITE), SPRITE_STAGE_BYTES)`,
   rounded down to an even number so a pixel is never split. With N = 1024 that's
-  1022 bytes. Each chunk is one WRITE_SPRITE and one memID.
+  1020 bytes (N minus the opcode and the 2-byte LEN). Each chunk is one
+  WRITE_SPRITE and one memID.
 - **Two passes:** first the images a sprite is waiting for, then the rest.
 - **Budget check:** if the image's chunks don't fit in the memIDs left, it becomes
   NO_ROOM and is skipped (logged).
@@ -199,7 +201,29 @@ At most one command per sprite per poll:
 |---|---|---|
 | NONE | its image is UPLOADED | SPRITE_WRITE (memID, visible, x, y, w, h) → CREATING |
 | LIVE | `remove` set | SPRITE_DELETE → DELETING |
-| LIVE | `x/y/visible` ≠ `s_*`, or `dirty` | SPRITE_UPDATE → UPDATING |
+| LIVE | `x/y/visible` ≠ `s_*`, or `dirty`, and the update window is open | SPRITE_UPDATE → UPDATING |
+
+**Updates are timed to SYNC.** The FPGA draws sprites as it scans the screen, so
+a sprite moved while the scan passes over it tears: its upper rows at the old
+place, the rest at the new. The scan is in its blanking just before SYNC (found
+with Bad Apple's delay setting: writes that end at SYNC don't tear), so updates
+wait and go out in a window that opens `sprite lead` µs (default 1000,
+`SPRITE_SYNC_LEAD_US`) before the next SYNC. `frame_sync.c` predicts it: the SYNC
+interrupt notes each SYNC's time with `plat_micros()` and keeps a running average
+of the period (16800 µs). The window closes once everything waiting has been
+sent; a full queue keeps it open until the rest is sent. Whatever is moved during
+a frame shows at the next one.
+
+- **Lead 0:** the window opens right after a SYNC instead. That was the first
+  version; it tore the top few rows, because the scan is already there.
+- **Tuning:** `sprite lead [<µs>]` on the console sets the lead. It also shows
+  the measured SYNC period, and when the changes since the last time you asked
+  actually finished, compared with the SYNC they were aimed at. That should be
+  before it. `sprite lead save` keeps the value in `settings.toml` on the SD
+  card (`sprite.lead_us`), and it's used from there at the next start.
+- **No SYNC:** if no SYNC comes for 50 ms (`SPRITE_SYNC_MAX_MS`), the window
+  opens anyway. `-DSPRITE_SYNC_UPDATES=0` sends updates at once.
+- **Not timed:** making and deleting sprites, and image uploads, don't wait.
 
 **`sprite_done()`**:
 - **Create OK:** the answer is the spriteID; the state becomes LIVE.
@@ -214,21 +238,24 @@ deleted as soon as the create finishes.
 
 ## Animations
 
-- **`sprite_ani_new(frames[], n, ticks, x, y, visible)`** makes one sprite per
+- **`sprite_ani_new(frames[], n, ms, x, y, visible)`** makes one sprite per
   frame (up to `SPRITE_ANI_FRAMES` = 16), all at the same spot, with only frame 0
   visible. All frames should be the same size.
-- **`sprite_ani_file(path, ticks, …)`** reads the frame count from the file
+- **`sprite_ani_file(path, ms, …)`** reads the frame count from the file
   header, registers `sprite_img_file(path, i)` for each frame, then calls
   `sprite_ani_new`.
 
-**`sprite_frame(n)`**, once per game frame, for each playing animation:
-- `count += n`, then `steps = count / ticks`, `count %= ticks`.
-- Using `n` keeps the speed right when several frames pass at once.
+**`sprite_frame()`**, once per game frame, for each playing animation:
+- `count += dt`, the real time since the last call (`plat_millis()`), then
+  `steps = count / ms`, `count %= ms`.
+- Real time keeps the speed the same at any frame rate, and when frames are
+  late. The first call, and the one after a pause such as a load, counts at
+  most 100 ms, so an animation doesn't jump ahead.
 - If a step is due, `ani_to(new_frame)` hides the current sprite and calls
   `sprite_set(new sprite, ani x, ani y, visible)`.
 
-`ticks` is game frames per animation frame: at 60 Hz, `ticks = 6` gives 10 frames
-a second. The fake FPGA on the PC runs at 30 Hz, so there it's 5 a second.
+`ms` is how long each animation frame is shown: `ms = 200` gives 5 frames a
+second, `ms = 80` about 12.
 
 `sprite_ani_move` moves only the visible frame. A hidden frame gets its position
 when it's next shown, in that same `sprite_set`. So **a move costs one update and
@@ -272,12 +299,13 @@ all sprites" command, or letting the MCU choose spriteIDs, would fix it.
 2. `sprite_new(assets.cursor, 0, 0, true)` gives a sprite in state NONE.
 3. INFO arrives (N = 1024). In the next `sprite_poll`, `next_upload()` picks the
    cursor first, because a sprite needs it. 384 bytes is one chunk:
-   `memids_pending = 1`, and the image is SENDING.
+   `memids_pending = 1`, and the image is SENDING. (Say it's the first upload of
+   the session; memIDs start at `FPGA_MEMID_FIRST`, 0.)
 4. The chunk loop takes a staging buffer, `make_chunk` → `storage_read(path, 8,
    buf, 384)` → WRITE_SPRITE.
-5. `image_done`: buffer freed, `memids_known = 1`, `mem_id = 1`, UPLOADED.
+5. `image_done`: buffer freed, `memids_known = 1`, `mem_id = 0`, UPLOADED.
 6. In the next poll, the sprite loop sees NONE with an uploaded image and sends
-   SPRITE_WRITE(memID 1, x, y, 12, 16). The answer gives spriteID 0, and the
+   SPRITE_WRITE(memID 0, x, y, 12, 16). The answer gives spriteID 0, and the
    sprite is LIVE.
 7. The mouse moves, and `sprite_move` changes `x/y`. The next poll sees
    `x ≠ s_x` and sends SPRITE_UPDATE(0, …), one at a time with the newest
@@ -302,8 +330,8 @@ python3 tools/png2spr.py walk_0.png walk_1.png -o sd/sprites/walk.spr         # 
   see-through.
 - An opaque pixel that happens to be exactly 0xF81F is nudged to 0xF81E so it
   doesn't vanish.
-- The tool prints how many memIDs each frame takes: about one per 1022 bytes at
-  N = 1024.
+- The tool prints how many memIDs each frame takes: one per 1020 bytes at
+  N = 1024 (see the chunk size above).
 
 ## assets.c
 
@@ -321,14 +349,14 @@ missing), the texts (one image each) and generated ones. `game.c` calls
 | `SPRITE_MAX` | 256 | sprites |
 | `SPRITE_ANI_MAX` / `SPRITE_ANI_FRAMES` | 16 / 16 | animations / frames each |
 | `SPRITE_NAME_MAX` | 40 | longest file path or text, including the end byte |
-| `SPRITE_STAGE_BYTES` | 1024 | staging buffer size = largest chunk; keep ≥ N − 1 |
+| `SPRITE_STAGE_BYTES` | 1024 | staging buffer size = largest chunk; keep ≥ N − 3 (WRITE_SPRITE's payload limit) |
 | `SPRITE_STAGE_BUFS` | 4 | chunks in flight at once |
-| `SPRITE_MEMIDS` | 1023 | memIDs per FPGA session (assumed 1–1023, 0 = none) |
+| `SPRITE_MEMIDS` | 1023 | memIDs per FPGA session, from `FPGA_MEMID_FIRST` (0) on |
 
 With these defaults `sprite.c` uses about 30 KB of RAM on the MCU. Lower the pool
 sizes with `-D` if needed.
 
-- **memID cost:** one per 1022 bytes of an image. A 12 × 16 cursor takes 1; a
+- **memID cost:** one per 1020 bytes of an image. A 12 × 16 cursor takes 1; a
   32 × 32 frame (2048 bytes) takes 3; a long text at scale 2 can take 10 or more.
 - **Commands per frame:** one per sprite that moved, two per animation frame
   change.

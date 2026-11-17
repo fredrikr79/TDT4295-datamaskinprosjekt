@@ -243,9 +243,9 @@ void encode_room(uint8_t *tileIDs, uint8_t *data, unsigned long *data_size)
 
     // Encode room
     data[*data_size + 8] = (portals[i].dest_room_x < 0) << 7;
-    data[*data_size + 8] += abs(portals[i].dest_room_x) & 7;
+    data[*data_size + 8] += abs(portals[i].dest_room_x) & 127;
     data[*data_size + 9] = (portals[i].dest_room_y < 0) << 7;
-    data[*data_size + 9] += abs(portals[i].dest_room_y) & 7;
+    data[*data_size + 9] += abs(portals[i].dest_room_y) & 127;
   
     // Encode pos
     data[*data_size + 10] = portals[i].dest_pos_x >> 8;

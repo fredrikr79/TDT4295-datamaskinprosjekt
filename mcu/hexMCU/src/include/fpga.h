@@ -1,7 +1,7 @@
 /* ======================================================================
  * fpga.h - async, queued command layer for the FPGA link.
  *
- * The protocol is docs/mcu_fpga_spi_api.md (the FPGA team's spec). On the
+ * The protocol is documentation/SPI/mcu_fpga_spi_api.md in the repo (the FPGA team's spec). On the
  * wire every command is one byte stream: opcode, then the parameters in
  * the order the spec lists them, then any payload. OCTOSPI carries the
  * first parameters in its address / alternate-bytes phases where they fit
@@ -59,7 +59,8 @@
  *         (grid, sprite images and instances) is gone
  *
  * Every command is WRITE -> wait for FPGA_READY -> and, if it has an
- * answer, READ (READ_OPCODE, turnaround, then the answer bytes). When
+ * answer, READ (READ_OPCODE, turnaround, then the answer bytes) and the
+ * READY that follows it (FPGA_READY_AFTER_READ). When
  * READY goes high the FPGA's ACK line says whether the command worked.
  * Low (NACK): the FPGA has flushed its FIFOs and put a one-byte error code
  * (fpga_fail_code_t) in the answer FIFO instead; fpga.c reads it, and the
@@ -121,11 +122,17 @@
 #define READ_BOX_OPCODE         0x60u
 #define WRITE_SPRITE_OPCODE     0x70u
 
-/* Frames a second: the FPGA pulses SYNC once per finished frame. The game
- * steps on SYNC (or on a timer at this rate while there is none). */
-#ifndef FPGA_FRAME_HZ
-#define FPGA_FRAME_HZ           25u
+/* The FPGA pulses SYNC once per screen frame. Its video runs 640x480 @ 60 Hz
+ * VGA timing (800 x 525 pixel clocks a frame) on a 25 MHz clock instead of
+ * the standard 25.175 MHz: 420000 / 25 MHz = 16.8 ms a frame, 59.52 Hz
+ * (Bad Apple measured 59.5). The game times nothing by it: SYNC says when
+ * to draw, and is the FPGA's heartbeat (game.c). The fake FPGA and the
+ * emulator window run at this rate too. */
+#ifndef FPGA_FRAME_US
+#define FPGA_FRAME_US           16800u
 #endif
+/* Rounded (60), for logs. */
+#define FPGA_FRAME_HZ           ((1000000u + FPGA_FRAME_US / 2u) / FPGA_FRAME_US)
 
 /* The first memID the FPGA hands out (the real FPGA starts at 0). */
 #ifndef FPGA_MEMID_FIRST
@@ -160,7 +167,7 @@
 /* What an INFO answer may say. Anything outside is taken as a garbled
  * answer (FPGA_ERR_BAD_INFO), so the handshake tries again instead of going
  * on with nonsense. PROTOCOL: widen these if the FPGA really goes beyond. */
-#define FPGA_INFO_MAX_DIM       2048u   /* W and H, cells                     */
+#define FPGA_INFO_MAX_DIM       2048u   /* W and H, screen pixels             */
 #define FPGA_INFO_MIN_N         9u      /* a BOX header alone is 9 bytes      */
 #define FPGA_INFO_MAX_N         8192u   /* N, bytes                           */
 
@@ -403,7 +410,7 @@ void          fpga_abort_all(void);     /* abort the running one, cancel the res
 
 /* The running command, or NULL. For debug output. */
 const fpga_cmd_t *fpga_current(void);
-const char   *fpga_current_step(void);  /* "write", "wait-irq", "read"     */
+const char   *fpga_current_step(void);  /* "write", "wait-irq", "read", "read-ready" */
 uint32_t      fpga_current_ms(void);    /* time spent in that step         */
 
 /* ---- link facts ----------------------------------------------------- */

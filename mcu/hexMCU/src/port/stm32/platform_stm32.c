@@ -14,6 +14,36 @@ uint32_t plat_millis(void)
     return HAL_GetTick();
 }
 
+/* From the Cortex-M33's cycle counter (DWT CYCCNT), started on the first
+ * call; no timer to set up in CubeMX. CYCCNT wraps every 2^32 cycles (26 s
+ * at 160 MHz), so each call adds the cycles since the last one: called at
+ * least that often (the SYNC interrupt calls it every frame), it never
+ * loses time. Interrupts off for the few lines that update the state, since
+ * both the main loop and the SYNC interrupt call it. */
+uint32_t plat_micros(void)
+{
+    static uint32_t last_cyc, us, rem;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (!(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) {
+#ifdef DCB                                      /* newer CMSIS names it DCB */
+        DCB->DEMCR |= DCB_DEMCR_TRCENA_Msk;
+#else
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+#endif
+        DWT->CYCCNT = 0;
+        DWT->CTRL  |= DWT_CTRL_CYCCNTENA_Msk;
+        last_cyc = 0;
+    }
+    uint32_t cyc = DWT->CYCCNT, per_us = SystemCoreClock / 1000000u;
+    rem += cyc - last_cyc;
+    last_cyc = cyc;
+    us  += rem / per_us;
+    rem %= per_us;
+    __set_PRIMASK(primask);
+    return us;
+}
+
 /* ---- LED ------------------------------------------------------------------
  * Only led.c calls these. Nucleo: the green LED (high = on). PCB: an RGB LED
  * with a common anode on 3V3, so each colour lights when its pin is LOW.

@@ -1,5 +1,7 @@
 /* assets.c - the game's images (see assets.h). Add new ones here. */
 
+#include "sprite.h"
+#include <stdint.h>
 #define LOG_TAG "assets"
 
 #include "assets.h"
@@ -34,11 +36,17 @@ static const char *const material_names[] = {
 _Static_assert(sizeof material_names / sizeof material_names[0] == MAT_COUNT,
                "a material in fpga.h has no name in material_names");
 
+const char *material_name(material_t m)
+{
+    return (unsigned)m < MAT_COUNT ? material_names[m] : "?";
+}
+
 /* ---- the player ------------------------------------------------------------
- * PLAYER_SIZE_X x PLAYER_SIZE_Y (player.h), one letter per pixel, looked up
- * in player_colour() below -- the same size as the hitbox, since a screen
- * pixel is a simulation cell. Edit away; a row that is too long fails to
- * compile, a short one is see-through at the end. */
+ * 4*PLAYER_SIZE_X x 4*PLAYER_SIZE_Y pixels, one letter per pixel, looked up
+ * in player_colour() below: the hitbox (player.h) is in grid cells, and a
+ * cell is 4x4 screen pixels (FPGA_SIM_SCALE), so the picture covers it
+ * exactly. Edit away; a row that is too long warns and is cut off, a short
+ * one is see-through at the end. */
 // static const char player_art[PLAYER_SIZE_Y][PLAYER_SIZE_X + 1] = {
 //     "  KKKK  ",
 //     " KYYYYK ",

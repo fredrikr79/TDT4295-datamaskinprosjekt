@@ -1,6 +1,6 @@
 /* ======================================================================
  * fake_fpga.c - what the FPGA does with the commands, for the host build.
- * Follows docs/mcu_fpga_spi_api.md; see fpga.h for the command table.
+ * Follows documentation/SPI/mcu_fpga_spi_api.md; see fpga.h for the command table.
  *
  * Model:
  *   - The grid is the SIM layer, the HUD is sprites. Both layers live in
@@ -21,7 +21,7 @@
  *   - WRITE/READ_BOX move cells too: W x H cells from (X, Y), one stream
  *     row by row, packed the same way. Only the HUD layer (sprites) is RGB565.
  *   - Sprites: WRITE_SPRITE appends its payload to sprite memory and
- *     answers a memID (1, 2, ...; 0 means none). Memory is append-only and
+ *     answers a memID (FPGA_MEMID_FIRST on: 0, 1, 2..., like the real FPGA). Memory is append-only and
  *     contiguous, so an image uploaded as several WRITE_SPRITEs in a row is
  *     one block from its first memID on. SPRITE_WRITE places an instance
  *     (first memID, W, H) and answers the lowest free spriteID. Instances
@@ -37,11 +37,11 @@
  *     can't be done (unknown ID, wrong parameter count, out of memIDs...)
  *     answers NACK on the ACK line, flushes the FIFOs and puts the one-byte
  *     error code in the answer FIFO, like the real FPGA.
- *   - SYNC is pulsed FRAME_HZ times a second, every frame, whatever the
+ *   - SYNC is pulsed every FPGA_FRAME_US (16.8 ms, 59.5 Hz), whatever the
  *     MCU does -- like the real FPGA finishing a frame for VGA.
  *   - Screen size, N and the session id live only here; the MCU side
  *     learns them with INFO, like it will from the real FPGA.
- *   - Out-of-bounds pixels are skipped with a warning -- keeping writes
+ *   - Out-of-bounds cells are skipped with a warning -- keeping writes
  *     in bounds is the MCU's job, so this is where you find out.
  *
  * Choices marked PROTOCOL are guesses where the spec isn't settled yet.
@@ -72,11 +72,10 @@ _Static_assert(FAKE_W % FPGA_SIM_SCALE == 0 && FAKE_H % FPGA_SIM_SCALE == 0,
 #define OUT_FIFO      1024u         /* answer FIFO                         */
 #define PIXEL_BYTES   2u            /* RGB565, MSB first                   */
 #define READY_US      200           /* command -> READY pulse              */
-#define FRAME_HZ      FPGA_FRAME_HZ /* SYNC pulses: one per finished frame (fpga.h) */
-#define FRAME_NS      (1000000000ull / FRAME_HZ)
+#define FRAME_NS      ((uint64_t)FPGA_FRAME_US * 1000u)  /* SYNC: one per frame (fpga.h) */
 
 /* The real FPGA has 16 MB; memIDs run out long before 2 MB is used
- * (1023 uploads of at most N-1 bytes). */
+ * (1023 uploads of at most N-3 bytes). */
 #define SPRITE_MEM    (2u * 1024u * 1024u)  /* bytes of sprite memory      */
 #define MAX_IMAGES    1024u         /* memID LUT: up to MAX_IMAGES-1 memIDs */
 #define MAX_SPRITES   1024u         /* PROTOCOL: spriteIDs 0 .. 1023       */
@@ -543,17 +542,7 @@ void fake_fpga_reset(void)
 
     LOG_INFO("fake fpga: screen %ux%u, grid %ux%u cells of %ux%u px, N=%u, "
              "session 0x%08lX, %u KB sprite memory, %u images, %u sprites, ready %d us, "
-             "sync %u Hz", FAKE_W, FAKE_H, GRID_W, GRID_H, FPGA_SIM_SCALE, FPGA_SIM_SCALE,
+             "sync every %u us", FAKE_W, FAKE_H, GRID_W, GRID_H, FPGA_SIM_SCALE, FPGA_SIM_SCALE,
              MAX_CMD, (unsigned long)ff.session, SPRITE_MEM / 1024u,
-             MAX_IMAGES - 1u, MAX_SPRITES, READY_US, FRAME_HZ);
-}
-
-/* For tests and the console: what the FPGA has in its sprite tables. */
-void fake_fpga_sprite_stats(unsigned *sprites, unsigned *images, uint32_t *mem_bytes)
-{
-    unsigned n = 0;
-    for (unsigned id = 0; id < MAX_SPRITES; id++) n += ff.sprite[id].used;
-    *sprites   = n;
-    *images    = ff.n_images;
-    *mem_bytes = ff.mem_used;
+             MAX_IMAGES - 1u, MAX_SPRITES, READY_US, (unsigned)FPGA_FRAME_US);
 }

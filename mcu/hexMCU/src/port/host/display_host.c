@@ -4,23 +4,24 @@
  * display_host.c - SIM + HUD layers in an SDL window.
  *
  * The layers are plain arrays that anyone may write at any time. Once per
- * frame (FPGA_FRAME_HZ, 25 Hz) display_poll() composites them into one RGB565 frame --
+ * frame (FPGA_FRAME_US, 59.5 Hz) display_poll() composites them into one RGB565 frame --
  * HUD pixel, unless it is DISPLAY_HUD_CLEAR, then the SIM pixel -- and
  * hands that to SDL as an RGB565 texture. 640x360 is ~230k pixels, cheap
  * enough to redo every frame, so nothing tracks what changed.
  *
  * Keyboard and mouse events belong to usb_backend_sdl.c; this file only
- * handles quit (window close or Esc) and drops the other event types.
+ * handles quit (window close or F4; Esc is the game's) and drops the
+ * other event types.
  * ====================================================================== */
 
 #include "display_host.h"
 #include "log.h"
-#include "fpga.h"          /* FPGA_FRAME_HZ */
+#include "fpga.h"          /* FPGA_FRAME_US */
 
 #include <SDL3/SDL.h>
 #include <string.h>
 
-#define FRAME_NS (1000000000ull / FPGA_FRAME_HZ)   /* present at the FPGA's frame rate */
+#define FRAME_NS ((uint64_t)FPGA_FRAME_US * 1000u)  /* present at the FPGA's frame rate */
 #define NPIX     ((size_t)DISPLAY_W * DISPLAY_H)
 
 static SDL_Window   *win;

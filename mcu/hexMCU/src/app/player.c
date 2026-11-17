@@ -7,8 +7,8 @@
 #include <math.h>
 #include <stdint.h>
 
-float move_direction = 0;
-bool jump_next_frame = false;
+static float move_direction = 0;
+static bool jump_next_frame = false;
 
 static sprite_t *spr;                   /* the picture, at the player's top-left */
 
@@ -17,8 +17,8 @@ static void sprite_follow(const player_t *player)
     sprite_move(spr, (int16_t) (player->x * 4), (int16_t) (player->y * 4));
 }
 
-uint16_t ticks_since_last_damage = 0;
-uint16_t ticks_since_last_heal = 0;
+static uint16_t ticks_since_last_damage = 0;
+static uint16_t ticks_since_last_heal = 0;
 
 static bool tile_has_damage(uint8_t id)
 {
@@ -69,15 +69,21 @@ static void perform_jump(
     }
 }
 
-void damage_player(player_t *player, uint16_t amount)
+// Returns true if this killed the player. game_reset() has then already
+// put a fresh player in *player, so the caller must stop using this step's numbers.
+bool damage_player(player_t *player, uint16_t amount)
 {
     if (amount < player->health)
         player->health -= amount;
     else player->health = 0;
     ticks_since_last_damage = PLAYER_DAMAGE_TO_HEAL_DELAY;
 
-    // TODO: Check if dead
-    if (player->health == 0) game_reset();
+    if (player->health == 0)
+    {
+        game_reset();
+        return true;
+    }
+    return false;
 }
 
 void heal_player(player_t *player, uint16_t amount)
@@ -101,16 +107,51 @@ void keep_player_in_bounds(player_t *player)
         player->y = 0;
         player->velocity_y = 0;
     }
-    if (ROOM_X - 1 <= player->x + PLAYER_SIZE_X)
+    if (ROOM_X <= player->x + PLAYER_SIZE_X)
     {
-        player->x = ROOM_X - 1 - PLAYER_SIZE_X;
+        player->x = ROOM_X - PLAYER_SIZE_X;
         player->velocity_x = 0;
     }
-    if (ROOM_Y - 1 <= player->y + PLAYER_SIZE_Y)
+    if (ROOM_Y <= player->y + PLAYER_SIZE_Y)
     {
-        player->y = ROOM_Y - 1 - PLAYER_SIZE_Y;
+        player->y = ROOM_Y - PLAYER_SIZE_Y;
         player->velocity_y = 0;
     }
+}
+
+static bool take_damage(
+    player_t *player,
+    uint16_t in_collision, uint16_t in_lava, uint16_t in_acid,
+    uint16_t in_explosion, bool on_radiation
+)
+{
+    if (player->burn_timer)
+    {
+        if (damage_player(player, 1)) return true;
+        player->burn_timer--;
+    }
+    if (in_collision && damage_player(player, 1)) return true;
+    if (in_lava)
+    {
+        if (damage_player(player, 3)) return true;
+        player->burn_timer = PLAYER_BURN_TIME;
+    }
+    if (in_acid && damage_player(player, 3)) return true;
+    if (in_explosion && damage_player(player, 5)) return true;
+    if (on_radiation && damage_player(player, 2)) return true;
+    if (player->breath_meter == 0 && damage_player(player, 5)) return true;
+    return false;
+}
+
+static void next_step(player_t *player)
+{
+    velocity_box_t next_velocity_box = create_velocity_box(
+        player->x, player->y,
+        PLAYER_SIZE_X, PLAYER_SIZE_Y,
+        player->velocity_x, player->velocity_y
+    );
+    set_next_velocity_box(&next_velocity_box);
+    sprite_follow(player);                  /* sprite_poll() sends it */
 }
 
 void update_player(
@@ -161,7 +202,7 @@ void update_player(
     else if (in_air && player->breath_meter < PLAYER_MAX_BREATH) player->breath_meter++;
 
     // Check if on ground
-    bool on_ground = velocity_box.box.y1 + velocity_box.box.y2 == ROOM_Y;
+    bool on_ground = (int)floorf(player->y + 0.5f) + PLAYER_SIZE_Y >= ROOM_Y;
     bool on_radiation = false;
     // LOG_DBG("on_ground: %u", on_ground);
     if (!on_ground)
@@ -206,7 +247,7 @@ void update_player(
             player->velocity_x = target_velocity;
     }
     // Stop if no input and low velocity
-    else if (fabsf(player->velocity_x) < 0.075) player->velocity_x = 0;
+    else if (fabsf(player->velocity_x) < SPEED(0.075)) player->velocity_x = 0;
 
     // Calculate gravity with bouyancy included
     float gravity_force = GRAVITY_AIR;
@@ -265,25 +306,16 @@ void update_player(
     else
     {
         ticks_since_last_heal = PLAYER_HEAL_DELAY;
-        player->health += PLAYER_HEAL_AMOUNT;
+        heal_player(player, PLAYER_HEAL_AMOUNT);    /* stops at PLAYER_MAX_HEALTH */
     }
 
     // Damage
-    if (player->burn_timer)
+    if (take_damage(player, in_collision, in_lava, in_acid, in_explosion, on_radiation))
     {
-        damage_player(player, 1);
-        player->burn_timer--;
+        // Stop the step if the player died (see take_damage())
+        next_step(player);
+        return;
     }
-    if (in_collision) damage_player(player, 1);
-    if (in_lava)
-    {
-        damage_player(player, 3);
-        player->burn_timer = PLAYER_BURN_TIME;
-    }
-    if (in_acid) damage_player(player, 3);
-    if (in_explosion) damage_player(player, 5);
-    if (on_radiation) damage_player(player, 2);
-    if (player->breath_meter == 0) damage_player(player, 5);
 
     // Check if player is overlapping with a portal
     portal_t *portal = area_in_portal(
@@ -346,16 +378,8 @@ void update_player(
         }
     }
 
-    // Create the next velocity box
-    velocity_box_t next_velocity_box = create_velocity_box(
-        player->x, player->y,
-        PLAYER_SIZE_X, PLAYER_SIZE_Y,
-        player->velocity_x, player->velocity_y
-    );
-    set_next_velocity_box(&next_velocity_box);
-
-    // Update player sprite
-    sprite_follow(player);                  /* sprite_poll() sends it */
+    // Create the next velocity box, and update the player sprite
+    next_step(player);
     //LOG_DBG("end vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 }
 
@@ -394,6 +418,9 @@ void player_set_default(player_t *player)
     player->burn_timer = 0;
 
     player->still_in_portal = 0;
+
+    ticks_since_last_damage = 0;
+    ticks_since_last_heal = 0;
 }
 
 void player_init()

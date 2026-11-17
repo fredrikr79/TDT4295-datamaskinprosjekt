@@ -12,9 +12,9 @@ fpga/test/config.hpp
 *.log
 .vivado.env
 /vtech
-.vscode/launch.json
-.vscode/settings.json
-.vscode/c_cpp_properties.json
+/.vscode/launch.json
+/.vscode/settings.json
+/.vscode/c_cpp_properties.json
 /vtech
 
 # mcu

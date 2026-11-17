@@ -23,8 +23,8 @@ velocity_box_t create_velocity_box(
     int dy = VELOCITY_BOX_Y;
     int rel_x = (dx - size_x) / 2;
     int rel_y = (dy - size_y) / 2;
-    if (vel_y < -5) rel_y += rel_y / 2;
-    else if (5 < vel_y) rel_y /= 2;
+    if (vel_y < SPEED(-5)) rel_y += rel_y / 2;
+    else if (SPEED(5) < vel_y) rel_y /= 2;
 
     // Player position
     int x = floorf(pos_x + 0.5);
@@ -218,9 +218,9 @@ bool perform_object_movement(
             {
                 if (tile_has_collision(box[base_x + horizontal_progress + y*velocity_box.box.x2]))
                 {
-                    if (y < step_allowance)
+                    if (y - y_start < step_allowance)
                     {
-                        step_start = y + 1;
+                        step_start = y - y_start + 1;
                         continue;
                     }
                     else if (y_target - y - 1 < step_allowance && step_end < y_target - y)
@@ -253,10 +253,15 @@ bool perform_object_movement(
                         x_start += 2;
                         x_end += 2;
                     }
-                    uint8_t y = velocity_box.rel_x - 1 + vertical_progress;
-                    uint8_t y_end = y - step_end;
+                    int y = velocity_box.rel_y - 1 + vertical_progress;
+                    int y_end = y - step_end;
                     while (y > y_end)
                     {
+                        if (y < 0)              // the room's top: no room to step up
+                        {
+                            hit_roof = true;
+                            break;
+                        }
                         for (uint8_t x = x_start; x < x_end; x++)
                         {
                             if (tile_has_collision(box[x + y*velocity_box.box.x2]))
@@ -356,14 +361,14 @@ bool perform_object_movement(
         *pos_y = 0;
         *velocity_y = 0;
     }
-    if (ROOM_X - 1 <= *pos_x + size_x)
+    if (ROOM_X <= *pos_x + size_x)
     {
-        *pos_x = ROOM_X - 1 - size_x;
+        *pos_x = ROOM_X - size_x;
         *velocity_x = 0;
     }
-    if (ROOM_Y - 1 <= *pos_y + size_y)
+    if (ROOM_Y <= *pos_y + size_y)
     {
-        *pos_y = ROOM_Y - 1 - size_y;
+        *pos_y = ROOM_Y - size_y;
         *velocity_y = 0;
     }
 

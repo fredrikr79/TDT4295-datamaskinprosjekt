@@ -21,19 +21,21 @@
  * first. FPGA sprite memory can't be freed, so neither can images: make
  * them once (at start, see assets.c), not every frame.
  *
- * A SPRITE is an instance of an image on the screen (SPRITE_WRITE ->
+ * A SPRITE is an instance of an image on the screen, placed in screen
+ * pixels (640x360), not grid cells (SPRITE_WRITE ->
  * spriteID): moved, shown or hidden (SPRITE_UPDATE), deleted. Its image
  * and size are fixed. Many sprites can share one image.
  *
  * An ANIMATION is a sprite per frame, all made up front; only the current
- * frame is shown, and sprite_frame() steps it every `ticks` game frames.
+ * frame is shown, and sprite_frame() moves it on every `ms` milliseconds
+ * (real time: the same speed at any frame rate).
  *
  *   sprite_init();                              once, before anything else
  *   sprite_img_t *img = sprite_img_file("sprites/cursor.spr", 0);
  *   sprite_t *cur = sprite_new(img, x, y, true);
  *   ...
  *   sprite_move(cur, x, y);                     whenever, as often as you like
- *   every game frame:  sprite_frame(n);
+ *   every game frame:  sprite_frame();
  *   every poll:        if (!sprite_poll()) -> resync
  *   on resync, after fpga_abort_all():  sprite_lost();
  *   new FPGA session:                   sprite_forget();
@@ -70,14 +72,14 @@
 #endif
 /* Pixels are made into these buffers before they go out. A chunk (one
  * WRITE_SPRITE, one memID) is at most this big, so it should be at least
- * the FPGA's payload limit, N-1 (1023 for N = 1024). */
+ * WRITE_SPRITE's payload limit, N-3 (1021 for N = 1024). */
 #ifndef SPRITE_STAGE_BYTES
 #define SPRITE_STAGE_BYTES  1024u
 #endif
 #ifndef SPRITE_STAGE_BUFS
 #define SPRITE_STAGE_BUFS   4u      /* chunks in flight at once          */
 #endif
-/* memIDs the FPGA has per session (LUT of 1024, assumed 0 = none). */
+/* memIDs the FPGA has per session (a LUT of 1024), from FPGA_MEMID_FIRST (0). */
 #ifndef SPRITE_MEMIDS
 #define SPRITE_MEMIDS       1023u
 #endif
@@ -127,25 +129,37 @@ sprite_img_t *sprite_image(const sprite_t *s);
 /* ---- animations ----------------------------------------------------------------- */
 typedef struct sprite_ani sprite_ani_t;
 
-/* n frames (at most SPRITE_ANI_FRAMES), each shown for `ticks` game frames
- * (60 Hz: ticks 6 = 10 frames a second). All frames must be the same size. */
-sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t ticks,
+/* n frames (at most SPRITE_ANI_FRAMES), each shown for `ms` milliseconds
+ * (ms 200 = 5 frames a second). All frames must be the same size. */
+sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint16_t ms,
                              int16_t x, int16_t y, bool visible);
 /* Every frame of a sprite file. */
-sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_t y,
+sprite_ani_t *sprite_ani_file(const char *path, uint16_t ms, int16_t x, int16_t y,
                               bool visible);
 void sprite_ani_move(sprite_ani_t *a, int16_t x, int16_t y);
 void sprite_ani_show(sprite_ani_t *a, bool visible);
 void sprite_ani_play(sprite_ani_t *a, bool playing);   /* paused: stays on its frame */
-void sprite_ani_speed(sprite_ani_t *a, uint8_t ticks);
+void sprite_ani_speed(sprite_ani_t *a, uint16_t ms);
 void sprite_ani_goto(sprite_ani_t *a, uint8_t frame);
 void sprite_ani_delete(sprite_ani_t *a);
 
 /* ---- driving it ------------------------------------------------------------------ */
 void sprite_init(void);                 /* empty everything; once at start */
-void sprite_frame(uint32_t n);          /* each game frame; n = SYNCs since last */
+void sprite_frame(void);                /* each game frame: animations, by real time */
 bool sprite_poll(void);                 /* each poll; false: a command failed -> resync */
 void sprite_lost(void);                 /* after fpga_abort_all() */
+
+/* Sprite changes (moves, show / hide) go out this many us before the next
+ * SYNC, to land in the screen's blanking; 0: right after a SYNC instead.
+ * Starts from settings.toml (sprite.lead_us), else SPRITE_SYNC_LEAD_US.
+ * Tune it with the console ("sprite lead"); "sprite lead save" stores it. */
+#define SPRITE_SYNC_LEAD_MAX_US 16000u
+void     sprite_set_sync_lead_us(uint32_t us);
+uint32_t sprite_sync_lead_us(void);
+/* How the timing went since the last call (then starts over): of the
+ * changes that finished, the latest one's time against the SYNC it was
+ * aimed at, in us (negative: before it, as it should be). false: none. */
+bool     sprite_sync_stats(int32_t *latest_us, uint32_t *count);
 void sprite_forget(void);               /* new FPGA session: send everything again */
 
 unsigned sprite_pending(void);          /* images not on the FPGA yet */

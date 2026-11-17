@@ -20,3 +20,6 @@ void game_set_loading(bool on);
 void game_reset_fpga(void);
 void game_reset_mcu(void);
 void game_reset_all(void);
+
+void game_reprogram_fpga(void);    /* reset -b fpga: PROGRAM_B, the FPGA loads its design again */
+void game_reprogram_all(void);     /* reset -b: the same, then the MCU */    

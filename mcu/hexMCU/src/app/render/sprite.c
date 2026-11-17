@@ -36,6 +36,27 @@
 #include "storage.h"
 #include "log.h"
 #include "platform.h"
+#include "frame_sync.h"                 /* frame_elapsed_ms(), frame_sync_last() */
+#include "settings.h"
+
+#ifndef SPRITE_SYNC_UPDATES
+#define SPRITE_SYNC_UPDATES 1           /* changes wait for SYNC (see update_window_check()) */
+#endif
+#define SPRITE_SYNC_MAX_MS  50u         /* ...but not longer than this (3 frames) */
+#ifndef SPRITE_SYNC_LEAD_US
+#define SPRITE_SYNC_LEAD_US 1000u       /* go out this long before the next SYNC */
+#endif
+
+static bool     update_window;          /* open: send the waiting changes   */
+static uint32_t update_sync_seen;       /* the SYNC it last opened at       */
+static uint32_t update_opened_ms;
+static uint32_t sync_lead_us;           /* sprite_sync_lead_us()            */
+static bool     sync_lead_known;        /* read from settings.toml, or set  */
+static uint32_t window_target_us;       /* the SYNC the window aims at      */
+static bool     stat_any;               /* sprite_sync_stats()              */
+static int32_t  stat_latest_us;
+static uint32_t stat_count;
+static void update_window_check(void);
 
 /* Sprite file: "SP", W, H, frames (16 bits, MSB first), then the frames'
  * pixels one after the other, RGB565 MSB first (tools/png2spr.py). */
@@ -81,8 +102,9 @@ struct sprite {
 
 struct sprite_ani {
     bool      used, visible, playing;
-    uint8_t   n, cur, ticks;
-    uint32_t  count;                /* game frames into the current frame      */
+    uint8_t   n, cur;
+    uint16_t  ms;                   /* each frame is shown this long           */
+    uint32_t  count;                /* ms into the current frame               */
     int16_t   x, y;
     sprite_t *frame[SPRITE_ANI_FRAMES];
 };
@@ -96,7 +118,8 @@ static bool          stage_busy[SPRITE_STAGE_BUFS];
 static uint8_t      *ready_buf;     /* made for uploading->sent, not submitted yet */
 
 static sprite_img_t *uploading;     /* image whose chunks are being submitted  */
-/* memID budget. memIDs are handed out in order (1, 2, 3...), so each OK
+/* memID budget. memIDs are handed out in order (from FPGA_MEMID_FIRST:
+ * 0, 1, 2...), so each OK
  * answer tells exactly how many are in use. In between, a chunk whose
  * fate is unknown (lost answer) counts as used. */
 static unsigned      memids_known;  /* in use after the chunks resolved so far */
@@ -464,9 +487,9 @@ sprite_img_t *sprite_image(const sprite_t *s) { return s ? s->img : NULL; }
 /* Make an animation: one sprite per frame, all at x, y, only frame 0
  * visible. Takes at most SPRITE_ANI_FRAMES frames; all should be the same
  * size (a warning if not). If a frame's sprite can't be made, the ones
- * already made are deleted and it returns NULL. ticks = game frames each
+ * already made are deleted and it returns NULL. ms = how long each
  * animation frame is shown (0 counts as 1). */
-sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t ticks,
+sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint16_t ms,
                              int16_t x, int16_t y, bool visible)
 {
     if (!frames || n == 0) return NULL;
@@ -489,7 +512,7 @@ sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t tic
         return NULL;
     }
     *a = (sprite_ani_t){ .visible = visible, .playing = true, .n = n,
-                         .ticks = ticks ? ticks : 1, .x = x, .y = y };
+                         .ms = ms ? ms : 1, .x = x, .y = y };
     for (uint8_t i = 0; i < n; i++) {
         a->frame[i] = sprite_new(frames[i], x, y, visible && i == 0);
         if (!a->frame[i]) {
@@ -503,7 +526,7 @@ sprite_ani_t *sprite_ani_new(sprite_img_t *const *frames, uint8_t n, uint8_t tic
 
 /* Make an animation from every frame of a sprite file: reads how many
  * frames it has, registers an image per frame, then sprite_ani_new(). */
-sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_t y,
+sprite_ani_t *sprite_ani_file(const char *path, uint16_t ms, int16_t x, int16_t y,
                               bool visible)
 {
     sprite_img_t *frames[SPRITE_ANI_FRAMES];
@@ -515,7 +538,7 @@ sprite_ani_t *sprite_ani_file(const char *path, uint8_t ticks, int16_t x, int16_
     }
     for (uint16_t i = 0; i < n; i++)
         if (!(frames[i] = sprite_img_file(path, i))) return NULL;
-    return sprite_ani_new(frames, (uint8_t)n, ticks, x, y, visible);
+    return sprite_ani_new(frames, (uint8_t)n, ms, x, y, visible);
 }
 
 /* Switch an animation to frame f: hide the sprite shown now, then show
@@ -552,7 +575,7 @@ void sprite_ani_show(sprite_ani_t *a, bool visible)
 /* Pause (it stays on its frame) or play again. */
 void sprite_ani_play(sprite_ani_t *a, bool playing) { if (a) a->playing = playing; }
 /* How many game frames each animation frame is shown (0 counts as 1). */
-void sprite_ani_speed(sprite_ani_t *a, uint8_t ticks) { if (a) a->ticks = ticks ? ticks : 1; }
+void sprite_ani_speed(sprite_ani_t *a, uint16_t ms) { if (a) a->ms = ms ? ms : 1; }
 
 /* Jump to a frame (wraps around), and start counting its time from now. */
 void sprite_ani_goto(sprite_ani_t *a, uint8_t frame)
@@ -571,18 +594,24 @@ void sprite_ani_delete(sprite_ani_t *a)
     a->used = false;
 }
 
-/* Step the animations. Call once per game frame with n = SYNCs since the
- * last call. Each animation counts game frames; every `ticks` of them it
- * moves on a frame. Counting n (not 1) keeps the speed right when the game
- * falls behind and several FPGA frames go by at once. */
-void sprite_frame(uint32_t n)
+/* Step the animations. Call once per game frame. Each animation counts the
+ * real time since the last call; every `ms` of it, it moves on a frame. So
+ * the speed is the same at any frame rate, and when frames are late. The
+ * first call (and one after a while without, such as a load) counts at
+ * most ANI_MAX_GAP_MS, so an animation doesn't jump ahead. */
+#define ANI_MAX_GAP_MS 100u
+
+void sprite_frame(void)
 {
+    static uint32_t last;
+    uint32_t dt = frame_elapsed_ms(&last, ANI_MAX_GAP_MS);
+
     for (unsigned i = 0; i < SPRITE_ANI_MAX; i++) {
         sprite_ani_t *a = &anis[i];
-        if (!a->used || !a->playing || a->n < 2 || n == 0) continue;
-        a->count += n;
-        uint32_t steps = a->count / a->ticks;
-        a->count %= a->ticks;
+        if (!a->used || !a->playing || a->n < 2 || dt == 0) continue;
+        a->count += dt;
+        uint32_t steps = a->count / a->ms;
+        a->count %= a->ms;
         if (steps) ani_to(a, (uint8_t)((a->cur + steps) % a->n));
     }
 }
@@ -694,6 +723,12 @@ static void sprite_done(const fpga_cmd_t *cmd, fpga_err_t err)
         s->id = fpga_answer_id(cmd);
         /* fall through */
     case SPR_UPDATING:
+        if (s->state == SPR_UPDATING) {          /* not a create: when did it land? */
+            int32_t rel = (int32_t)(plat_micros() - window_target_us);
+            if (!stat_any || rel > stat_latest_us) stat_latest_us = rel;
+            stat_any = true;
+            stat_count++;
+        }
         s->state = SPR_LIVE;
         s->s_x = s->p_x; s->s_y = s->p_y; s->s_visible = s->p_visible;
         s->dirty = false;
@@ -736,7 +771,7 @@ static bool image_needed(const sprite_img_t *img)
 }
 
 /* Pick the next image to upload and work out its chunks.
- *   - Chunk size: as much as one WRITE_SPRITE may carry (N - 1), but at
+ *   - Chunk size: as much as one WRITE_SPRITE may carry (N - 3), but at
  *     most a staging buffer, rounded down to whole pixels. Nothing until
  *     INFO has told us N.
  *   - Two passes: first images a sprite waits for, then all the rest.
@@ -838,6 +873,7 @@ bool sprite_poll(void)
     }
 
     /* sprites */
+    update_window_check();
     for (unsigned i = 0; i < SPRITE_MAX; i++) {
         sprite_t *s = &sprs[i];
         fpga_cmd_t c;
@@ -852,7 +888,7 @@ bool sprite_poll(void)
             c = fpga_cmd_sprite_delete(s->id);
             if (!submit(&c, sprite_done, s)) return !failed;
             s->state = SPR_DELETING;
-        } else if (s->state == SPR_LIVE &&
+        } else if (update_window && s->state == SPR_LIVE &&
                    (s->dirty || s->x != s->s_x || s->y != s->s_y ||
                     s->visible != s->s_visible)) {          /* moved / shown / hidden: update */
             s->p_x = s->x; s->p_y = s->y; s->p_visible = s->visible;
@@ -861,7 +897,70 @@ bool sprite_poll(void)
             s->state = SPR_UPDATING;
         }
     }
+    update_window = false;      /* all sent: the next ones wait for the next SYNC */
     return !failed;
+}
+
+/* ---- sprite changes go out just before a SYNC ---------------------------------------------
+ * The FPGA draws sprites as it scans the screen. A sprite moved, shown or
+ * hidden while the scan is passing over it tears: its upper rows at the
+ * old place, the rest at the new. The scan is in its blanking just before
+ * SYNC (found with Bad Apple's delay: writes ending at SYNC don't tear), so
+ * changes to live sprites wait, and go out sync_lead_us before the next
+ * SYNC, predicted from the last one and the measured period
+ * (frame_sync.h). Whatever is moved during a frame shows at the next one.
+ * Lead 0: right after a SYNC instead (the first poll after it).
+ * If no SYNC comes for SPRITE_SYNC_MAX_MS (an FPGA that doesn't send it),
+ * they go anyway. -DSPRITE_SYNC_UPDATES=0: send them at once, as before.
+ * Making and deleting sprites, and image uploads, don't wait.
+ * sprite_sync_stats() says when they really landed, to tune the lead. */
+void sprite_set_sync_lead_us(uint32_t us)
+{
+    sync_lead_us    = us < SPRITE_SYNC_LEAD_MAX_US ? us : SPRITE_SYNC_LEAD_MAX_US;
+    sync_lead_known = true;
+}
+
+/* From settings.toml (sprite.lead_us) the first time, else the default. */
+uint32_t sprite_sync_lead_us(void)
+{
+    if (!sync_lead_known) {
+        int32_t v = settings_get("sprite.lead_us", (int32_t)SPRITE_SYNC_LEAD_US);
+        sprite_set_sync_lead_us(v < 0 ? 0u : (uint32_t)v);
+    }
+    return sync_lead_us;
+}
+
+bool sprite_sync_stats(int32_t *latest_us, uint32_t *count)
+{
+    bool any = stat_any;
+    *latest_us = stat_latest_us;
+    *count     = stat_count;
+    stat_any   = false;
+    stat_count = 0;
+    return any;
+}
+static void update_window_check(void)
+{
+#if SPRITE_SYNC_UPDATES
+    uint32_t now_ms = plat_millis(), c, at;
+    frame_sync_last(&c, &at);
+    if (c != update_sync_seen) {                /* not opened yet since this SYNC */
+        uint32_t lead = sprite_sync_lead_us();
+        uint32_t target = lead ? at + frame_sync_period_us() : at;
+        if ((int32_t)(plat_micros() - (target - lead)) < 0) return;           /* not yet */
+        update_sync_seen = c;
+        update_window    = true;
+        update_opened_ms = now_ms;
+        window_target_us = target;
+    } else if (now_ms - update_opened_ms >= SPRITE_SYNC_MAX_MS) {
+        update_window    = true;                /* no SYNC: don't wait forever */
+        update_opened_ms = now_ms;
+        window_target_us = plat_micros();
+    }
+#else
+    update_window = true;
+    window_target_us = plat_micros();
+#endif
 }
 
 /* ---- errors, sessions ------------------------------------------------------------------- */

@@ -92,9 +92,12 @@ def main():
     with open(a.out, "wb") as fh:
         fh.write(b"SP" + struct.pack(">HHH", w, h, len(frames)) + body)
 
+    # one memID per WRITE_SPRITE chunk: N minus the opcode and the 2-byte
+    # LEN, rounded down to whole pixels (sprite.c, next_upload)
+    chunk = (1024 - 3) & ~1
     per = w * h * 2
     print(f"{a.out}: {w}x{h} px, {len(frames)} frame(s), {per} bytes each "
-          f"(~{-(-per // 1022)} memID(s) per frame at N=1024)")
+          f"({-(-per // chunk)} memID(s) per frame at N=1024)")
     if nudged:
         print(f"note: {nudged} opaque pixel(s) were exactly the see-through colour; nudged to 0x{CLEAR - 1:04X}")
 

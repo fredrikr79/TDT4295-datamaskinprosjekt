@@ -8,14 +8,18 @@
  *
  * Steps:
  *   WRITE     header (+ payload straight from the caller's tx buffer)
- *   WAIT_IRQ  an FPGA_READY edge since the WRITE was started; also checks
- *             the ACK line. On a NACK the rest of the command is replaced
- *             by one READ of the error code the FPGA queued.
+ *   WAIT_IRQ  an FPGA_READY edge since the WRITE was started, with the
+ *             line high now; also checks the ACK line. On a NACK the rest
+ *             of the command is replaced by one READ of the error code the
+ *             FPGA queued.
  *   READ      READ_OPCODE, turnaround, rx_len bytes into the caller's rx
+ *   READ_READY  the READY the FPGA gives after a READ, used up so it isn't
+ *             taken as stray (FPGA_READY_AFTER_READ)
  *
- * All commands are [WRITE, WAIT_IRQ(, READ)], except the console's raw
- * read, which is a single READ. ECHO compares rx with tx at
- * the end, INFO parses its answer.
+ * All commands are [WRITE, WAIT_IRQ(, READ, READ_READY)], except the
+ * console's raw read, which is READ(, READ_READY). No transfer starts while
+ * READY is low. ECHO compares rx with tx at the end, INFO parses its answer
+ * (the screen in pixels; the grid is that / FPGA_SIM_SCALE).
  *
  * The sprite commands carry their parameters and their two-byte answer
  * inside the command (param[], answer[]). fpga_submit() points tx / rx at

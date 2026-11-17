@@ -18,7 +18,7 @@
 #define COL_HEALTH   RGB565(220,  40,  40)  /* red                          */
 #define COL_FUEL     RGB565(255, 140,   0)  /* orange                       */
 
-#define TITLE_Y      16     /* the test sentence, centred near the top       */
+#define TITLE_Y      16     /* HUD_TEST: the sentence, centred near the top  */
 
 /* ---- state ------------------------------------------------------------------ */
 typedef struct {
@@ -63,6 +63,7 @@ void hud_init(uint16_t screen_w, uint16_t screen_h)
     h.made = true;
     h.sh   = screen_h;
 
+#if HUD_TEST
     /* test: a sentence centred near the top */
     int32_t w = sprite_img_w(assets.title);
     int32_t x = w < screen_w ? (screen_w - w) / 2 : 0;
@@ -70,6 +71,7 @@ void hud_init(uint16_t screen_w, uint16_t screen_h)
 
     /* demo: an animation from the card, top-left, 4 frames a second */
     h.spinner = sprite_ani_file("sprites/spinner.spr", 250, 8, 8, true);
+#endif
 
     /* the bars: health against the right edge, fuel to its left. Empty
      * bars first, so the fills are drawn on top of them. */
@@ -92,7 +94,7 @@ void hud_visible(bool on)
 {
     if (h.shown == on) return;
     h.shown = on;
-    sprite_show(h.title, on);
+    sprite_show(h.title, on);           /* both NULL without HUD_TEST */
     sprite_ani_show(h.spinner, on);
     bar_place(&h.health);
     bar_place(&h.fuel);

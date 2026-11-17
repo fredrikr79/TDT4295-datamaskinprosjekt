@@ -211,7 +211,7 @@ void assets_init(void)
     assets.menu_load    = text("Load");
     assets.menu_restart = text("Restart room");
     assets.menu_draw    = text("Draw");
-    for (unsigned i = 0; i < MAT_COUNT; i++) assets.material[i] = text(material_names[i]);
+    for (unsigned i = 0; i < DRAW_ELEMENTS; i++) assets.element[i] = text(draw_elements[i].name);
 
     /* drawing mode: the brush sizes, which depend on the FPGA's N (known by now) */
     uint16_t sizes[DRAW_SIZES_MAX];

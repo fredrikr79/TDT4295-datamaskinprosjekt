@@ -218,9 +218,6 @@ bool perform_object_movement(
             {
                 if (tile_has_collision(box[base_x + horizontal_progress + y*velocity_box.box.x2]))
                 {
-                    // Fix: was y < step_allowance, but y is the row in the box, not in the
-                    // player: only true near the room's top, where the player could then
-                    // walk through a wall at head height
                     if (y - y_start < step_allowance)
                     {
                         step_start = y - y_start + 1;
@@ -256,8 +253,6 @@ bool perform_object_movement(
                         x_start += 2;
                         x_end += 2;
                     }
-                    // Fix: was rel_x (a column) for the row above the head, and uint8_t,
-                    // which wrapped to 255 (far past box[]) at the room's top
                     int y = velocity_box.rel_y - 1 + vertical_progress;
                     int y_end = y - step_end;
                     while (y > y_end)
@@ -366,7 +361,6 @@ bool perform_object_movement(
         *pos_y = 0;
         *velocity_y = 0;
     }
-    // Fix: was ROOM_X - 1 - size_x: one cell short of the room's last column / row
     if (ROOM_X <= *pos_x + size_x)
     {
         *pos_x = ROOM_X - size_x;

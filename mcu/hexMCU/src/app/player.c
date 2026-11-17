@@ -7,7 +7,6 @@
 #include <math.h>
 #include <stdint.h>
 
-// Fix: static -- global names this common can clash with another file's
 static float move_direction = 0;
 static bool jump_next_frame = false;
 
@@ -18,7 +17,6 @@ static void sprite_follow(const player_t *player)
     sprite_move(spr, (int16_t) (player->x * 4), (int16_t) (player->y * 4));
 }
 
-// Fix: static, as above
 static uint16_t ticks_since_last_damage = 0;
 static uint16_t ticks_since_last_heal = 0;
 
@@ -71,7 +69,7 @@ static void perform_jump(
     }
 }
 
-// Fix: returns true if this killed the player. game_reset() has then already
+// Returns true if this killed the player. game_reset() has then already
 // put a fresh player in *player, so the caller must stop using this step's numbers.
 bool damage_player(player_t *player, uint16_t amount)
 {
@@ -109,8 +107,6 @@ void keep_player_in_bounds(player_t *player)
         player->y = 0;
         player->velocity_y = 0;
     }
-    // Fix: was ROOM_X - 1 - PLAYER_SIZE_X: one cell short, so the player could
-    // never reach the room's last column (or row, below)
     if (ROOM_X <= player->x + PLAYER_SIZE_X)
     {
         player->x = ROOM_X - PLAYER_SIZE_X;
@@ -123,10 +119,6 @@ void keep_player_in_bounds(player_t *player)
     }
 }
 
-// Fix: the damage, moved out of update_player() so the step can stop when the
-// player dies. Before, the rest of the step hit the respawned player: dying from
-// burning made its burn_timer-- turn the fresh 0 into 65535 (burning on and on).
-// true: the player died.
 static bool take_damage(
     player_t *player,
     uint16_t in_collision, uint16_t in_lava, uint16_t in_acid,
@@ -151,8 +143,6 @@ static bool take_damage(
     return false;
 }
 
-// Fix: the end of a step, also used after dying: the next READ_BOX and the
-// sprite, for where the player is now (after dying, the respawned player)
 static void next_step(player_t *player)
 {
     velocity_box_t next_velocity_box = create_velocity_box(
@@ -212,10 +202,6 @@ void update_player(
     else if (in_air && player->breath_meter < PLAYER_MAX_BREATH) player->breath_meter++;
 
     // Check if on ground
-    // Fix: was box.y1 + box.y2 == ROOM_Y, true whenever the box read around the
-    // player reaches the room's bottom: grounded in mid-air in the last ~10 rows
-    // (jumping again, jetpack refilled). Checks the player's own feet now; the
-    // row below them is only read when it's inside the room.
     bool on_ground = (int)floorf(player->y + 0.5f) + PLAYER_SIZE_Y >= ROOM_Y;
     bool on_radiation = false;
     // LOG_DBG("on_ground: %u", on_ground);
@@ -324,9 +310,9 @@ void update_player(
     }
 
     // Damage
-    // Fix: stop the step if the player died (see take_damage())
     if (take_damage(player, in_collision, in_lava, in_acid, in_explosion, on_radiation))
     {
+        // Stop the step if the player died (see take_damage())
         next_step(player);
         return;
     }
@@ -433,7 +419,6 @@ void player_set_default(player_t *player)
 
     player->still_in_portal = 0;
 
-    // Fix: a respawned player starts fresh, not with the heal delay its death left
     ticks_since_last_damage = 0;
     ticks_since_last_heal = 0;
 }

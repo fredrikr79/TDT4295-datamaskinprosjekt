@@ -13,7 +13,7 @@ module mem_txn_write (
   logic [31:0] even_address;
 
   always_comb begin
-    even_address = address - address % 2;
+    even_address = address - address[0];
     out = '{rwds: 'b0, dq: 'h00, next_state: current_state, read_data: 'h00};
     if (reset) out.next_state = memory_pkg::IDLE;
     else if (enable) begin
@@ -37,7 +37,7 @@ module mem_txn_write (
           if (memory_pkg::waiting_is_finished(bytes_this_state, double_latency)) begin
             out.next_state = memory_pkg::WRITING;
             out.dq = write_data;
-            if (address % 2 == 0) out.rwds = 0;
+            if (~address[0]) out.rwds = 0;
             else out.rwds = 1;
           end
         end
@@ -45,7 +45,7 @@ module mem_txn_write (
           out.dq   = write_data;
           out.rwds = 0;
           if (memory_pkg::transaction_is_finished(
-                  bytes_this_state, memory_pkg::WRITE, write_length
+                  bytes_this_state - address[0], memory_pkg::WRITE, write_length
               )) begin
             out.next_state = memory_pkg::IDLE;
           end

@@ -70,6 +70,7 @@ module main #(
 
   // Row-commit handshake: sim_buffers -> fb_compositor
   logic sim_pulse_row_commit, sim_commit_res_buffer, sim_pulse_frame_restart;
+  logic sim_idle;
   mem_map_pkg::fb_y_t sim_commit_y;
 
 
@@ -156,6 +157,7 @@ module main #(
     .commit_y(sim_commit_y),
     .commit_res_buffer(sim_commit_res_buffer),
     .pulse_frame_restart(sim_pulse_frame_restart),
+    .idle(sim_idle),
 
     .mem_toggle(sim_mem_toggle),
     .mem_transaction(sim_mem_transaction),
@@ -172,6 +174,7 @@ module main #(
     .clk(clk),
     .pulse_new_row(pulse_new_row),
     .sim_running(sim_running),
+    .pulse_frame_restart(sim_pulse_frame_restart),
     .input_buffers(sim_window),
     .pulse_transaction_pair_done(pulse_transaction_pair_done),
     .pulse_row_done(pulse_row_done),
@@ -345,6 +348,7 @@ module main #(
       .v_blank(v_blank),
       .near_frame_end(near_frame_end),
       .sim_running(sim_running),
+      .sim_idle(sim_idle),
       .allow(mem_allow)
   );
 

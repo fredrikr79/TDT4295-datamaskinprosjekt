@@ -4,6 +4,7 @@ module simulator #(
     input wire clk,
     pulse_new_row,
     sim_running,
+    pulse_frame_restart,
     input sim_pkg::row_buffer_t input_buffers[3],
     output logic pulse_transaction_pair_done,
     pulse_row_done,
@@ -206,6 +207,7 @@ module simulator #(
           current_row_index <= current_row_index + 1'b1;
         end
       end
+      if (pulse_frame_restart) current_row_index <= '0;
 
       if (pulse_new_row) begin
         if (is_unmatched_boundry_row) begin

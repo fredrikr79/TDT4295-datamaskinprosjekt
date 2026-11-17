@@ -36,7 +36,7 @@ module simulator #(
   // Stage 1 (issue): reads the neighbourhood for simulation_base from input_buffers.
   // Stage 2: runs the rules and writes for base_q one cycle later.
   // Safe because input_buffers do not change while a row is running. A row now takes
-  // Stride+1 cycles instead of Stride.
+  // Stride+1 cycles instead of Stride (Stride+3 with PIPELINE 2 and 3 below).
   typedef struct {
     sim_pkg::neighbourhood_t nb[sim_pkg::SimulationCoreCount];
     logic [BaseW-1:0] base;
@@ -44,6 +44,15 @@ module simulator #(
     logic last;
   } pipeline_stage_t;
   pipeline_stage_t setup_stage;
+
+  // [PIPELINE 3] Stage between setup and rule. The explosion rule did not fit in one 10 ns
+  // cycle (noise_lfsr / setup_stage.nb -> explosion_r, -3.7 ns slack), so its first half
+  // (candidates + first two max levels) is registered here in explo_p, and the second half
+  // runs into explosion_r. pre_stage carries the neighbourhood along. A row takes Stride+3.
+  pipeline_stage_t pre_stage;
+  sim_rules::explo_partial_t explo_p[sim_pkg::SimulationCoreCount];
+  // GoL noise bit sampled in the same cycle as before the extra stage, so results are unchanged.
+  logic gol_noise_p[sim_pkg::SimulationCoreCount];
 
   // [PIPELINE 2] Second register stage. The explosion and GoL rules only look at the
   // registered neighbourhood, never at output_buffers, so they are computed here and
@@ -127,24 +136,34 @@ module simulator #(
         noise_lfsr[c][15] ^ noise_lfsr[c][13] ^ noise_lfsr[c][12] ^ noise_lfsr[c][10]
       };
     end
-    // ---- [PIPELINE 2] Stage 2: explosion and GoL rules from the registered neighbourhood ----
-    rule_stage.valid <= setup_stage.valid;
-    rule_stage.last <= setup_stage.last;
-    rule_stage.base <= setup_stage.base;
+    // ---- [PIPELINE 3] Pre stage: first half of the explosion rule ----
+    pre_stage.valid <= setup_stage.valid;
+    pre_stage.last <= setup_stage.last;
+    pre_stage.base <= setup_stage.base;
     for (int core = 0; core < sim_pkg::SimulationCoreCount; core++) begin
-      rule_stage.nb[core] <= setup_stage.nb[core];
+      pre_stage.nb[core] <= setup_stage.nb[core];
       // The two random decisions come from this core's LFSR (each ~1/4 chance).
-      explosion_r[core] <= sim_rules::explosion_rules(
+      explo_p[core] <= sim_rules::explosion_rules_a(
           setup_stage.nb[core],
           noise_lfsr[core][3] & noise_lfsr[core][11],
           noise_lfsr[core][6] & noise_lfsr[core][14]
       );
+      gol_noise_p[core] <= noise_lfsr[core][0];
+    end
+
+    // ---- [PIPELINE 2] Stage 2: explosion (second half) and GoL rules ----
+    rule_stage.valid <= pre_stage.valid;
+    rule_stage.last <= pre_stage.last;
+    rule_stage.base <= pre_stage.base;
+    for (int core = 0; core < sim_pkg::SimulationCoreCount; core++) begin
+      rule_stage.nb[core] <= pre_stage.nb[core];
+      explosion_r[core] <= sim_rules::explosion_rules_b(explo_p[core]);
       gol_r[core] <= sim_rules::gol_rules(
-          setup_stage.nb[core], simulation_counter, gol_refresh, noise_lfsr[core][0]
+          pre_stage.nb[core], simulation_counter, gol_refresh, gol_noise_p[core]
       );
     end
 
-    // [LOOP CUT 2] Output pixels for the column entering the rule stage.
+    // [LOOP CUT 2] Output pixels for the column entering the rule stage (pre_stage.base).
     for (int core = 0; core < sim_pkg::SimulationCoreCount; core++)
       for (int b = 0; b < 2; b++) out_view[core][b] <= out_view_next[core][b];
 
@@ -373,10 +392,11 @@ module simulator #(
                                                                    input int core);
     window_t w = window(row, core);
     // [LOOP CUT 6] was rule_stage.base: the read now happens one stage earlier
-    return w[setup_stage.base*sim_pkg::BitsPerPixel+:3*sim_pkg::BitsPerPixel];
+    // [PIPELINE 3] pre_stage is now the stage right before the rule stage
+    return w[pre_stage.base*sim_pkg::BitsPerPixel+:3*sim_pkg::BitsPerPixel];
   endfunction
 
-  // [LOOP CUT 6] Output-row view for the column in the setup stage (about to enter the rule
+  // [LOOP CUT 6] Output-row view for the column in the pre stage (about to enter the rule
   // stage). output_buffers does not yet hold what the two columns before it wrote, so those
   // are patched in. With this file's slot naming (.left lands on column+1, .right on column-1):
   //   column-2 (write stage): its .left write lands on this view's left pixel

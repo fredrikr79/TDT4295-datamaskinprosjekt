@@ -17,23 +17,6 @@
 bool read_room(int x, int y, uint8_t *tileIDs);
 bool save_room(int x, int y, uint8_t *tileIDs);
 
-struct online_room
-{
-    int x;
-    int y;
-
-    uint8_t *tileIDs;
-    uint32_t tile_progress;
-    uint8_t prev_id;
-    uint32_t consecutive;
-
-    uint8_t data[DATA_MAX_SIZE];
-    unsigned long data_size;
-};
-struct online_room start_online_room(int x, int y, uint8_t *tileIDs);
-void progress_online_room(struct online_room *room, uint8_t *new_ids, uint16_t id_length);
-bool save_online_room(struct online_room *room);
-
 bool delete_save(int x, int y);
 void delete_all_saves();
 

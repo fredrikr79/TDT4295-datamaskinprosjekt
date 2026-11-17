@@ -72,6 +72,8 @@ module main #(
   logic sim_pulse_row_commit, sim_commit_res_buffer, sim_pulse_frame_restart;
   logic sim_idle;
   mem_map_pkg::fb_y_t sim_commit_y;
+  sim_pkg::row_buffer_t sim_commit_rows [2];
+  logic sim_frame_active;  // a simulated frame is in progress
 
 
   // Memory signals
@@ -157,6 +159,8 @@ module main #(
     .commit_y(sim_commit_y),
     .commit_res_buffer(sim_commit_res_buffer),
     .pulse_frame_restart(sim_pulse_frame_restart),
+    .commit_rows(sim_commit_rows),
+    .sim_frame_active(sim_frame_active),
     .idle(sim_idle),
 
     .mem_toggle(sim_mem_toggle),
@@ -173,7 +177,7 @@ module main #(
   simulator sim_controller (
     .clk(clk),
     .pulse_new_row(pulse_new_row),
-    .sim_running(sim_running),
+    .sim_running(sim_frame_active),
     .pulse_frame_restart(sim_pulse_frame_restart),
     .input_buffers(sim_window),
     .pulse_transaction_pair_done(pulse_transaction_pair_done),
@@ -291,7 +295,7 @@ module main #(
       .commit_y(sim_commit_y),
       .commit_res_buffer(sim_commit_res_buffer),
       .pulse_frame_restart(sim_pulse_frame_restart),
-      .res_buffer(sim_res_buffer),
+      .res_buffer(sim_commit_rows),
 
       .hud_x(fb_hud_x),
       .hud_y(fb_hud_y),

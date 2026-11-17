@@ -27,10 +27,23 @@ package sim_rules;
     return (a > b) ? a : b;
   endfunction
 
-  function automatic sim_pkg::pixel_t explosion_rules(input sim_pkg::neighbourhood_t stencil,
-                                                 input logic can_move_free,
-                                                 input logic diagonal_cheap);
+  // [TIMING 3] The explosion rule is split over two clock cycles. In one cycle it was 13 logic
+  // levels (diagonal cost mux -> 3-operand subtract -> 3-level max tree -> compare -> mux) and
+  // missed 100 MHz by ~3.7 ns. explosion_rules_a() runs the candidates and the first two max
+  // levels; its result is registered; explosion_rules_b() finishes the max and picks the
+  // result. explosion_rules() chains the two and gives exactly the old result.
+  typedef struct packed {
+    force_t m_a;       // max of the straight neighbours
+    force_t m_b;       // max of the diagonal neighbours
+    force_t c_center;  // own decayed strength
+    logic is_exploding;
+    logic center_is_explo;
+  } explo_partial_t;
 
+  function automatic explo_partial_t explosion_rules_a(input sim_pkg::neighbourhood_t stencil,
+                                                       input logic can_move_free,
+                                                       input logic diagonal_cheap);
+    explo_partial_t p;
     logic [3:0] blast_resistance = sim_pkg::mat_blast_resistance(stencil.center.material);
     logic center_is_explo = (stencil.center.material == sim_pkg::MatExplo);
     logic [1:0] diagonal_cost = can_move_free ? 2'd0 : (diagonal_cheap ? 2'd2 : 2'd3);
@@ -45,16 +58,15 @@ package sim_rules;
     force_t c_bl = explo_candidate(stencil.bottomLeft, diagonal_cost, blast_resistance);
     force_t c_br = explo_candidate(stencil.bottomRight, diagonal_cost, blast_resistance);
 
+    p.m_a = force_max2(force_max2(c_top, c_left), force_max2(c_right, c_bottom));
+    p.m_b = force_max2(force_max2(c_tl, c_tr), force_max2(c_bl, c_br));
+
     // Own strength decays by one each pass.
-    force_t c_center = (center_is_explo && stencil.center.data != 4'd0)
+    p.c_center = (center_is_explo && stencil.center.data != 4'd0)
         ? force_t'({2'b00, stencil.center.data}) - 6'sd1 : 6'sd0;
 
-    // Max tree, three levels deep plus the centre.
-    force_t m_a = force_max2(force_max2(c_top, c_left), force_max2(c_right, c_bottom));
-    force_t m_b = force_max2(force_max2(c_tl, c_tr), force_max2(c_bl, c_br));
-    force_t full_force = force_max2(force_max2(m_a, m_b), c_center);
-
-    logic is_exploding =
+    p.center_is_explo = center_is_explo;
+    p.is_exploding =
         center_is_explo ||
         stencil.topLeft.material     == sim_pkg::MatExplo ||
         stencil.top.material         == sim_pkg::MatExplo ||
@@ -64,15 +76,26 @@ package sim_rules;
         stencil.bottomLeft.material  == sim_pkg::MatExplo ||
         stencil.bottom.material      == sim_pkg::MatExplo ||
         stencil.bottomRight.material == sim_pkg::MatExplo;
+    return p;
+  endfunction
 
+  function automatic sim_pkg::pixel_t explosion_rules_b(input explo_partial_t p);
+    force_t full_force = force_max2(force_max2(p.m_a, p.m_b), p.c_center);
     // [SYNTH FIX] One result variable and one return. The earlier form returned from inside
     // nested ifs and fell through to a final return; the synthesized netlist did not match
     // simulation for that pattern (every non-exploding cell came out as air).
     logic [7:0] result;
     result = 8'hFF;  // no change
-    if (is_exploding && full_force > 6'sd0) result = {sim_pkg::MatExplo, full_force[3:0]};
-    else if (is_exploding && center_is_explo) result = {sim_pkg::MatAir, 4'd0};
+    if (p.is_exploding && full_force > 6'sd0) result = {sim_pkg::MatExplo, full_force[3:0]};
+    else if (p.is_exploding && p.center_is_explo) result = {sim_pkg::MatAir, 4'd0};
     return result;
+  endfunction
+
+  // Single-cycle form, same result as the two halves chained.
+  function automatic sim_pkg::pixel_t explosion_rules(input sim_pkg::neighbourhood_t stencil,
+                                                 input logic can_move_free,
+                                                 input logic diagonal_cheap);
+    return explosion_rules_b(explosion_rules_a(stencil, can_move_free, diagonal_cheap));
   endfunction
 
   function automatic sim_pkg::pixel_t gol_rules(input sim_pkg::neighbourhood_t stencil,

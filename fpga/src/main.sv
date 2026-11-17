@@ -454,6 +454,8 @@ module main #(
       .error_critical(error_critical)
     );
 
+    assign mem_reset_n = ck_rst;
+
     memory memory (
       .clk(clk),
       .reset(~ck_rst),

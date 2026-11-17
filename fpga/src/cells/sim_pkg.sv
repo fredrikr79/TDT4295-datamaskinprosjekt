@@ -42,7 +42,7 @@ package sim_pkg;
     logic [3:0]        blast_resistance;
   } material_props_t;
 
-  localparam int GolRefreshDelay = 'd100;
+  localparam int GolRefreshDelay = 'd300;
   localparam logic [2:0] IgneousStoneThickness = 'sb111;
 
   // Lookup table for materials

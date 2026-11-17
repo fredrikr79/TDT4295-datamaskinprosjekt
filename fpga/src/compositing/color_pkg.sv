@@ -159,7 +159,7 @@ package color_pkg;
   function automatic logic [15:0] sand_colors (input logic [3:0] meta);
     unique case (4'(meta))
       4'b0000: return 16'b11110_110110_10000;
-      4'b0001: return 16'b11110_111101_11110;
+      4'b0001: return 16'b11100_111000_11100;
       4'b0010: return 16'b11110_110110_10001;
       4'b0011: return 16'b11110_110111_10001;
       4'b0100: return 16'b11110_110111_10010;
@@ -168,7 +168,7 @@ package color_pkg;
       4'b0111: return 16'b11110_111001_10100;
       4'b1000: return 16'b11111_111001_10100;
       4'b1001: return 16'b11111_111010_10101;
-      4'b1010: return 16'b11011_110111_10110;
+      4'b1010: return 16'b11110_111001_11011;
       4'b1011: return 16'b11111_111010_10110;
       4'b1100: return 16'b11111_111011_10111;
       4'b1101: return 16'b11111_111011_11000;

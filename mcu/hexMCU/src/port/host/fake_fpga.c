@@ -242,6 +242,22 @@ static int32_t box_cell(uint16_t x, uint16_t y, uint16_t w, uint32_t k)
     return (int32_t)(cy * GRID_W + cx);
 }
 
+/* FAKE_FPGA_PAIRS=1 in the environment: act like the FPGA build that
+ * had the cell-pair bug, to try 'demo align' and workarounds on. Its grid
+ * memory is two cells wide: a box at odd X starts a cell to the left, and
+ * a write always fills whole pairs, the last cell twice when the row ends
+ * in the middle of one (so 1x1 at even X writes 2 cells). */
+static bool pair_bug(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *e = getenv("FAKE_FPGA_PAIRS");
+        on = e && *e && *e != '0';
+        if (on) LOG_WARN("FAKE_FPGA_PAIRS: boxes act like the cell-pair bug");
+    }
+    return on;
+}
+
 /* WRITE_BOX: w x h IDs, row by row. */
 static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                       const uint8_t *data, uint16_t nbytes)
@@ -252,6 +268,15 @@ static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                  (unsigned long)fpga_sim_bytes(n), nbytes);
         if ((uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE < n) n = (uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE;
     }
+    if (pair_bug()) {                       /* as the real FPGA did: see pair_bug() */
+        uint16_t x0 = (uint16_t)(x & ~1u), end = (uint16_t)(x0 + ((w + 1u) & ~1u));
+        for (uint32_t r = 0; r < h && r * w < n; r++)
+            for (uint16_t cx = x0; cx < end; cx++) {
+                uint32_t k = r * w + ((uint32_t)(cx - x0) < w ? (uint32_t)(cx - x0) : w - 1u);   /* last one twice */
+                if (cx >= GRID_W || y + r >= GRID_H) { oob++; continue; }
+                cell_set((y + r) * GRID_W + cx, packed_cell(data, k));
+            }
+    } else
     for (uint32_t k = 0; k < n; k++) {
         int32_t c = box_cell(x, y, w, k);
         if (c < 0) { oob++; continue; }
@@ -271,6 +296,7 @@ static void box_read(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
         nbytes = OUT_FIFO;
     }
     memset(ff.out, 0, nbytes);
+    if (pair_bug()) x &= (uint16_t)~1u;     /* as the real FPGA did: starts a cell left */
     for (uint32_t k = 0; k < n && k / FPGA_SIM_IDS_PER_BYTE < nbytes; k++) {
         int32_t c = box_cell(x, y, w, k);
         pack_cell(ff.out, k, c < 0 ? SIM_CELL(MAT_AIR) : cells[c]);

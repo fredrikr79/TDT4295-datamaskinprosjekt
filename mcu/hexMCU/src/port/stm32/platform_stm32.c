@@ -14,13 +14,19 @@ uint32_t plat_millis(void)
     return HAL_GetTick();
 }
 
-/* From the Cortex-M33's cycle counter (DWT CYCCNT), started on the first
- * call; no timer to set up in CubeMX. CYCCNT wraps every 2^32 cycles (26 s
- * at 160 MHz), so each call adds the cycles since the last one: called at
- * least that often (the SYNC interrupt calls it every frame), it never
- * loses time. Interrupts off for the few lines that update the state, since
- * both the main loop and the SYNC interrupt call it. */
-uint32_t plat_micros(void)
+/* Microseconds: the 1 ms tick, plus how far SysTick has counted into the
+ * current millisecond. SysTick drives HAL_GetTick(), so it always runs.
+ * (The first version used the DWT cycle counter. That is debug hardware,
+ * and it may not count without a debugger attached: then everything timed
+ * in us stood still.)
+ * SysTick counts down from LOAD to 0, then the tick interrupt adds 1 ms.
+ * Called with that interrupt pending but not run yet (from a higher
+ * priority interrupt, such as the SYNC one, or with interrupts off), the
+ * tick is a millisecond behind while SysTick has started over: then the
+ * millisecond is added here. Wraps after 71 minutes, like plat_micros()
+ * says. If the HAL's tick comes from another timer (SysTick off), it falls
+ * back to the cycle counter. */
+static uint32_t micros_dwt(void)
 {
     static uint32_t last_cyc, us, rem;
     uint32_t primask = __get_PRIMASK();
@@ -42,6 +48,24 @@ uint32_t plat_micros(void)
     rem %= per_us;
     __set_PRIMASK(primask);
     return us;
+}
+
+uint32_t plat_micros(void)
+{
+    if (!(SysTick->CTRL & SysTick_CTRL_ENABLE_Msk)) return micros_dwt();
+
+    uint32_t load = SysTick->LOAD + 1u;         /* cycles per tick (1 ms) */
+    uint32_t ms, val, pending;
+    do {                                        /* a tick in between: again */
+        ms      = HAL_GetTick();
+        val     = SysTick->VAL;
+        pending = SCB->ICSR & SCB_ICSR_PENDSTSET_Msk;
+    } while (ms != HAL_GetTick());
+    /* SysTick started over, but its interrupt hasn't added the ms yet: VAL
+     * is near the top again (it only just restarted) */
+    if (pending && val > load / 2u) ms++;
+    uint32_t into = load - 1u - val;            /* cycles into this ms */
+    return ms * 1000u + (uint32_t)((uint64_t)into * 1000u / load);
 }
 
 /* ---- LED ------------------------------------------------------------------

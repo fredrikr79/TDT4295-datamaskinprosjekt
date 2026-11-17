@@ -71,18 +71,10 @@ package memory_pkg;
 
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
-    return waiting_is_finished_after(amount_of_latency_ticks, double_latency, 1'b0);
-  endfunction
-
-  // [ODD ADDR] Same, but `extra` ticks later. Used to skip the even byte in front of an odd
-  // read address. (Subtracting from the tick count instead wraps at 0 and ends the wait at once.)
-  function automatic logic waiting_is_finished_after(input message_length_t amount_of_latency_ticks,
-                                                     input logic double_latency,
-                                                     input logic extra);
     memory_pkg::message_length_t latency_count;
     latency_count = message_length_t'(2  * (double_latency ? 2 * LatencyCount : LatencyCount));
 
-    return amount_of_latency_ticks >= latency_count + 1'b1 + message_length_t'(extra);
+    return amount_of_latency_ticks >= latency_count + 1'b1;
   endfunction
   function automatic logic transaction_is_finished(input message_length_t amount_of_rws,
                                                    input transaction_e transaction,

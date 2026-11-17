@@ -93,15 +93,11 @@ module memory_controller (
       bytes_this_state + 1'b1, double_latency
   );
 
-  // [ODD ADDR] Odd address: slot 0 is a masked byte, so the client's first byte goes out one
-  // falling edge later than for an even address. That is the first rising edge in WRITING
-  // (previous_state still says WAITING_ON_LATENCY). bytes_this_state cannot be used here: it is
-  // only reset on this same edge, and reads 0 one cycle too late.
   assign wr_start_odd = current_address[0]
       && current_state == memory_pkg::WRITING
-      && previous_state == memory_pkg::WAITING_ON_LATENCY
       && current_transaction == memory_pkg::WRITE
-      && wr_left == 0;
+      && wr_left == 0
+      && bytes_this_state == 0;
 
   assign wr_start = wr_start_even || wr_start_odd;
 
@@ -182,16 +178,14 @@ module memory_controller (
 
   logic reset_byte_counter;
   assign reset_byte_counter = (current_state == previous_state) ? 0 : 1;
-  // [ODD ADDR] A write can take MaxMessageLength + 2 slots (masked lead byte + masked pad
-  // byte), so the counter must reach MaxMessageLength + 1 without wrapping.
-  localparam int unsigned ByteCounterN = memory_pkg::MaxMessageLength + 2;
-  localparam int unsigned ByteCounterWidth = $clog2(ByteCounterN);
+  localparam int unsigned ByteCounterWidth = (memory_pkg::MaxMessageLength > 1)
+      ? $clog2(memory_pkg::MaxMessageLength) : 1;
 
   logic [ByteCounterWidth-1:0] bytes_this_state_raw;
   assign bytes_this_state = memory_pkg::message_length_t'(bytes_this_state_raw);
 
   mod_n_counter #(
-      .N(ByteCounterN)
+      .N(memory_pkg::MaxMessageLength)
   ) byte_counter (
       .clk(clk),
       .enable(enable),

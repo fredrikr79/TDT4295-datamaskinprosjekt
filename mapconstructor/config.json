@@ -8,8 +8,12 @@
                     "room": [-1, 0], "pos": [158, null]
                 },
                 {
-                    "from": [158, 41], "to": [160, 46],
+                    "from": [158, 25], "to": [160, 46],
                     "room": [50, 0], "pos": [0, 22]
+                },
+                {
+                    "from": [141, 0], "to": [160, 2],
+                    "room": [0, -50], "pos": [null, 86]
                 }
             ]
         },
@@ -208,7 +212,7 @@
             "portals": [
                 {
                     "from": [0, 0], "to": [2, 30],
-                    "room": [51, 0], "pos": [152, null]
+                    "room": [50, 0], "pos": [152, null]
                 },
                 {
                     "from": [158, 0], "to": [160, 31],
@@ -225,7 +229,89 @@
                 },
                 {
                     "from": [158, 0], "to": [160, 31],
-                    "room": [52, 0], "pos": [0, null]
+                    "room": [53, 0], "pos": [0, null]
+                }
+            ]
+        },
+        "53,0": {
+            "path": "final/challenge/room4.png",
+            "portals": [
+                {
+                    "from": [0, 0], "to": [2, 30],
+                    "room": [52, 0], "pos": [152, null]
+                },
+                {
+                    "from": [112, 88], "to": [139, 90],
+                    "room": [53, 1], "pos": [null, 0]
+                }
+            ]
+        },
+        "53,1": {
+            "path": "final/challenge/room5.png",
+            "portals": [
+                {
+                    "from": [112, 88], "to": [139, 90],
+                    "room": [53, 0], "pos": [null, 0]
+                },
+                {
+                    "from": [0, 0], "to": [2, 30],
+                    "room": [52, 1], "pos": [152, null]
+                }
+            ]
+        },
+        "52,1": {
+            "path": "final/challenge/room6.png",
+            "portals": [
+                {
+                    "from": [158, 0], "to": [160, 31],
+                    "room": [53, 1], "pos": [0, null]
+                },
+                {
+                    "from": [0, 60], "to": [2, 85],
+                    "room": [51, 1], "pos": [152, null]
+                }
+            ]
+        },
+        "51,1": {
+            "path": "final/challenge/room7.png",
+            "portals": [
+                {
+                    "from": [158, 60], "to": [160, 85],
+                    "room": [52, 1], "pos": [0, null]
+                },
+                {
+                    "from": [0, 60], "to": [2, 85],
+                    "room": [0, 0], "pos": [80, 5]
+                }
+            ]
+        },
+
+
+
+        "0,-1": {
+            "path": "final/cool_rooms/coolroom1.png",
+            "portals": [
+                {
+                    "from": [141, 88], "to": [160, 90],
+                    "room": [0, 0], "pos": [null, 4]
+                },
+                {
+                    "from": [0, 74], "to": [2, 86],
+                    "room": [-1, -1], "pos": [158, null]
+                }
+            ]
+        },
+        "-1,-1": {
+            "path": "final/cool_rooms/coolroom2.png",
+            "portals": [
+                
+                {
+                    "from": [0, 74], "to": [2, 86],
+                    "room": [-0, -1], "pos": [158, null]
+                },
+                {
+                    "from": [6, 88], "to": [25, 90],
+                    "room": [-4,0], "pos": [80, 4]
                 }
             ]
         }

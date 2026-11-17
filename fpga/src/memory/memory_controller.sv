@@ -85,18 +85,21 @@ module memory_controller (
   logic wr_start, wr_start_even, wr_start_odd;
   // True on the rising edge just before the falling edge that enters WRITING. Uses the same
   // latency test as mem_txn_write, looking one tick ahead of the counter.
-  assign wr_start_even = (current_state == memory_pkg::WAITING_ON_LATENCY)
-      && (current_transaction == memory_pkg::WRITE)
-      && (wr_left == '0)
+  assign wr_start_even = current_address % 2 == 0
+      && current_state == memory_pkg::WAITING_ON_LATENCY
+      && current_transaction == memory_pkg::WRITE
+      && wr_left == 0
       && memory_pkg::waiting_is_finished(
       bytes_this_state + 1'b1, double_latency
   );
 
-  assign wr_start_odd = current_state == memory_pkg::WRITING
-      && wr_left == '0
+  assign wr_start_odd = current_address % 2 == 1
+      && current_state == memory_pkg::WRITING
+      && current_transaction == memory_pkg::WRITE
+      && wr_left == 0
       && bytes_this_state == 0;
 
-  assign wr_start = current_address % 2 == 0 ? wr_start_even : wr_start_odd;
+  assign wr_start = wr_start_even || wr_start_odd;
 
   always_ff @(posedge clk) begin
     if (reset) begin

@@ -196,6 +196,36 @@
                 {
                     "from": [0, 0], "to": [2, 30],
                     "room": [0, 0], "pos": [152, null]
+                },
+                {
+                    "from": [158, 0], "to": [160, 31],
+                    "room": [51, 0], "pos": [0, null]
+                }
+            ]
+        },
+        "51,0": {
+            "path": "final/challenge/room2.png",
+            "portals": [
+                {
+                    "from": [0, 0], "to": [2, 30],
+                    "room": [51, 0], "pos": [152, null]
+                },
+                {
+                    "from": [158, 0], "to": [160, 31],
+                    "room": [52, 0], "pos": [0, null]
+                }
+            ]
+        },
+        "52,0": {
+            "path": "final/challenge/room3.png",
+            "portals": [
+                {
+                    "from": [0, 0], "to": [2, 30],
+                    "room": [51, 0], "pos": [152, null]
+                },
+                {
+                    "from": [158, 0], "to": [160, 31],
+                    "room": [52, 0], "pos": [0, null]
                 }
             ]
         }

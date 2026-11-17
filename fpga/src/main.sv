@@ -155,9 +155,11 @@ module main #(
   logic [memory_pkg::NumMemClients-1:0] mem_client_data_on_cable;
   logic [memory_pkg::NumMemClients-1:0] mem_client_grant; // Used by testbenches
 
+  logic reset = ~ck_rst || ~user_btn;
+
   vga vga_controller (
       .clk(clk),
-      .reset(~ck_rst),
+      .reset(reset),
       .enable(1'b1),
       .h_sync(vga_hsync),
       .v_sync(vga_vsync),
@@ -178,7 +180,7 @@ module main #(
 
   sim_buffers sim_line_memory_reader(
     .clk(clk),
-    .reset(~ck_rst),
+    .reset(reset),
     .sim_running(sim_running),
 
     .pulse_new_row(pulse_new_row),
@@ -227,7 +229,7 @@ module main #(
   assign v_blank_rising = v_blank && !v_blank_d1;
 
   always_ff @(posedge clk) begin
-    if (~ck_rst) begin
+    if (reset) begin
       fb_sel <= 1'b0;
       fb_swap_pending <= 1'b0;
       v_blank_d1 <= 1'b0;
@@ -246,7 +248,7 @@ module main #(
 
   fb_scanout fb_display (
       .clk(clk),
-      .reset(~ck_rst),
+      .reset(reset),
       .active_area(active_area),
       .coord_x(coord_x),
       .coord_y(coord_y),
@@ -269,7 +271,7 @@ module main #(
   // Rasterizes one row of sprite pixels ahead of the compositor writing it.
   hud_line_buffer hud_painter (
       .clk(clk),
-      .reset(~ck_rst),
+      .reset(reset),
 
       .sprite_read_id(sprite_read_id),
       .sprite_entry(sprite_entry),
@@ -299,7 +301,7 @@ module main #(
 
   fb_compositor fb_writer (
       .clk(clk),
-      .reset(~ck_rst),
+      .reset(reset),
 
       .pulse_row_commit(sim_pulse_row_commit),
       .commit_y(sim_commit_y),
@@ -340,7 +342,7 @@ module main #(
 
   hud hud_controller (
       .clk(clk),
-      .reset(~ck_rst),
+      .reset(reset),
       .req_valid(sprite_req_valid),
       .sprite_mem_id(sprite_mem_id),
       .sprite_w_mem_addr(spi_write_sprite_base_addr),
@@ -413,7 +415,7 @@ module main #(
       .clk(clk),
       .ck_ss(ck_ss),
       .ck_sck(ck_sck),
-      .ck_rst(ck_rst),
+      .reset_in(reset),
       .octo_spi(octo_spi),
       .acknack(acknack),
       .led_r_n(led_r_n),
@@ -457,7 +459,7 @@ module main #(
 
     memory memory (
       .clk(clk),
-      .reset(~ck_rst),
+      .reset(reset),
       .enable(1'b1),
       .client_toggle(mem_client_toggle),
       .client_next_transaction(mem_client_transaction),

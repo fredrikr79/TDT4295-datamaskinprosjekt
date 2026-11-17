@@ -4,7 +4,7 @@ module spi #(
     input wire clk,
     input wire ck_ss,
     input wire ck_sck,
-    input wire ck_rst,
+    input wire reset_in,
     input wire error_critical,
 
     // Octal SPI data bus
@@ -93,7 +93,7 @@ module spi #(
 
   // RESET
   reg rst_en = 1'b0;  // programatic reset
-  wire reset = ~ck_rst || rst_en;
+  wire reset = reset_in || rst_en;
   wire reset_s = ~ck_rst_s || rst_en;
 
  // READY
@@ -162,7 +162,7 @@ module spi #(
       out_empty_sync <= 3'b111;
     end else begin
       ck_ss_sync <= {ck_ss_sync[1:0], ck_ss};
-      ck_rst_sync <= {ck_rst_sync[1:0], ck_rst};
+      ck_rst_sync <= {ck_rst_sync[1:0], ~reset_in};
       out_empty_sync <= {out_empty_sync[1:0], out_empty};
     end
   end

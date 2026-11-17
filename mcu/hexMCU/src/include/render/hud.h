@@ -8,7 +8,8 @@
  *   - two bars at the bottom right, side by side: health (red) against the
  *     right edge, jetpack fuel (orange) to its left, each over a dark grey
  *     "empty" bar
- *   - the test sentence at the top and the demo animation (sprites/spinner.spr)
+ *   - HUD_TEST only: the test sentence at the top and the demo animation
+ *     (sprites/spinner.spr)
  *
  * A bar is two sprites the same size: the empty bar, and the fill in front
  * of it. The fill is moved down past the screen's bottom edge so that only
@@ -33,6 +34,12 @@
  * hud_frame()), to show the bars work without a player. */
 #ifndef HUD_DEMO
 #define HUD_DEMO 0
+#endif
+
+/* 1 (-DHUD_TEST=1): also show the test sentence at the top and the
+ * spinner from the card (sprites/spinner.spr). 0: just the bars. */
+#ifndef HUD_TEST
+#define HUD_TEST 0
 #endif
 
 void hud_init(uint16_t screen_w, uint16_t screen_h);

@@ -30,6 +30,12 @@
 #define EXPLOSION_SIZE_X 1
 #define EXPLOSION_SIZE_Y 1
 
+#define GOL_PROJ_SIZE_X 3
+#define GOL_PROJ_SIZE_Y 3
+#define GOL_SIZE_X 5
+#define GOL_SIZE_Y 5
+
+#define PROJECTILE_TYPES 2
 enum projectile_type {
     EXPLOSIVE, GOL
 };
@@ -61,8 +67,7 @@ projectile_t get_new_projectile(
 void set_projectile(
     projectile_t *projectile,
     float x, float y,
-    float vel_x, float vel_y,
-    enum projectile_type type
+    float vel_x, float vel_y
 );
 
 /* The projectile's sprite. projectile_sprite_init()

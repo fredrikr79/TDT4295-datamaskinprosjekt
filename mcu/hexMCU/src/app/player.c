@@ -161,8 +161,7 @@ static void shoot_projectile(player_t *player)
     set_projectile(
         &(player->projectile),
         player->x + PLAYER_SIZE_X / 2, player->y + PLAYER_SIZE_Y / 2, 
-        vel_x, vel_y,
-        EXPLOSIVE
+        vel_x, vel_y
     );
 }
 
@@ -439,7 +438,6 @@ void queue_shot(int x, int y)
     shoot_target_x = (uint16_t) x / 4;
     shoot_target_y = (uint16_t) y / 4;
 }
-
 
 void player_set_default(player_t *player)
 {

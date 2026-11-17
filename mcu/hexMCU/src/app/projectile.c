@@ -9,6 +9,13 @@
 #include <stdint.h>
 
 static uint8_t explosion_box[EXPLOSION_SIZE_X*EXPLOSION_SIZE_Y] = {112};
+static uint8_t gol_box[GOL_SIZE_X*GOL_SIZE_Y] = {
+    0, 96, 96, 96, 0,
+    96, 96, 96, 96, 96,
+    96, 96, 96, 96, 96,
+    96, 96, 96, 96, 96,
+    0, 96, 96, 96, 0
+};
 
 static sprite_t *spr;                   /* the picture, at the projectile's top-left */
 
@@ -62,10 +69,18 @@ static void detonate_projectile(projectile_t *projectile)
     if (projectile->type == EXPLOSIVE)
     {
         box = explosion_box;
-        box_fpga.x1 = (uint16_t) projectile->x;
-        box_fpga.y1 = (uint16_t) projectile->y;
+        box_fpga.x1 = (uint16_t) projectile->x - EXPLOSION_SIZE_X;
+        box_fpga.y1 = (uint16_t) projectile->y - EXPLOSION_SIZE_Y;
         box_fpga.x2 = EXPLOSION_SIZE_X;
         box_fpga.y2 = EXPLOSION_SIZE_Y;
+    }
+    else if (projectile->type == GOL)
+    {
+        box = gol_box;
+        box_fpga.x1 = (uint16_t) projectile->x - GOL_SIZE_X;
+        box_fpga.y1 = (uint16_t) projectile->y - GOL_SIZE_Y;
+        box_fpga.x2 = GOL_SIZE_X;
+        box_fpga.y2 = GOL_SIZE_Y;
     }
     else return;
 
@@ -111,8 +126,7 @@ bool update_projectile(projectile_t *projectile)
 void set_projectile(
     projectile_t *projectile,
     float x, float y,
-    float vel_x, float vel_y,
-    enum projectile_type type
+    float vel_x, float vel_y
 )
 {
     projectile->active = true;
@@ -122,12 +136,19 @@ void set_projectile(
     projectile->velocity_y = vel_y;
     projectile->size_x = 1;
     projectile->size_y = 1;
-    projectile->type = type;
 
+    LOG_DBG("MAU %u", projectile->type);
     if (projectile->type == EXPLOSIVE)
     {
+        LOG_DBG("Mooooooooo");
         projectile->size_x = EXPLOSIVE_SIZE_X;
         projectile->size_y = EXPLOSIVE_SIZE_Y;
+    }
+    else if (projectile->type == GOL)
+    {
+        LOG_DBG("Nyu lai");
+        projectile->size_x = GOL_PROJ_SIZE_X;
+        projectile->size_y = GOL_PROJ_SIZE_Y;
     }
 
     projectile->velocity_box = create_velocity_box(
@@ -143,14 +164,13 @@ projectile_t get_new_projectile(
     enum projectile_type type
 )
 {
-    // uint8_t box[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
     projectile_t projectile = (projectile_t) {};
     set_projectile(
         &projectile,
         x, y,
-        vel_x, vel_y,
-        type
+        vel_x, vel_y
     );
+    projectile.type = type;
 
     return projectile;
 }

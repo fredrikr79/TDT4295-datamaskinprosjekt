@@ -81,12 +81,13 @@ static uint8_t box_player_projectile[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
 static velocity_box_t velocity_box;
 
 static bool shoot_pressed_last_time = false;
+static bool switch_pressed_last_time = false;
 
 static void run_enter(void);
 static void room_enter(void);
 static void menu_reset(void);
 
-static void handle_movement_keys(input_t in);
+static void handle_player_keys(input_t in);
 
 static void go(state_t s)
 {
@@ -626,7 +627,7 @@ static void run_poll(void)
             sim_run(false);
             break;
         }
-        handle_movement_keys(run.keys);
+        handle_player_keys(run.keys);
         break;
     }
 
@@ -645,7 +646,7 @@ static bool any_pad_held(const input_t *in, uint32_t buttons)
  *   left / right   A / D, the arrow keys, or the d-pad
  *   jump           space, the up arrow, d-pad up, or cross (A on an Xbox-style
  *                  pad); held in the air, it flies the jetpack */
-static void handle_movement_keys(input_t in)
+static void handle_player_keys(input_t in)
 {
     bool left_pressed  = key_held(&in, KEY_A)
                          || key_held(&in, KEY_LEFT)
@@ -653,12 +654,27 @@ static void handle_movement_keys(input_t in)
     bool right_pressed = key_held(&in, KEY_D)
                          || key_held(&in, KEY_RIGHT)
                          || any_pad_held(&in, PAD_RIGHT);
+
     bool shoot_pressed = mouse_held(&in, MOUSE_LEFT)
                          || any_pad_held(&in, PAD_R2);
+    bool switch_pressed = mouse_held(&in, MOUSE_RIGHT)
+                         || any_pad_held(&in, PAD_R1);
 
     if (shoot_pressed && !shoot_pressed_last_time)
         queue_shot(run.cx, run.cy);
     shoot_pressed_last_time = shoot_pressed;
+    if (
+        switch_pressed
+        && !switch_pressed_last_time
+        && !(player.projectile.active)
+    )
+    {
+        enum projectile_type type = (&(player.projectile))->type;
+        LOG_DBG("Change from proj: %u", (&(player.projectile))->type);
+        (&(player.projectile))->type = (type + 1) % PROJECTILE_TYPES;
+        LOG_DBG("Change to proj: %u", (&(player.projectile))->type);
+    }
+    switch_pressed_last_time = switch_pressed;
 
     if (left_pressed && !right_pressed)      move_left();
     else if (right_pressed && !left_pressed) move_right();

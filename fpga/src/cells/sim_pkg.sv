@@ -50,7 +50,7 @@ package sim_pkg;
     material_props_t p;
     case (m)
       MatSand: begin
-        p.density          = 'd8;
+        p.density          = 'd12;
         p.falls            = 1'b1;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;

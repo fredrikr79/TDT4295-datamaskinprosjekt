@@ -73,9 +73,11 @@ module fb_compositor #(
 
   // Compositing sim with hud
   assign mem_transaction = memory_pkg::WRITE;
-  assign hud_x = mem_map_pkg::fb_x_t'(bytes_moved);
+  logic hud_opaque_q;
+  color_pkg::hud_color_t hud_color_q;
+  assign hud_x = mem_map_pkg::fb_x_t'(bytes_moved + CountBits'(mem_data_on_cable));
   assign hud_y = row_y;
-  assign mem_write_data = hud_opaque ? hud_color : row_shift[7:0]; // Data to write each cycle
+  assign mem_write_data = hud_opaque_q ? hud_color_q : row_shift[7:0]; // Data to write each cycle
 
   logic can_accept_commit;
   assign can_accept_commit = !row_writing_active; // Accept new row from sim if idle
@@ -90,6 +92,11 @@ module fb_compositor #(
   assign advance_row = row_writing_active
     && (32'(bytes_moved) >= mem_map_pkg::ScreenWidth)
     && !mem_busy && rowStride == 2'd3 ;
+
+  always_ff @(posedge clk) begin
+    hud_opaque_q <= hud_opaque;
+    hud_color_q <= hud_color;
+  end
 
   always_ff @(posedge clk) begin
     frame_written <= 1'b0;

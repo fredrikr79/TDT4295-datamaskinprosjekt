@@ -1,10 +1,10 @@
 GlobalClockFrequency ?= 100_000_000
 LeftPorch ?= 48
-ActiveWidth ?= 32
+ActiveWidth ?= 640
 RightPorch ?= 16
 HorizontalSync ?= 96
 TopPorch ?= 93
-ActiveHeight ?= 32
+ActiveHeight ?= 360
 BottomPorch ?= 70
 VerticalSync ?= 2
 FPS ?= 60

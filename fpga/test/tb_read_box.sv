@@ -3,7 +3,7 @@
 
 module tb_read_box;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   // cols and rows are treated as inclusive maximum offsets by this test:

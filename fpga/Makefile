@@ -23,7 +23,7 @@ ifneq ($(filter $(TOP_MODULE),tb_main),)
 DUMP_OUTPUTS := $(DUMP_DIR)/$(VCD_DUMP)
 endif
 ifneq ($(filter $(TOP_MODULE),tb_sim),)
-GRID_FILE ?= resources/test_grid_1.bmp
+GRID_FILE ?= resources/test_grid_1.dat
 DUMP_FLAGS += -GNUM_GENERATIONS=$(DUMP_MOVIE_MAX_FRAME)
 DUMP_FLAGS += -GGRID_FILE=\"$(GRID_FILE)\"
 DUMP_OUTPUTS := $(DUMP_FRAMES)
@@ -46,7 +46,7 @@ $(DUMP_DIR)/$(DUMP_MOVIE_NAME): $(DUMP_FRAMES)
 	ffmpeg -y \
 		-framerate $(DUMP_MOVIE_FPS) \
 		-i $(DUMP_DIR)/frame_%04d.ppm \
-		-c:v libopenh264 \
+		-c:v libx264 \
 		-pix_fmt yuv420p \
 		$(DUMP_DIR)/movie.mp4
 dump: $(DUMP_OUTPUTS)

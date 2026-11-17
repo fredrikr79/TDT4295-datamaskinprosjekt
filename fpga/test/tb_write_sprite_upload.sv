@@ -10,7 +10,7 @@ module tb_write_sprite_upload #(
   parameter int PAYLOAD_LEN = 2 * memory_pkg::MaxMessageLength + 5
 );
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   localparam int HEADER_LEN = 2;

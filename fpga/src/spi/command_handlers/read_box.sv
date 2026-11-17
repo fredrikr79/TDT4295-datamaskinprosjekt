@@ -23,7 +23,7 @@ module read_box #(
 
   import spi_pck::*;
   import config_pkg::*;
-  import mem_driver_pkg::*;
+  import mem_map_pkg::*;
   import memory_pkg::*;
 
   typedef enum bit [4:0] {
@@ -46,9 +46,6 @@ module read_box #(
   logic [15:0] row_index = 16'd0, col_index = 16'd0;
   logic [15:0] gridX, gridY;
   logic [15:0] rows, cols;
-
-  logic data_valid = 1'b0;
-  always @(posedge clk) data_valid <= mem_data_on_wire;
 
   r_box_states_e state = START;
 
@@ -113,13 +110,13 @@ module read_box #(
             state <= GET_HEIGHT_BOTTOM;
           end
           GET_HEIGHT_BOTTOM: begin
-            rows[7:0] <= in_fifo;
-            state <= GET_MEM_ADDR;
-
             // IF empty at this point, too few parameters we're supplied.
             if(in_empty) begin
               error_valid <= 1'b1;
               error_code <= MISSING_PARAMETER_ERROR;
+            end else begin
+              rows[7:0] <= in_fifo;
+              state <= GET_MEM_ADDR;
             end
           end
           GET_MEM_ADDR: begin
@@ -137,7 +134,7 @@ module read_box #(
             end
           end
           DATA: begin
-            if (data_valid) begin
+            if (mem_data_on_wire) begin
               read_box_fifo <= mem_out;
               read_box_w_en <= 1'b1;
               read_bytes <= read_bytes + 16'd1;

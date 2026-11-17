@@ -9,8 +9,10 @@ module mem_txn_read (
     read_length,
     output memory_pkg::transaction_output_t out
 );
+  logic [31:0] even_address;
 
   always_comb begin
+    even_address = address - address % 2;
     out = '{rwds: 'b0, dq: 'h00, next_state: current_state, read_data: 'h00};
     if (reset) out.next_state = memory_pkg::IDLE;
     else if (enable) begin
@@ -23,21 +25,22 @@ module mem_txn_read (
         memory_pkg::SENDING_CMD: begin
           if (bytes_this_state == 1) begin
             out.next_state = memory_pkg::SENDING_ADDRESS;
-            out.dq = address[31-:8];
+            out.dq = even_address[31-:8];
           end else out.dq = memory_pkg::READ;
         end
         memory_pkg::SENDING_ADDRESS: begin
-          if (bytes_this_state < 3) out.dq = address[31-8*(bytes_this_state+1)-:8];
+          if (bytes_this_state < 3) out.dq = even_address[31-8*(bytes_this_state+1)-:8];
           else out.next_state = memory_pkg::WAITING_ON_LATENCY;
         end
         memory_pkg::WAITING_ON_LATENCY: begin
-          if (memory_pkg::waiting_is_finished(bytes_this_state, double_latency)) begin
+          if (memory_pkg::waiting_is_finished_after(
+                  bytes_this_state, double_latency, address[0]
+              )) begin
             out.next_state = memory_pkg::READING;
-            out.read_data = dq_in;
+            out.read_data  = dq_in;
           end
         end
         memory_pkg::READING: begin
-          out.read_data = dq_in;
           if (memory_pkg::transaction_is_finished(
                   bytes_this_state, memory_pkg::READ, read_length
               )) begin

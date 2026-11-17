@@ -32,7 +32,7 @@ package memory_pkg;
     logic [7:0] read_data;
   } transaction_output_t;
 
-  localparam int unsigned MaxMessageLength = 128;
+  localparam int unsigned MaxMessageLength = 64;
   localparam int unsigned MessageLengthRegisterWidth = (MaxMessageLength > 1) ? $clog2(
       MaxMessageLength + 1
   ) : 1;
@@ -54,7 +54,7 @@ package memory_pkg;
   localparam int unsigned MemoryClockSlowDownFactor = 2;
   localparam int unsigned MemoryClockFrequency =
     config_pkg::GlobalClockFrequency / MemoryClockSlowDownFactor;
-  localparam int unsigned ReadDataDelay = 5 / 2 + 1;
+  localparam int unsigned ReadDataDelay = 2;
 
   localparam int unsigned LatencyCount = MemoryClockFrequency < 85_000_000 ? 3
   : MemoryClockFrequency < 104_000_000 ? 4
@@ -71,20 +71,27 @@ package memory_pkg;
 
   function automatic logic waiting_is_finished(input message_length_t amount_of_latency_ticks,
                                                input logic double_latency);
+    return waiting_is_finished_after(amount_of_latency_ticks, double_latency, 1'b0);
+  endfunction
+
+  function automatic logic waiting_is_finished_after(input message_length_t amount_of_latency_ticks,
+                                                     input logic double_latency,
+                                                     input logic extra);
     memory_pkg::message_length_t latency_count;
     latency_count = message_length_t'(2  * (double_latency ? 2 * LatencyCount : LatencyCount));
 
-    return amount_of_latency_ticks >= latency_count - 1'b1;
+    return amount_of_latency_ticks >= latency_count + 1'b1 + message_length_t'(extra);
   endfunction
+
   function automatic logic transaction_is_finished(input message_length_t amount_of_rws,
                                                    input transaction_e transaction,
                                                    input message_length_t optional_length);
-    return amount_of_rws == get_rw_length(transaction, optional_length) - 1;
+    return amount_of_rws >= get_rw_length(transaction, optional_length) - 1;
   endfunction
 
   localparam bit FixedLatency = 1'b1;
   localparam bit UseHybridBurst = 1'b1;
-  localparam bit [1:0] BurstLength = 2'b11; // burst length of 32 bytes
+  localparam bit [1:0] BurstLength = 2'b00; // burst length of 32 bytes
 
 
   // Possible drive strengths

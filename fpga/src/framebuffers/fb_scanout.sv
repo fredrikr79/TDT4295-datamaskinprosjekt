@@ -1,6 +1,6 @@
 module fb_scanout #(
     parameter int unsigned BurstBytes = memory_pkg::MaxMessageLength,
-    parameter int unsigned LineBytes  = mem_map_pkg::GridWidth
+    parameter int unsigned LineBytes  = mem_map_pkg::ScreenWidth
 ) (
     input logic clk,
     input logic reset,
@@ -57,7 +57,7 @@ module fb_scanout #(
   logic [AddrBits-1:0] read_x;
   assign read_x = AddrBits'(coord_x);
 
-  logic [7:0] fb_line_pixel_data;
+  logic [15:0] fb_line_pixel_data;
 
   fb_line_buffer #(
       .LineBytes(LineBytes)

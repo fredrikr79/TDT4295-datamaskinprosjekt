@@ -1,6 +1,6 @@
 module fb_line_fetcher #(
     parameter int unsigned BurstBytes = memory_pkg::MaxMessageLength,
-    parameter int unsigned LineBytes  = mem_map_pkg::GridWidth
+    parameter int unsigned LineBytes  = mem_map_pkg::ScreenWidth
 ) (
     input logic clk,
     input logic reset,
@@ -37,8 +37,9 @@ module fb_line_fetcher #(
     else next_line = mem_map_pkg::fb_y_t'(coord_y + 1'b1);
   end
 
+  // + Fetch when new frame about to start
   logic fetch_needed;
-  assign fetch_needed = (32'(coord_y) < ActiveHeight - 1) || near_frame_end; // + Fetch when new frame about to start
+  assign fetch_needed = (32'(coord_y) < ActiveHeight - 1) || near_frame_end;
   logic [CountBits-1:0] remaining;
   assign remaining = CountBits'(LineBytes) - bytes_requested;
 
@@ -68,7 +69,7 @@ module fb_line_fetcher #(
       end else if (line_in_progress) begin
         if (mem_data_on_cable) bytes_received <= bytes_received + 1'b1;
 
-        if (fetch_needed && !mem_busy && (bytes_received == bytes_requested)
+        if (fetch_needed && !mem_busy && (bytes_received >= bytes_requested)
             && 32'(bytes_requested) < LineBytes) begin
           mem_address <= mem_map_pkg::fb_line_addr(fb_sel, next_line)
                        + memory_pkg::address_t'(bytes_requested);

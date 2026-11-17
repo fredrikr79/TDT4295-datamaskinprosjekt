@@ -161,10 +161,10 @@ static void print_hex(const uint8_t *b, uint16_t n)
 
 typedef enum { PEND_NONE, PEND_SEND, PEND_READ, PEND_FECHO, PEND_INFO,
                PEND_SPR_UPLOAD, PEND_SPR_NEW, PEND_SPR_MOVE, PEND_SPR_DEL,
-               PEND_SIM } pend_t;
+               PEND_SIM, PEND_GRID, PEND_GRID_WRITE } pend_t;
 static const char *const pend_names[] = { "-", "send", "read", "fecho", "info",
                "sprite upload", "sprite new", "sprite move", "sprite del",
-               "sim" };
+               "sim", "grid", "grid write" };
 
 static struct {
     pend_t      what;
@@ -172,6 +172,7 @@ static struct {
     bool        waiting;      /* queue was full: retrying from cli_poll()  */
     uint32_t    since;        /* when waiting started                      */
     uint16_t    len;          /* read / fecho byte count                   */
+    uint16_t    gx, gy, gw, gh; /* grid: the box read                      */
 
     /* fecho repeat. rounds == 1 is a normal one-shot. */
     uint32_t    rounds;       /* total rounds requested                    */
@@ -312,6 +313,26 @@ static void print_info(void)
     cli_async_end();
 }
 
+/* grid: the cells read back, a row per line, with the cell numbers */
+static void print_grid(void)
+{
+    char line[16 + 3 * 32];
+    cli_async_begin();
+    int p = snprintf(line, sizeof line, "      ");
+    for (uint16_t x = 0; x < pend.gw; x++)
+        p += snprintf(line + p, sizeof line - (size_t)p, " %2u", (unsigned)((pend.gx + x) % 100u));
+    log_raw("%s   (x %% 100)\r\n", line);
+    for (uint16_t y = 0; y < pend.gh; y++) {
+        p = snprintf(line, sizeof line, "  %3u:", (unsigned)(pend.gy + y));
+        for (uint16_t x = 0; x < pend.gw; x++)
+            p += snprintf(line + p, sizeof line - (size_t)p, " %02X", rd_buf[y * pend.gw + x]);
+        log_raw("%s\r\n", line);
+    }
+    cli_async_end();
+}
+
+static void grid_read_around(void);
+
 /* Done callback for every console command, called from fpga_poll(). */
 static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
 {
@@ -329,6 +350,10 @@ static void cli_done(const fpga_cmd_t *cmd, fpga_err_t err)
         print_info();
     else if (what == PEND_READ)
         print_hex(rd_buf, pend.len);
+    else if (what == PEND_GRID)
+        print_grid();
+    else if (what == PEND_GRID_WRITE)
+        grid_read_around();                     /* where did it land? */
     else if (what == PEND_SPR_UPLOAD)
         LOG_INFO("sprite upload: memID %u", (unsigned)fpga_answer_id(cmd));
     else if (what == PEND_SPR_NEW)
@@ -645,6 +670,65 @@ static void cmd_sprite(int argc, char **argv)
             "       sprite move <id> <x> <y> [hide]\r\n"
             "       sprite del <id>\r\n"
             "       sprite lead [<us> | save]\r\n");
+}
+
+/* grid <x> <y> [<w> <h>]   READ_BOX: the cell bytes in a box of the grid
+ * (cells, not pixels; default 5 x 5), a row per line. To see what the FPGA
+ * really holds -- what was written, not what the screen shows.
+ * grid write <x> <y> <w> <h>   WRITE_BOX a numbered pattern there (sand,
+ * low bits 1, 2, 3 ... row by row, up to F, then 1 again), then read the
+ * box with a cell more all round: each byte should be where its number
+ * says. 'sim stop' first, or the sand falls. */
+#define GRID_MAX_W 32u
+
+/* After a grid write: the box and a cell all round (cut at the grid's top
+ * and left edges). */
+static void grid_read_around(void)
+{
+    uint16_t x = pend.gx ? (uint16_t)(pend.gx - 1u) : 0u;
+    uint16_t y = pend.gy ? (uint16_t)(pend.gy - 1u) : 0u;
+    uint16_t w = (uint16_t)(pend.gw + (pend.gx - x) + 1u), h = (uint16_t)(pend.gh + (pend.gy - y) + 1u);
+    if (w > GRID_MAX_W || (uint32_t)w * h > RD_BUF_SIZE) { log_raw("written\r\n"); return; }
+    log_raw("wrote %ux%u at %u, %u: 21 22 23 ... row by row. Read back, with a cell all round:\r\n",
+            pend.gw, pend.gh, pend.gx, pend.gy);
+    pend.gx = x; pend.gy = y; pend.gw = w; pend.gh = h;
+    pend_start(PEND_GRID, fpga_cmd_read_box(fpga_box(x, y, w, h), rd_buf, (uint16_t)(w * h)));
+}
+
+static void cmd_grid(int argc, char **argv)
+{
+    unsigned long x, y, w = 5, h = 5;
+    if (argc == 6 && !strcmp(argv[1], "write")) {
+        if (!parse_arg("x", argv[2], 0xFFFF, &x) || !parse_arg("y", argv[3], 0xFFFF, &y) ||
+            !parse_arg("w", argv[4], GRID_MAX_W - 2u, &w) || !parse_arg("h", argv[5], 0xFFFF, &h))
+            return;
+        if (w == 0 || h == 0 || (w + 2u) * (h + 2u) > RD_BUF_SIZE) {
+            log_raw("1..%u cells wide, (w+2) * (h+2) up to %u\r\n", GRID_MAX_W - 2u, RD_BUF_SIZE);
+            return;
+        }
+        if (console_busy()) return;             /* tx_buf may still be in use */
+        for (unsigned long k = 0; k < w * h; k++)
+            tx_buf[k] = (uint8_t)(SIM_CELL(MAT_SAND) | (k % 15u + 1u));
+        pend.gx = (uint16_t)x; pend.gy = (uint16_t)y; pend.gw = (uint16_t)w; pend.gh = (uint16_t)h;
+        pend_start(PEND_GRID_WRITE, fpga_cmd_write_box(fpga_box((uint16_t)x, (uint16_t)y,
+                   (uint16_t)w, (uint16_t)h), tx_buf, (uint16_t)(w * h)));
+        return;
+    }
+    if (argc != 3 && argc != 5) {
+        log_raw("usage: grid <x> <y> [<w> <h>]  |  grid write <x> <y> <w> <h>   (cells)\r\n");
+        return;
+    }
+    if (!parse_arg("x", argv[1], 0xFFFF, &x) || !parse_arg("y", argv[2], 0xFFFF, &y)) return;
+    if (argc == 5 && (!parse_arg("w", argv[3], GRID_MAX_W, &w) || !parse_arg("h", argv[4], 0xFFFF, &h)))
+        return;
+    if (w == 0 || h == 0 || w * h > RD_BUF_SIZE) {
+        log_raw("1..%u cells wide, up to %u cells in all\r\n", GRID_MAX_W, RD_BUF_SIZE);
+        return;
+    }
+    if (console_busy()) return;
+    pend.gx = (uint16_t)x; pend.gy = (uint16_t)y; pend.gw = (uint16_t)w; pend.gh = (uint16_t)h;
+    pend_start(PEND_GRID, fpga_cmd_read_box(fpga_box((uint16_t)x, (uint16_t)y, (uint16_t)w,
+                                                      (uint16_t)h), rd_buf, (uint16_t)(w * h)));
 }
 
 /* sim start | stop */
@@ -1089,6 +1173,7 @@ static const cli_cmd_t cmds[] = {
     { "fecho",   cmd_fecho,    "fecho [-r N] <n> | <b0> <b1> ...  echo random / given bytes, N rounds" },
     { "sprite",  cmd_sprite,   "sprite upload|new|move|del ... | lead [<us>|save]  sprite commands by hand / when changes go out" },
     { "sim",     cmd_sim,      "sim start|stop      START_SIM / STOP_SIM" },
+    { "grid",    cmd_grid,     "grid <x> <y> [<w> <h>] | write <x> <y> <w> <h>  read the cells there / write a test pattern and read it back" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]  (w h: screen px)" },
     { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
@@ -1218,4 +1303,4 @@ void cli_poll(void)
     int c;
     while ((c = io_getc()) >= 0)
         handle_char((char)c);
-}   
+}

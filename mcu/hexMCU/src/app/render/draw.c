@@ -73,6 +73,13 @@ static struct {
     sprite_t *outline[DRAW_SIZES_MAX][4][2];
     uint16_t  outline_len[DRAW_SIZES_MAX];  /* pixels, one piece */
     uint16_t  sw, sh;                       /* the screen, pixels */
+
+    /* The box whose outline is on the screen now: the one from the last
+     * frame. Sprite changes go out just before the next SYNC (sprite.c),
+     * so the outline shows a frame after it's moved, while a WRITE_BOX
+     * lands at once. Placing here, not under the cursor right now, puts
+     * the box where the outline is, also while the cursor moves. */
+    struct { int32_t x0, y0, x1, y1; bool ok; } shown;
 } d = { .elem = 3, .cur_size = 2 };            /* Sand */
 
 #define DRAW_AIR 0u                             /* draw_elements[]: erasing */
@@ -236,6 +243,7 @@ static void outline_at(bool any, int32_t cx0, int32_t cy0, int32_t cx1, int32_t 
 void draw_enter(void)
 {
     d.active  = true;
+    d.shown.ok = false;                     /* no outline on the screen yet */
     d.running = false;                      /* the menu stopped it */
     /* the click / cross that chose Draw in the menu is most likely still
      * down: don't let it place a box the moment drawing starts */
@@ -264,13 +272,11 @@ static void placed(const fpga_cmd_t *c, fpga_err_t err)
     }
 }
 
-/* A size x size box of element e (cells) at the cursor (screen pixels
- * px, py), cut to the grid, each cell textured. Size 1 is one byte. */
-static void place(uint8_t e, int32_t px, int32_t py)
+/* Element e into the box x0 <= x < x1, y0 <= y < y1 (cells, already cut
+ * to the grid), each cell textured. Size 1 is one byte. */
+static void place(uint8_t e, int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
     if (d.in_flight >= MAX_IN_FLIGHT) return;       /* the queue is busy: next frame */
-    int32_t x0, y0, x1, y1;
-    if (!brush_box(px, py, &x0, &y0, &x1, &y1)) return;
 
     uint16_t w = (uint16_t)(x1 - x0), h = (uint16_t)(y1 - y0);
     uint8_t *buf = tx[tx_next], cell = draw_elements[e].cell;
@@ -284,6 +290,8 @@ static void place(uint8_t e, int32_t px, int32_t py)
                                       (uint16_t)fpga_sim_bytes((uint32_t)w * h));
     c.done = placed;
     if (fpga_submit(&c) == FPGA_OK) {
+        LOG_DBG("WRITE_BOX %s %ux%u at cell %ld, %ld (first byte %02X)", draw_elements[e].name,
+                w, h, (long)x0, (long)y0, buf[0]);
         d.in_flight++;
         tx_next = (tx_next + 1u) % MAX_IN_FLIGHT;
     }
@@ -346,20 +354,22 @@ draw_event_t draw_frame(const input_t *in, int32_t cx, int32_t cy)
     if (any_pad_pressed(in, PAD_DOWN)) grow--;
     if (grow) set_size((int)d.cur_size + grow);
 
-    /* the outline follows the cursor, jumping a whole cell at a time, and
-     * shrinks with the box at the screen's edges */
-    int32_t bx0, by0, bx1, by1;
-    bool any = brush_box(cx, cy, &bx0, &by0, &bx1, &by1);
-    outline_at(any, bx0, by0, bx1, by1);
-
-    /* place / erase while held */
+    /* place / erase while held: where the outline is on the screen now
+     * (last frame's box, see d.shown) */
     bool erase = mouse_held(in, MOUSE_RIGHT) || any_pad_held(in, PAD_EAST | PAD_L2);
     bool put   = mouse_held(in, MOUSE_LEFT)  || any_pad_held(in, PAD_SOUTH | PAD_R2);
     if (d.wait_release && !erase && !put) d.wait_release = false;
-    if (!d.wait_release) {
-        if (erase)    place(DRAW_AIR, cx, cy);
-        else if (put) place(d.elem, cx, cy);
-    }
+    if (!d.wait_release && d.shown.ok && (erase || put))
+        place(erase ? DRAW_AIR : d.elem, d.shown.x0, d.shown.y0, d.shown.x1, d.shown.y1);
+
+    /* the outline follows the cursor, jumping a whole cell at a time, and
+     * shrinks with the box at the screen's edges; it shows from the next
+     * frame, and that's where the next placement goes */
+    int32_t bx0, by0, bx1, by1;
+    bool any = brush_box(cx, cy, &bx0, &by0, &bx1, &by1);
+    outline_at(any, bx0, by0, bx1, by1);
+    d.shown.x0 = bx0; d.shown.y0 = by0; d.shown.x1 = bx1; d.shown.y1 = by1;
+    d.shown.ok = any;
 
     /* pause / run: square, Enter, middle (wheel) button */
     if (any_pad_pressed(in, PAD_WEST) || key_pressed(in, KEY_ENTER) ||

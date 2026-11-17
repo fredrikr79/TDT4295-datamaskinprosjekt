@@ -50,6 +50,7 @@ module write_sprite #(
       write_sprite_fifo <= 8'd0;
       state <= MEM_START;
       written_bytes <= 16'b0;
+      next_id <= 1'b0;
     end else begin
       do_r_en  <= 1'b0;
       write_sprite_w_en  <= 1'b0;

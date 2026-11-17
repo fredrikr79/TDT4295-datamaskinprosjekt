@@ -120,6 +120,41 @@ module main #(
   wire error_critical;
   assign error_critical = 1'b0;
 
+  // HUD
+  assign layers[LayerHud] = layer_pkg::TransparentPixel;
+
+  mem_map_pkg::fb_x_t fb_hud_x;
+  mem_map_pkg::fb_y_t fb_hud_y;
+  logic fb_hud_opaque;
+  color_pkg::hud_color_t fb_hud_color;
+  logic fb_hud_row_ready, fb_hud_overflow;
+  logic fb_hud_line_start;
+  logic fb_compositor_overrun;
+
+  hud_pkg::sprite_mem_id hud_lookup_mem_id;
+  hud_pkg::sprite_mem_id sprite_read_id;
+  logic [31:0] hud_lookup_mem_addr;
+
+  logic hud_mem_toggle;
+  memory_pkg::transaction_e hud_mem_transaction;
+  memory_pkg::address_t hud_mem_address;
+  memory_pkg::message_length_t hud_mem_length;
+
+  logic fb_wr_mem_toggle;
+  memory_pkg::transaction_e fb_wr_mem_transaction;
+  memory_pkg::address_t fb_wr_mem_address;
+  memory_pkg::message_length_t fb_wr_mem_length;
+  logic [7:0] fb_wr_mem_in;
+
+  logic [memory_pkg::NumMemClients-1:0] mem_client_toggle;
+  memory_pkg::transaction_e mem_client_transaction[memory_pkg::NumMemClients];
+  memory_pkg::address_t mem_client_address[memory_pkg::NumMemClients];
+  memory_pkg::message_length_t mem_client_length_burst[memory_pkg::NumMemClients];
+  logic [7:0] mem_client_write_data[memory_pkg::NumMemClients];
+  logic [memory_pkg::NumMemClients-1:0] mem_client_busy;
+  logic [memory_pkg::NumMemClients-1:0] mem_client_data_on_cable;
+  logic [memory_pkg::NumMemClients-1:0] mem_client_grant; // Used by testbenches
+
   vga vga_controller (
       .clk(clk),
       .reset(~ck_rst),
@@ -230,25 +265,6 @@ module main #(
       .pixel(layers[LayerCells]),
       .underrun(fb_underrun)
   );
-  // HUD
-  assign layers[LayerHud] = layer_pkg::TransparentPixel;
-
-  mem_map_pkg::fb_x_t fb_hud_x;
-  mem_map_pkg::fb_y_t fb_hud_y;
-  logic fb_hud_opaque;
-  color_pkg::hud_color_t fb_hud_color;
-  logic fb_hud_row_ready, fb_hud_overflow;
-  logic fb_hud_line_start;
-  logic fb_compositor_overrun;
-
-  hud_pkg::sprite_mem_id hud_lookup_mem_id;
-  hud_pkg::sprite_mem_id sprite_read_id;
-  logic [31:0] hud_lookup_mem_addr;
-
-  logic hud_mem_toggle;
-  memory_pkg::transaction_e hud_mem_transaction;
-  memory_pkg::address_t hud_mem_address;
-  memory_pkg::message_length_t hud_mem_length;
 
   // Rasterizes one row of sprite pixels ahead of the compositor writing it.
   hud_line_buffer hud_painter (
@@ -280,12 +296,6 @@ module main #(
       // Currently not wired up against anything, but is a signal that is true on len(shortlist) > MaxActiveSprites
       .shortlist_overflow(fb_hud_overflow)
   );
-
-  logic fb_wr_mem_toggle;
-  memory_pkg::transaction_e fb_wr_mem_transaction;
-  memory_pkg::address_t fb_wr_mem_address;
-  memory_pkg::message_length_t fb_wr_mem_length;
-  logic [7:0] fb_wr_mem_in;
 
   fb_compositor fb_writer (
       .clk(clk),
@@ -355,15 +365,6 @@ module main #(
       .sim_idle(sim_idle),
       .allow(mem_allow)
   );
-
-  logic [memory_pkg::NumMemClients-1:0] mem_client_toggle;
-  memory_pkg::transaction_e mem_client_transaction[memory_pkg::NumMemClients];
-  memory_pkg::address_t mem_client_address[memory_pkg::NumMemClients];
-  memory_pkg::message_length_t mem_client_length_burst[memory_pkg::NumMemClients];
-  logic [7:0] mem_client_write_data[memory_pkg::NumMemClients];
-  logic [memory_pkg::NumMemClients-1:0] mem_client_busy;
-  logic [memory_pkg::NumMemClients-1:0] mem_client_data_on_cable;
-  logic [memory_pkg::NumMemClients-1:0] mem_client_grant; // Used by testbenches
 
   always_comb begin
     mem_client_toggle = '0;

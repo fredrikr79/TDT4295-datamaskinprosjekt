@@ -133,7 +133,7 @@ package sim_rules;
     if (stencil.center.material == sim_pkg::MatLava)
       if (stencil.top.material == sim_pkg::MatWater)
         result = {sim_pkg::MatStone, 1'b0, 3'(sim_pkg::IgneousStoneThickness)};
-      else if (stencil.top.material == sim_pkg::MatStone && stencil.top[2:0] > 0 && stencil.top[3] == 1'd1)
+      else if (stencil.top.material == sim_pkg::MatStone && stencil.top[2:0] > 0 && stencil.top[3] == 1'd0)
         result = {sim_pkg::MatStone, 1'b0, stencil.top[2:0] - 3'd1};
     return result;
   endfunction

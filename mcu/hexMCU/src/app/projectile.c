@@ -27,24 +27,30 @@ static void sprite_follow(const projectile_t *projectile)
 
 bool check_bounds(projectile_t *projectile)
 {
+    uint8_t collsion_mask = 0;
+
     if (projectile->x <= 0)
     {
         projectile->x = 0;
+        collsion_mask |= 0b0100;
     }
     else if (projectile->y <= 0)
     {
         projectile->y = 0;
+        collsion_mask |= 0b0010;
     }
     else if (ROOM_X <= projectile->x + projectile->size_x)
     {
         projectile->x = ROOM_X - projectile->size_x;
+        collsion_mask |= 0b0001;
     }
     else if (ROOM_Y <= projectile->y + projectile->size_y)
     {
         projectile->y = ROOM_Y - projectile->size_y;
+        collsion_mask |= 0b1000;
     }
-    else return false;
-    return true;
+    
+    return collsion_mask;
 }
 
 
@@ -59,11 +65,12 @@ static void next_step(projectile_t *projectile)
     sprite_follow(projectile);                  /* sprite_poll() sends it */
 }
 
-static void detonate_projectile(projectile_t *projectile)
+static void detonate_projectile(
+    projectile_t *projectile,
+    uint8_t collision_mask
+)
 {
     uint8_t *box;
-    uint16_t size_x;
-    uint16_t size_y;
     uint16_t proj_size_x;
     uint16_t proj_size_y;
     fpga_box_t box_fpga = {0};
@@ -74,25 +81,32 @@ static void detonate_projectile(projectile_t *projectile)
     if (projectile->type == EXPLOSIVE)
     {
         box = explosion_box;
-        size_x = EXPLOSION_SIZE_X;
-        size_y = EXPLOSION_SIZE_Y;
-        proj_size_x = EXPLOSIVE_SIZE_X;
-        proj_size_y = EXPLOSIVE_SIZE_Y;
+        box_fpga.x2 = EXPLOSION_SIZE_X;
+        box_fpga.y2 = EXPLOSION_SIZE_Y;
+        proj_size_x = EXPLOSION_PROJ_SIZE_X;
+        proj_size_y = EXPLOSION_PROJ_SIZE_Y;
     }
     else if (projectile->type == GOL)
     {
         box = gol_box;
-        size_x = GOL_SIZE_X;
-        size_y = GOL_SIZE_Y;
+        box_fpga.x2 = GOL_SIZE_X;
+        box_fpga.y2 = GOL_SIZE_Y;
         proj_size_x = GOL_PROJ_SIZE_X;
         proj_size_y = GOL_PROJ_SIZE_Y;
     }
     else return;
 
-    box_fpga.x1 = (uint16_t) projectile->x + abs(size_x - proj_size_x) / 2;
-    box_fpga.y1 = (uint16_t) projectile->y + abs(size_y - proj_size_y) / 2;
-    box_fpga.x2 = size_x;
-    box_fpga.y2 = size_y;
+    box_fpga.x1 = (uint16_t) projectile->x + proj_size_x / 2;
+    box_fpga.y1 = (uint16_t) projectile->y + proj_size_y / 2;
+    if (collision_mask & 0b0001)
+        box_fpga.x1 = (uint16_t) projectile->x + proj_size_x - box_fpga.x2 / 2;
+    else if (collision_mask & 0b0100)
+        box_fpga.x1 = (uint16_t) projectile->x - box_fpga.x2 / 2;
+
+    if (collision_mask & 0b0010)
+        box_fpga.y1 = (uint16_t) projectile->y - box_fpga.y2 / 2;
+    else if (collision_mask & 0b1000)
+        box_fpga.y1 = (uint16_t) projectile->y + proj_size_y - box_fpga.y2 / 2;
 
     // TODO: Check if there's room in the fpga command queue to not break more important functions
 
@@ -113,7 +127,7 @@ static void detonate_projectile(projectile_t *projectile)
 bool update_projectile(projectile_t *projectile)
 {
     // Move the player
-    bool collided = perform_object_movement(
+    uint8_t collision_mask = perform_object_movement(
         &(projectile->x), &(projectile->y),
         &(projectile->velocity_x), &(projectile->velocity_y),
         projectile->size_x, projectile->size_y,
@@ -121,10 +135,10 @@ bool update_projectile(projectile_t *projectile)
         projectile->velocity_box, projectile->box
     );
 
-    collided = collided || check_bounds(projectile);
+    collision_mask |= check_bounds(projectile);
 
-    if (collided) {
-        detonate_projectile(projectile);
+    if (collision_mask) {
+        detonate_projectile(projectile, collision_mask);
         return true;
     }
 
@@ -149,8 +163,8 @@ void set_projectile(
 
     if (projectile->type == EXPLOSIVE)
     {
-        projectile->size_x = EXPLOSIVE_SIZE_X;
-        projectile->size_y = EXPLOSIVE_SIZE_Y;
+        projectile->size_x = EXPLOSION_PROJ_SIZE_X;
+        projectile->size_y = EXPLOSION_PROJ_SIZE_Y;
     }
     else if (projectile->type == GOL)
     {

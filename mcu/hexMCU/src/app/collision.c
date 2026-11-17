@@ -44,7 +44,7 @@ velocity_box_t create_velocity_box(
     return (velocity_box_t) {box, rel_x, rel_y, dx*dy};
 }
 
-bool perform_object_movement(
+uint8_t perform_object_movement(
     float *pos_x, float *pos_y,
     float *velocity_x, float *velocity_y,
     uint8_t size_x, uint8_t size_y,
@@ -325,6 +325,12 @@ bool perform_object_movement(
         }
     }
 
+    // Create collision mask to return
+    uint8_t collision_mask = (uint8_t) (horizontal_collision && x_is_right);
+    collision_mask += ((uint8_t) (vertical_collision && !y_is_down )) << 1;
+    collision_mask += ((uint8_t) (horizontal_collision && !x_is_right)) << 2;
+    collision_mask += ((uint8_t) (vertical_collision && y_is_down)) << 3;
+
     // Stop object if collided, and apply movement
     // LOG_DBG("horizontal_collision: %u", horizontal_collision);
     // LOG_DBG("vertical_collision: %u", vertical_collision);
@@ -372,5 +378,5 @@ bool perform_object_movement(
         *velocity_y = 0;
     }
 
-    return vertical_collision || horizontal_collision;
+    return collision_mask;
 };

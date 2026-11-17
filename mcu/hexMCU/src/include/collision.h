@@ -22,7 +22,7 @@ velocity_box_t create_velocity_box(
     float vel_x, float vel_y
 );
 
-bool perform_object_movement(
+uint8_t perform_object_movement(
     float *pos_x, float *pos_y,
     float *velocity_x, float *velocity_y,
     uint8_t size_x, uint8_t size_y,

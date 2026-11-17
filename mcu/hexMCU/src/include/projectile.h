@@ -27,6 +27,8 @@
 
 #define EXPLOSIVE_SIZE_X 2
 #define EXPLOSIVE_SIZE_Y 2
+#define EXPLOSION_SIZE_X 1
+#define EXPLOSION_SIZE_Y 1
 
 enum projectile_type {
     EXPLOSIVE, GOL

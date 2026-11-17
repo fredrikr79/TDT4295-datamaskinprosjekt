@@ -8,13 +8,7 @@
 #include <math.h>
 #include <stdint.h>
 
-static uint8_t explosion_box = {
-    112, 112, 112, 112, 112,
-    112, 112, 112, 112, 112,
-    112, 112, 112, 112, 112,
-    112, 112, 112, 112, 112,
-    112, 112, 112, 112, 112
-};
+static uint8_t explosion_box[EXPLOSION_SIZE_X*EXPLOSION_SIZE_Y] = {112};
 
 static sprite_t *spr;                   /* the picture, at the projectile's top-left */
 
@@ -62,13 +56,16 @@ static void detonate_projectile(projectile_t *projectile)
     uint8_t *box;
     fpga_box_t box_fpga = {0};
 
+    if (!(projectile->active)) return;
+    projectile->active = false;
+
     if (projectile->type == EXPLOSIVE)
     {
-        box = &explosion_box;
+        box = explosion_box;
         box_fpga.x1 = (uint16_t) projectile->x;
         box_fpga.y1 = (uint16_t) projectile->y;
-        box_fpga.x2 = 5;
-        box_fpga.y2 = 5;
+        box_fpga.x2 = EXPLOSION_SIZE_X;
+        box_fpga.y2 = EXPLOSION_SIZE_Y;
     }
     else return;
 
@@ -126,13 +123,18 @@ void set_projectile(
     projectile->size_x = 1;
     projectile->size_y = 1;
     projectile->type = type;
-    projectile->velocity_box = (velocity_box_t) {};
 
     if (projectile->type == EXPLOSIVE)
     {
         projectile->size_x = EXPLOSIVE_SIZE_X;
         projectile->size_y = EXPLOSIVE_SIZE_Y;
     }
+
+    projectile->velocity_box = create_velocity_box(
+        x, y,
+        projectile->size_x, projectile->size_y,
+        vel_x, vel_y
+    );
 }
 
 projectile_t get_new_projectile(

@@ -80,6 +80,8 @@ static uint8_t box[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
 static uint8_t box_player_projectile[VELOCITY_BOX_X*VELOCITY_BOX_Y] = {0};
 static velocity_box_t velocity_box;
 
+static bool shoot_pressed_last_time = false;
+
 static void run_enter(void);
 static void room_enter(void);
 static void menu_reset(void);
@@ -330,6 +332,7 @@ static void phys_reset(void)
 }
 
 static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err);
+static void update_projectile_callback(const fpga_cmd_t *cmd, fpga_err_t err);
 
 /* F8: the player to the top of the screen, same x. Done here, with no read
  * out: a read already sent is for the box around the old place. */
@@ -354,6 +357,17 @@ static void phys_read(void)
     fpga_cmd_t c = fpga_cmd_read_box(velocity_box.box, box, velocity_box.length);
     c.done = update_player_callback;
     fpga_status_t st = fpga_submit(&c);
+    if (player.projectile.active)
+    {
+        fpga_cmd_t plr_proj_cmd = fpga_cmd_read_box(
+            player.projectile.velocity_box.box,
+            player.projectile.box,
+            player.projectile.velocity_box.length
+        );
+        plr_proj_cmd.done = update_projectile_callback;
+        plr_proj_cmd.ctx = &(player.projectile);
+        fpga_status_t proj_status = fpga_submit(&plr_proj_cmd);
+    }
     if (st == FPGA_OK)    { phys.reading = true; return; }
     if (st == FPGA_EFULL) return;
     static bool told;           /* a bad box: once, not 60 times a second */
@@ -424,7 +438,7 @@ static void room_enter(void)
 void set_player(player_t plr)
 {
     player = plr;
-    player.projectile.box = box_player_projectile;
+    (&(player.projectile))->box = box_player_projectile;
 }
 
 /* Set the next velocity box */
@@ -460,6 +474,36 @@ static void update_player_callback(const fpga_cmd_t *cmd, fpga_err_t err)
     health_bar_set(player.health * 100u / PLAYER_MAX_HEALTH);
     fuel_bar_set(player.fly_meter * 100u / MAX_FLY_TIME);
 #endif
+    /* The next owed step, if any -- unless that step took us out of
+     * playing (a portal saves the room, dying reloads it). */
+    if (state == S_RUN && run_state == RS_SIM) phys_read();
+}
+
+/* A step's READ_BOX is back: one step of the player. */
+static void update_projectile_callback(const fpga_cmd_t *cmd, fpga_err_t err)
+{
+    projectile_t projectile = *((projectile_t*) (cmd->ctx));
+
+    phys.reading = false;
+    if (err != FPGA_ERR_NONE)
+    {
+        if (err == FPGA_ERR_CANCELLED || err == FPGA_ERR_ABORTED)
+            return;                                 /* a resync / reset is already on it */
+        LOG_WARN(
+            "read box, x %d, y %d, dx %d, dy %d: %s",
+            projectile.velocity_box.box.x1,
+            projectile.velocity_box.box.y1,
+            projectile.velocity_box.box.x2,
+            projectile.velocity_box.box.y2,
+            fpga_err_str(err)
+        );
+        failed = true;                              /* the link is out of step: resync */
+        return;
+    }
+
+    if (state != S_RUN) return;     /* a room started loading (F5, F6...): the box is old */
+    if (phys.owed) phys.owed--;
+    update_projectile((projectile_t*) (cmd->ctx));  /* moves its sprite too */
     /* The next owed step, if any -- unless that step took us out of
      * playing (a portal saves the room, dying reloads it). */
     if (state == S_RUN && run_state == RS_SIM) phys_read();
@@ -603,14 +647,19 @@ static bool any_pad_held(const input_t *in, uint32_t buttons)
  *                  pad); held in the air, it flies the jetpack */
 static void handle_movement_keys(input_t in)
 {
-    bool left_pressed  = key_held(&in, KEY_A) || key_held(&in, KEY_LEFT) ||
-                         any_pad_held(&in, PAD_LEFT);
-    bool right_pressed = key_held(&in, KEY_D) || key_held(&in, KEY_RIGHT) ||
-                         any_pad_held(&in, PAD_RIGHT);
-    bool lol = key_held(&in, KEY_F) || key_held(&in, KEY_RIGHT) ||
-                         any_pad_held(&in, PAD_RIGHT);
+    bool left_pressed  = key_held(&in, KEY_A)
+                         || key_held(&in, KEY_LEFT)
+                         || any_pad_held(&in, PAD_LEFT);
+    bool right_pressed = key_held(&in, KEY_D)
+                         || key_held(&in, KEY_RIGHT)
+                         || any_pad_held(&in, PAD_RIGHT);
+    bool shoot_pressed = mouse_held(&in, MOUSE_LEFT)
+                         || any_pad_held(&in, PAD_R2);
 
-    if (lol)      queue_shot();
+    if (shoot_pressed && !shoot_pressed_last_time)
+        queue_shot(run.cx, run.cy);
+    shoot_pressed_last_time = shoot_pressed;
+
     if (left_pressed && !right_pressed)      move_left();
     else if (right_pressed && !left_pressed) move_right();
     else                                     move_stop();

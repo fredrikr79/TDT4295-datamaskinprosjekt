@@ -70,6 +70,7 @@ module main #(
 
   // Row-commit handshake: sim_buffers -> fb_compositor
   logic sim_pulse_row_commit, sim_commit_res_buffer, sim_pulse_frame_restart;
+  logic sim_idle;
   mem_map_pkg::fb_y_t sim_commit_y;
   sim_pkg::row_buffer_t sim_commit_rows [2];
   logic sim_frame_active;  // a simulated frame is in progress
@@ -140,19 +141,6 @@ module main #(
       .line_end(line_end)
   );
 
-
-//   layer_pkg::layer_px_t cells_pixel_unused;
-//   cells cell_controller (
-//       .clk(clk),
-//       .sw(sw),
-//       .sim_running(sim_running),
-//       .active_area(active_area),
-//       .pixel_pulse(pixel_pulse),
-//       .coord_x(coord_x),
-//       .coord_y(coord_y),
-//       .pixel(cells_pixel_unused) // Temporary for implementing frame buffer
-//   );
-
   sim_buffers sim_line_memory_reader(
     .clk(clk),
     .reset(~ck_rst),
@@ -173,6 +161,7 @@ module main #(
     .pulse_frame_restart(sim_pulse_frame_restart),
     .commit_rows(sim_commit_rows),
     .sim_frame_active(sim_frame_active),
+    .idle(sim_idle),
 
     .mem_toggle(sim_mem_toggle),
     .mem_transaction(sim_mem_transaction),
@@ -189,6 +178,7 @@ module main #(
     .clk(clk),
     .pulse_new_row(pulse_new_row),
     .sim_running(sim_frame_active),
+    .pulse_frame_restart(sim_pulse_frame_restart),
     .input_buffers(sim_window),
     .pulse_transaction_pair_done(pulse_transaction_pair_done),
     .pulse_row_done(pulse_row_done),
@@ -340,6 +330,7 @@ module main #(
 
   hud hud_controller (
       .clk(clk),
+      .reset(~ck_rst),
       .req_valid(sprite_req_valid),
       .sprite_mem_id(sprite_mem_id),
       .sprite_w_mem_addr(spi_write_sprite_base_addr),
@@ -360,7 +351,8 @@ module main #(
   mem_access_policy access_policy (
       .v_blank(v_blank),
       .near_frame_end(near_frame_end),
-      .sim_running(sim_running || sim_frame_active),
+      .sim_running(sim_running),
+      .sim_idle(sim_idle),
       .allow(mem_allow)
   );
 
@@ -414,8 +406,6 @@ module main #(
     mem_client_address[memory_pkg::MemClientCompositorID]     = fb_wr_mem_address;
     mem_client_length_burst[memory_pkg::MemClientCompositorID]= fb_wr_mem_length;
     mem_client_write_data[memory_pkg::MemClientCompositorID]  = fb_wr_mem_in;
-
-    // TODO: Add the other clients here when they implement the external SRAM
   end
 
   spi spi_controller (
@@ -464,36 +454,6 @@ module main #(
       .error_critical(error_critical)
     );
 
-
-  // simulator simulation_core (
-  //   .clk(clk),
-  //   .pulse_new_row(pulse_new_row),
-  //   .sim_running(sim_running),
-  //   .buffers(buffers),
-  //   .pulse_transaction_pair_done(pulse_transaction_pair_done),
-  //   .pulse_row_done(pulse_row_done),
-  //   .res_buffer(res_buffers)
-  // );
-
-  if(ON_BOARD_MEMORY) begin : g_mem_onboard
-    memory_onboard memory (
-      .clk(clk),
-      .reset(~ck_rst),
-      .enable(1'b1),
-      .transaction_toggle(mem_toggle),
-
-      .next_transaction(mem_transaction),
-      .address(mem_addr),
-      .length(mem_len),
-      .write_data(mem_in),
-
-      // Info to FPGA
-      .busy(mem_client_busy),
-      .data_on_cable(mem_client_data_on_cable),
-      .read_data(mem_out)
-    );
-  end else begin : g_mem
-
     memory memory (
       .clk(clk),
       .reset(~ck_rst),
@@ -515,7 +475,6 @@ module main #(
       .dq(mem_data_bus),
       .rwds(mem_rwds)
     );
-  end
 
 endmodule
 

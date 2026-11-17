@@ -6,6 +6,7 @@ module hud #(
     input [31:0] sprite_w_mem_addr,
     input hud_pkg::sprite_op_e sprite_req_op,
     input hud_pkg::sprite_inst_entry_t sprite_req_body,
+    input logic reset,
 
     // Sprite instance memory entry lookup for BRAM implementation
     // Write signal resides in req body.
@@ -77,7 +78,7 @@ hud_pkg::sprite_lut_id read_req_id;
 
 always_comb begin
     sprite_read_entry = '0;
-    sprite_read_entry.active = dynamic_r_data.active;
+    sprite_read_entry.active = dynamic_r_data.active & sprite_id_bitmap[sprite_lut_read_id];
     sprite_read_entry.id = read_req_id;
     sprite_read_entry.mem_id = static_r_data.mem_id;
     sprite_read_entry.x = dynamic_r_data.x;
@@ -88,20 +89,24 @@ end
 
 always_ff @(posedge clk) begin
     // Write data
-    read_req_id <= sprite_lut_read_id;
-    if(op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE, hud_pkg::LUT_DELETE}) begin
-        dynamic_data_mem[sprite_req_body.id] <= dynamic_w_data;
-        if(op == hud_pkg::LUT_WRITE) begin
-            sprite_id_bitmap[sprite_req_body.id] <= 1'b1;
-            static_data_mem[sprite_req_body.id] <= static_w_data;
-        end else if (op == hud_pkg::LUT_DELETE) begin
-            sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
+    if(reset) begin
+        sprite_id_bitmap <= 1'b0;
+    end else begin
+        read_req_id <= sprite_lut_read_id;
+        if(op inside {hud_pkg::LUT_WRITE, hud_pkg::LUT_UPDATE, hud_pkg::LUT_DELETE}) begin
+            dynamic_data_mem[sprite_req_body.id] <= dynamic_w_data;
+            if(op == hud_pkg::LUT_WRITE) begin
+                sprite_id_bitmap[sprite_req_body.id] <= 1'b1;
+                static_data_mem[sprite_req_body.id] <= static_w_data;
+            end else if (op == hud_pkg::LUT_DELETE) begin
+                sprite_id_bitmap[sprite_req_body.id] <= 1'b0;
+            end
         end
-    end
 
-    // Read data
-    static_r_data <= static_data_mem[sprite_lut_read_id];
-    dynamic_r_data <= dynamic_data_mem[sprite_lut_read_id];
+        // Read data
+        static_r_data <= static_data_mem[sprite_lut_read_id];
+        dynamic_r_data <= dynamic_data_mem[sprite_lut_read_id];
+    end
 
 end
 

@@ -43,6 +43,7 @@ package sim_pkg;
   } material_props_t;
 
   localparam int GolRefreshDelay = 'd100;
+  localparam logic [2:0] IgneousStoneThickness = 'sb111;
 
   // Lookup table for materials
   function automatic material_props_t props(material_t m);
@@ -180,6 +181,11 @@ package sim_pkg;
     logic [BitsPerPixel-MaterialBits-1:0] data;
   } pixel_t;
   typedef struct packed {
+    logic right;
+    logic center;
+    logic left;
+  } neighbourhood_row_en_t;
+  typedef struct packed {
     pixel_t right;
     pixel_t center;
     pixel_t left;
@@ -212,4 +218,26 @@ package sim_pkg;
   function automatic logic no_movement(fluid_movement_t movement);
     return !movement.topRight && !movement.topLeft && !movement.centerRight && !movement.centerLeft;
   endfunction
+
+  // Liquid turbulence
+
+  function automatic pixel_t add_turbulence(input pixel_t pixel);
+    pixel_t result;
+    result = pixel;
+    if (sim_pkg::mat_spreads(pixel.material) && pixel.data != 4'd15) begin
+      result.data = pixel.data + 4'd1;
+    end
+    return result;
+  endfunction
+
+  function automatic sim_pkg::pixel_t remove_turbulence(input sim_pkg::pixel_t pixel);
+    pixel_t result;
+    result = pixel;
+    if (sim_pkg::mat_spreads(pixel.material) && pixel.data != 4'd0) begin
+      result.data = pixel.data - 4'd1;
+    end
+    return result;
+  endfunction
+
+
 endpackage

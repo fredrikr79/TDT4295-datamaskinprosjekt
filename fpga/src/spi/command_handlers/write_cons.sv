@@ -79,7 +79,6 @@ module write_cons #(
             state <= MEM_GET_MSG_LENGTH_TOP;
           end
           MEM_GET_MSG_LENGTH_TOP: begin
-            //TODO fix MSG is two bytes
             do_r_en <= 1'b1;
             total_bytes[15:8] <= in_fifo;
             state <= MEM_GET_MSG_LENGTH_BOTTOM;

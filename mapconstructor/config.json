@@ -311,12 +311,26 @@
             ]
         },
         "-1,-1": {
+            "path": "final/cool_rooms/coolroom3.png",
+            "portals": [
+                
+                {
+                    "from": [157, 74], "to": [160, 86],
+                    "room": [-0, -1], "pos": [158, null]
+                },
+                {
+                    "from": [0, 74], "to": [2, 86],
+                    "room": [-2, -1], "pos": [158, null]
+                }
+            ]
+        },
+        "-2,-1": {
             "path": "final/cool_rooms/coolroom2.png",
             "portals": [
                 
                 {
                     "from": [0, 74], "to": [2, 86],
-                    "room": [-0, -1], "pos": [158, null]
+                    "room": [-1, -1], "pos": [158, null]
                 },
                 {
                     "from": [6, 88], "to": [25, 90],

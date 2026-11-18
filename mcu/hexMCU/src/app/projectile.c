@@ -8,8 +8,9 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "fpga.h"
 
-static uint8_t explosion_box[EXPLOSION_SIZE_X*EXPLOSION_SIZE_Y] = {112};
+static uint8_t explosion_box[EXPLOSION_SIZE_X*EXPLOSION_SIZE_Y] = {(uint8_t)(SIM_CELL(MAT_EXPLOSIVE) | SIM_EXPLOSIVE_FULL)};
 static uint8_t gol_box[GOL_SIZE_X*GOL_SIZE_Y] = {
     0, 96, 96, 96, 0,
     96, 96, 96, 96, 96,

@@ -307,57 +307,6 @@ bool save_room(int x, int y, uint8_t *tileIDs)
   return save_data(x, y, data, data_size);
 }
 
-struct online_room start_online_room(int x, int y, uint8_t *tileIDs)
-{
-  struct online_room room = {
-    x, y,
-    tileIDs, 0, 0, 0,
-    {0}, 0
-  };
-
-  return room;
-}
-
-void progress_online_room(struct online_room *room, uint8_t *new_ids, uint16_t id_length)
-{
-  // Init room progression if first progress
-  if (room->tile_progress == 0)
-  {
-    room->prev_id = new_ids[0];
-    room->consecutive = 0;  // the loop below counts new_ids[0] itself
-  }
-
-  // Iterate through IDs in received batch
-  for (uint16_t i = 0; i < id_length; i++)
-  {
-    // Add data if new ID met, or consecutive reaches 5 bytes in length
-    if (new_ids[i] != room->prev_id || room->consecutive == 4294967295)
-    {
-      add_data(
-        room->prev_id, room->consecutive,
-        room->data, &room->data_size
-      );
-      room->prev_id = new_ids[i];
-      room->consecutive = 0;
-    }
-
-    room->consecutive++;
-  }
-  room->tile_progress += id_length;
-}
-
-bool save_online_room(struct online_room *room)
-{
-  // Add the last section
-  add_data(
-    room->prev_id, room->consecutive,
-    room->data, &room->data_size
-  );
-  room->consecutive = 0;
-
-  return save_data(room->x, room->y, room->data, room->data_size);
-}
-
 bool delete_save(int x, int y)
 {
   char filename[NAME_LEN] = {0};

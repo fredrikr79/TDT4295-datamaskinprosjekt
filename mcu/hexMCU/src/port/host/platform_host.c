@@ -109,3 +109,5 @@ bool plat_exit(int code)
 }
 
 void plat_mcu_reset(void) { cli_quit("MCU reset: start the program again"); }
+
+plat_reset_t plat_reset_cause(void) { return PLAT_RESET_POWER; }   /* a new process: as from power-up */

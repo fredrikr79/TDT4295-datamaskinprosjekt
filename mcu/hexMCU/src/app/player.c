@@ -154,15 +154,27 @@ static void shoot_projectile(player_t *player)
     // TODO: Check if there's room in the fpga command queue to not break more important functions
 
     // Aim the projectile
-    float vel_x = shoot_target_x - player->x - PLAYER_SIZE_X / 2;
-    float vel_y = shoot_target_y - player->y - PLAYER_SIZE_Y / 2;
+    float x = player->x + PLAYER_SIZE_X / 2;
+    float y = player->y + PLAYER_SIZE_Y / 2;
+    if (player->projectile.type == EXPLOSIVE)
+    {
+        x -= EXPLOSION_PROJ_SIZE_X / 2;
+        y -= EXPLOSION_PROJ_SIZE_Y / 2;
+    }
+    else if (player->projectile.type == GOL)
+    {
+        x -= GOL_PROJ_SIZE_X / 2;
+        y -= GOL_PROJ_SIZE_Y / 2;
+    }
+    float vel_x = shoot_target_x - x;
+    float vel_y = shoot_target_y - y;
     float magnitude = sqrtf(vel_x*vel_x + vel_y*vel_y);
     vel_x *= PROJECTILE_SPEED / magnitude;
     vel_y *= PROJECTILE_SPEED / magnitude;
 
     set_projectile(
         &(player->projectile),
-        player->x + PLAYER_SIZE_X / 2, player->y + PLAYER_SIZE_Y / 2, 
+        x, y, 
         vel_x, vel_y
     );
 }

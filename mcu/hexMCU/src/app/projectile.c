@@ -71,42 +71,46 @@ static void detonate_projectile(
 )
 {
     uint8_t *box;
-    uint16_t proj_size_x;
-    uint16_t proj_size_y;
     fpga_box_t box_fpga = {0};
 
     if (!(projectile->active)) return;
     projectile->active = false;
 
+    // Determine the size of the result
     if (projectile->type == EXPLOSIVE)
     {
         box = explosion_box;
         box_fpga.x2 = EXPLOSION_SIZE_X;
         box_fpga.y2 = EXPLOSION_SIZE_Y;
-        proj_size_x = EXPLOSION_PROJ_SIZE_X;
-        proj_size_y = EXPLOSION_PROJ_SIZE_Y;
     }
     else if (projectile->type == GOL)
     {
         box = gol_box;
         box_fpga.x2 = GOL_SIZE_X;
         box_fpga.y2 = GOL_SIZE_Y;
-        proj_size_x = GOL_PROJ_SIZE_X;
-        proj_size_y = GOL_PROJ_SIZE_Y;
     }
     else return;
 
-    box_fpga.x1 = (uint16_t) projectile->x + proj_size_x / 2;
-    box_fpga.y1 = (uint16_t) projectile->y + proj_size_y / 2;
+    // Find ideal placement
+    float x = projectile->x + projectile->size_x / 2;
+    float y = projectile->y + projectile->size_y / 2;
     if (collision_mask & 0b0001)
-        box_fpga.x1 = (uint16_t) projectile->x + proj_size_x - box_fpga.x2 / 2;
+        x = projectile->x + projectile->size_x - box_fpga.x2 / 2;
     else if (collision_mask & 0b0100)
-        box_fpga.x1 = (uint16_t) projectile->x - box_fpga.x2 / 2;
+        x = projectile->x - box_fpga.x2 / 2;
 
     if (collision_mask & 0b0010)
-        box_fpga.y1 = (uint16_t) projectile->y - box_fpga.y2 / 2;
+        y = projectile->y - box_fpga.y2 / 2;
     else if (collision_mask & 0b1000)
-        box_fpga.y1 = (uint16_t) projectile->y + proj_size_y - box_fpga.y2 / 2;
+        y = projectile->y + projectile->size_y - box_fpga.y2 / 2;
+
+    // Keep result in bounds
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (ROOM_X <= x + box_fpga.x2) x = ROOM_X - box_fpga.x2;
+    if (ROOM_Y <= y + box_fpga.y2) y = ROOM_Y - box_fpga.y2;
+    box_fpga.x1 = (uint16_t) x;
+    box_fpga.y1 = (uint16_t) y;
 
     // TODO: Check if there's room in the fpga command queue to not break more important functions
 

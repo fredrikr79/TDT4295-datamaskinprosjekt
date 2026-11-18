@@ -670,9 +670,7 @@ static void handle_player_keys(input_t in)
     )
     {
         enum projectile_type type = (&(player.projectile))->type;
-        LOG_DBG("Change from proj: %u", (&(player.projectile))->type);
         (&(player.projectile))->type = (type + 1) % PROJECTILE_TYPES;
-        LOG_DBG("Change to proj: %u", (&(player.projectile))->type);
     }
     switch_pressed_last_time = switch_pressed;
 

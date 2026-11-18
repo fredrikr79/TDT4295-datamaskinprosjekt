@@ -6,6 +6,7 @@
  * loop) shows the first active one in this list:
  *
  *   state                 colour    pattern
+ *   LED_SAVES_DELETED     white     3 quick blinks  the saves were deleted (a new game)
  *   LED_FPGA_UNLOADED     red       steady          FPGA_DONE low: no design loaded
  *   LED_READY_STORM       magenta   fast blink      stray READY edges < 10 ms apart
  *   LED_FPGA_NO_ANSWER    red       slow blink      the handshake keeps failing
@@ -25,6 +26,7 @@
 #include <stdint.h>
 
 typedef enum {
+    LED_SAVES_DELETED,      /* led_flash(LED_SAVES_DELETED, LED_SAVES_DELETED_MS) */
     LED_FPGA_UNLOADED,      /* set by led_poll itself, from plat_fpga_done() */
     LED_READY_STORM,
     LED_FPGA_NO_ANSWER,
@@ -35,6 +37,8 @@ typedef enum {
     LED_RUNNING,
     LED_COUNT
 } led_state_t;
+
+#define LED_SAVES_DELETED_MS 750u   /* 3 blinks of its fast-blink pattern */
 
 /* colours: R | G | B */
 #define LED_OFF      0u
@@ -47,30 +51,8 @@ typedef enum {
 #define LED_WHITE    (LED_RED | LED_GREEN | LED_BLUE)
 
 void led_set(led_state_t s, bool on);
-void led_flash(led_state_t s, uint32_t ms);   /* on now, off by itself after ms */
+void led_flash(led_state_t s, uint32_t ms);   /* on now, off by itself after ms;
+                                                 its pattern starts from the top */
 void led_poll(void);                          /* main loop: updates the LED    */
-
-/* ---- console tests ----------------------------------------------------------
- * These take the LED over from the states until led_auto(); they work with
- * no FPGA at all (no DONE, no READY, loading off), since led_poll() runs
- * every main-loop pass whatever the game is doing.
- *   led_test(rgb)   a fixed colour, to check which pin is which
- *   led_show(s)     one state's colour and pattern, as if it were on top
- *   led_cycle()     every state in turn, LED_CYCLE_MS each, named on the
- *                   console as it comes up
- * led_now() names what's shown; led_id()/led_name() are for listing the
- * states ("led list"); led_find() is the state with that id, -1 if none. */
-#define LED_CYCLE_MS 4000u      /* two rounds of a 2 s pattern */
-/* (The pins themselves: plat_led_pins(), "led pins" on the console.) */
-
-void        led_test(uint8_t rgb);
-void        led_show(led_state_t s);
-void        led_cycle(void);
-void        led_auto(void);
-const char *led_now(void);
-
-const char *led_id(led_state_t s);      /* short: "storm", "nosd", ...     */
-const char *led_name(led_state_t s);    /* long:  "READY storm", ...      */
-int         led_find(const char *id);
 
 #endif

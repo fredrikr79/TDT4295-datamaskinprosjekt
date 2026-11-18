@@ -415,6 +415,10 @@ static void sprites_setup(void)
 
     const fpga_info_t *scr = fpga_link_info();
     player_sprite_init((int) player.x, (int) player.y);   /* the player's picture, until it first moves */
+    projectile_sprite_init(
+        player.projectile.x * FPGA_SIM_SCALE,
+        player.projectile.y * FPGA_SIM_SCALE
+    );
 
     /* before the cursor: drawn under it */
     hud_init(scr->width, scr->height);     /* the bars, the test sentence, the animation */
@@ -423,7 +427,6 @@ static void sprites_setup(void)
 
     cursor = sprite_new(assets.cursor, 0, 0, true);
 }
-
 
 /* Per-room game state: from load_start(), once per room. */
 static void room_enter(void)
@@ -558,6 +561,10 @@ static bool hotkeys(const input_t *in)
                                            player.velocity_x, player.velocity_y);
         player_sprite_init((int16_t)(player.x * FPGA_SIM_SCALE),
                            (int16_t)(player.y * FPGA_SIM_SCALE));
+        projectile_sprite_init(
+            player.projectile.x * FPGA_SIM_SCALE,
+            player.projectile.y * FPGA_SIM_SCALE
+        );
         load_start();
         return true;
     }

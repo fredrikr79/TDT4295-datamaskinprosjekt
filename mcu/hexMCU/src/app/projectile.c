@@ -18,11 +18,23 @@ static uint8_t gol_box[GOL_SIZE_X*GOL_SIZE_Y] = {
     0, 96, 96, 96, 0
 };
 
-static sprite_t *spr;                   /* the picture, at the projectile's top-left */
+static sprite_t *explosion_proj_sprite;
+static sprite_t *gol_proj_sprite;
 
 static void sprite_follow(const projectile_t *projectile)
 {
-    sprite_move(spr, (int16_t) (projectile->x * 4), (int16_t) (projectile->y * 4));
+    if (projectile->type == EXPLOSIVE)
+        sprite_move(
+            explosion_proj_sprite,
+            (int16_t) (projectile->x * 4),
+            (int16_t) (projectile->y * 4)
+        );
+    else if (projectile->type == GOL)
+        sprite_move(
+            gol_proj_sprite,
+            (int16_t) (projectile->x * 4),
+            (int16_t) (projectile->y * 4)
+        );
 }
 
 bool check_bounds(projectile_t *projectile)
@@ -73,6 +85,8 @@ static void detonate_projectile(
     uint8_t *box;
     fpga_box_t box_fpga = {0};
 
+    // Guard from accidental detonations
+    projectile_show(projectile->type, false);
     if (!(projectile->active)) return;
     projectile->active = false;
 
@@ -202,12 +216,24 @@ projectile_t get_new_projectile(
 
 void projectile_sprite_init(int16_t x, int16_t y)
 {
-    if (!spr)       /* after sprite_init() and assets_init() */
-        spr = sprite_new(assets.player, x, y, true);
-    sprite_move(spr, x, y);
+    if (!explosion_proj_sprite)
+        explosion_proj_sprite = sprite_new(assets.explosive_proj, x, y, false);
+    sprite_move(explosion_proj_sprite, x, y);
+    if (!gol_proj_sprite)
+        gol_proj_sprite = sprite_new(assets.gol_proj, x, y, false);
+    sprite_move(gol_proj_sprite, x, y);
 }
 
-void projectile_show(bool visible)
+void projectile_show(enum projectile_type type, bool visible)
 {
-    sprite_show(spr, visible);
+    if (type == EXPLOSIVE)
+    {
+        sprite_show(explosion_proj_sprite, visible);
+        sprite_show(gol_proj_sprite, false);
+    }
+    else if (type == GOL)
+    {
+        sprite_show(gol_proj_sprite, visible);
+        sprite_show(explosion_proj_sprite, false);
+    }
 }

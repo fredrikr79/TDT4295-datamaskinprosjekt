@@ -328,6 +328,7 @@ void update_player(
     if (shoot_next_frame && !(player->projectile.active))
     {
         shoot_projectile(player);
+        projectile_show(player->projectile.type, true);
     }
     shoot_next_frame = false;
 

@@ -76,4 +76,4 @@ void set_projectile(
  * once, after assets_init(); update_projectile() and projectile_init() then keep
  * it on the projectile, and sprite_poll() sends it. */
 void projectile_sprite_init(int16_t x, int16_t y);
-void projectile_show(bool visible);         /* hidden while drawing */
+void projectile_show(enum projectile_type type, bool visible);

@@ -706,7 +706,7 @@ void game_reset()
 {
     if (state != S_RUN) return;
     menu_reset();
-    delete_all_saves();
+    delete_saves("Death");
     room_x = FIRST_ROOM_X;
     room_y = FIRST_ROOM_Y;
     player_set_default(&player);

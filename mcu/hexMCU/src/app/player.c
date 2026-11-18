@@ -457,7 +457,7 @@ void queue_shot(int x, int y)
 void player_set_default(player_t *player)
 {
     player->x = 78;
-    player->y = 30;
+    player->y = 26;
 
     player->velocity_x = 0;
     player->velocity_y = 0;

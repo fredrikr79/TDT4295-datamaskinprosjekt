@@ -6,8 +6,8 @@
 uint32_t plat_millis(void);
 /* Microseconds since start, for timing inside a frame (frame_sync.c).
  * Wraps after 71 minutes: compare differences, never absolute values.
- * STM32: from the CPU's cycle counter, so it must be called at least every
- * 26 s or it loses time -- the SYNC interrupt calls it every frame. */
+ * STM32: the 1 ms tick plus how far SysTick is into the current one, so it
+ * runs with or without a debugger attached. */
 uint32_t plat_micros(void);
 void plat_led_pins(char *buf, size_t n);
 bool     plat_fpga_ready_pin(void);

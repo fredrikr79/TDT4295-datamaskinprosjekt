@@ -1037,18 +1037,271 @@ static step_t scene_step(unsigned i, fpga_cmd_t *c, uint32_t *ms) { (void)ms; re
 static step_t clear_step(unsigned i, fpga_cmd_t *c, uint32_t *ms) { (void)ms; return grid_step(i, c, pat_air); }
 
 /* ======================================================================
+ * align: READ_BOX and WRITE_BOX at odd and even X and widths
+ *
+ * The grid memory is two cells wide, so the FPGA has to handle a box
+ * that starts or ends in the middle of a pair. This tries every case on
+ * a 16x4 test area at (AL_X, AL_Y) and says, case by case, what went in
+ * or came out, as a picture with one letter per cell and a space between
+ * pairs:
+ *
+ *   . air  # stone  s sand  w water  l lava  a acid  g life  x explosive
+ *
+ *   1. Baseline: the area written and read as one even box. If this
+ *      fails, nothing else can be trusted.
+ *   2. Reads: the area holds a pattern where every cell differs from its
+ *      neighbours, and boxes are read from it at odd and even X.
+ *   3. Writes: the area is filled with stone, a box is written, and the
+ *      whole area is read back (an even box, as in 1.), so cells written
+ *      outside the box show up.
+ * ====================================================================== */
+#define AL_X  8u                    /* even, as is AL_W: the baseline box */
+#define AL_Y  10u
+#define AL_W  16u
+#define AL_H  4u
+
+static const struct { uint16_t dx, dy, w, h; } al_cases[] = {    /* from (AL_X, AL_Y) */
+    { 2, 1, 1, 1 },                 /* 1x1, even X              */
+    { 3, 1, 1, 1 },                 /* 1x1, odd X               */
+    { 2, 1, 2, 1 },                 /* one whole pair           */
+    { 3, 1, 2, 1 },                 /* across a pair boundary   */
+    { 2, 1, 3, 1 },                 /* even X, odd width        */
+    { 3, 1, 3, 1 },                 /* odd X, odd width         */
+    { 3, 1, 4, 2 },                 /* odd X, two rows          */
+    { 3, 1, 5, 2 },                 /* odd X, odd width, two rows */
+};
+#define AL_N  ((unsigned)(sizeof al_cases / sizeof al_cases[0]))
+
+static unsigned al_reads_ok, al_writes_ok;
+static unsigned al_box;             /* the case being written (al_after()) */
+
+static void al_geo(unsigned k, uint16_t *x, uint16_t *y, uint16_t *w, uint16_t *h)
+{
+    *x = (uint16_t)(AL_X + al_cases[k].dx);
+    *y = (uint16_t)(AL_Y + al_cases[k].dy);
+    *w = al_cases[k].w;
+    *h = al_cases[k].h;
+}
+
+/* Every cell differs from the ones beside it (and the next one over), so
+ * a read that starts a cell or two off shows. Never air. */
+static uint8_t al_pat(uint32_t x, uint32_t y)   { return (uint8_t)(1u + (x + 3u * y) % 7u); }
+static uint8_t al_stone(uint32_t x, uint32_t y) { (void)x; (void)y; return MAT_STONE; }
+/* What a written box holds: never stone, so it stands out from the area. */
+static uint8_t al_ink(uint32_t x, uint32_t y)   { return (uint8_t)(2u + (x + y) % 6u); }
+/* The area after case al_box is written into the stone. */
+static uint8_t al_after(uint32_t x, uint32_t y)
+{
+    uint16_t bx, by, bw, bh;
+    al_geo(al_box, &bx, &by, &bw, &bh);
+    bool in = x >= bx && x < bx + bw && y >= by && y < (uint32_t)by + bh;
+    return in ? al_ink(x, y) : MAT_STONE;
+}
+
+static char al_char(uint8_t m) { return m <= MAT_ID_MAX ? ".#swlagx"[m] : '?'; }
+
+/* One row of w cells from x0: letters, a space after each pair (odd X). */
+static void al_row(char *s, size_t size, uint16_t x0, uint16_t w, uint8_t (*m)(uint16_t k))
+{
+    size_t n = 0;
+    if (x0 & 1u) s[n++] = ' ';                  /* line up with the pairs above */
+    for (uint16_t k = 0; k < w && n + 3 < size; k++) {
+        s[n++] = al_char(m(k));
+        if ((x0 + k) & 1u) s[n++] = ' ';
+    }
+    while (n && s[n - 1] == ' ') n--;
+    s[n] = '\0';
+}
+
+/* For al_row(): cell k of the row being shown, wanted or read. */
+static const uint8_t *al_buf;
+static uint16_t al_x0, al_y0, al_bw, al_r;
+static pattern_fn al_want;
+static uint8_t al_got_k(uint16_t k)  { return sim_get(al_buf, (uint32_t)al_r * al_bw + k); }
+static uint8_t al_want_k(uint16_t k) { return al_want(al_x0 + k, al_y0 + al_r); }
+
+/* Show the rows of a w x h box read at (x, y) that differ from what they
+ * should hold, above it, with ^ under the wrong cells. */
+static void al_show(const uint8_t *buf, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                    pattern_fn should)
+{
+    char a[2 * AL_W + 4], b[sizeof a], mk[sizeof a];
+    al_buf = buf; al_x0 = x; al_y0 = y; al_bw = w; al_want = should;
+    for (al_r = 0; al_r < h; al_r++) {
+        al_row(a, sizeof a, x, w, al_want_k);
+        al_row(b, sizeof b, x, w, al_got_k);
+        size_t n;
+        for (n = 0; a[n] && b[n] && n + 1 < sizeof mk; n++) mk[n] = a[n] != b[n] ? '^' : ' ';
+        while (n && mk[n - 1] == ' ') n--;
+        mk[n] = '\0';
+        if (!n) continue;                       /* this row is right */
+        LOG_WARN("      y=%-3u x=%-3u want %s", (unsigned)(y + al_r), x, a);
+        LOG_WARN("                got  %s", b);
+        LOG_WARN("                     %s", mk);
+    }
+}
+
+/* How many of the w x h cells read at (x, y) match want, when the read
+ * is taken to have started `shift` cells to the right of x. */
+static uint32_t al_match(const uint8_t *buf, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
+                         int shift, pattern_fn should)
+{
+    uint32_t ok = 0;
+    for (uint32_t k = 0; k < (uint32_t)w * h; k++) {
+        int32_t cx = (int32_t)(x + k % w) + shift;
+        if (cx < 0) continue;
+        ok += sim_get(buf, k) == should((uint32_t)cx, y + k / w);
+    }
+    return ok;
+}
+
+static void al_check_read(const char *what, const uint8_t *buf, uint16_t x, uint16_t y,
+                          uint16_t w, uint16_t h, bool count)
+{
+    uint32_t n = (uint32_t)w * h;
+    if (al_match(buf, x, y, w, h, 0, al_pat) == n) {
+        LOG_INFO("  %s %ux%u at (%u,%u)%s: OK", what, w, h, x, y, x & 1u ? ", odd X" : "");
+        al_reads_ok += count;
+        return;
+    }
+    d.bad++;
+    const char *how = "wrong cells";
+    if      (al_match(buf, x, y, w, h, -1, al_pat) == n) how = "starts 1 cell LEFT of X";
+    else if (al_match(buf, x, y, w, h, +1, al_pat) == n) how = "starts 1 cell RIGHT of X";
+    else if (al_match(buf, x, y, w, h, -2, al_pat) == n) how = "starts 2 cells LEFT of X";
+    LOG_WARN("  %s %ux%u at (%u,%u)%s: FAIL, %s", what, w, h, x, y, x & 1u ? ", odd X" : "", how);
+    al_show(buf, x, y, w, h, al_pat);
+}
+
+/* After a write: which cells of each row of the area changed from stone,
+ * against the ones that should have. */
+static void al_check_write(const uint8_t *buf)
+{
+    uint16_t x, y, w, h;
+    al_geo(al_box, &x, &y, &w, &h);
+    uint32_t n = AL_W * AL_H;
+    if (al_match(buf, AL_X, AL_Y, AL_W, AL_H, 0, al_after) == n) {
+        LOG_INFO("  write %ux%u at (%u,%u)%s: OK", w, h, x, y, x & 1u ? ", odd X" : "");
+        al_writes_ok++;
+        return;
+    }
+    d.bad++;
+    LOG_WARN("  write %ux%u at (%u,%u)%s: FAIL", w, h, x, y, x & 1u ? ", odd X" : "");
+    for (uint16_t r = 0; r < AL_H; r++) {
+        int lo = -1, hi = -1;                   /* changed from stone */
+        bool vals = true;                       /* changed cells hold the right ink */
+        for (uint16_t k = 0; k < AL_W; k++) {
+            uint8_t m = sim_get(buf, (uint32_t)r * AL_W + k);
+            if (m == MAT_STONE) continue;
+            if (lo < 0) lo = AL_X + k;
+            hi = AL_X + k;
+            vals &= m == al_ink(AL_X + k, AL_Y + r);
+        }
+        uint16_t ry = (uint16_t)(AL_Y + r);
+        bool in = ry >= y && ry < y + h;
+        if (!in && lo < 0) continue;
+        if (!in)            LOG_WARN("    row %u: should be stone, written at x %d..%d", ry, lo, hi);
+        else if (lo < 0)    LOG_WARN("    row %u: should be x %u..%u, nothing written", ry, x, x + w - 1u);
+        else if (lo != x || hi != x + w - 1)
+            LOG_WARN("    row %u: should be x %u..%u, written x %d..%d%s", ry, x, x + w - 1u,
+                     lo, hi, vals ? "" : " (and wrong values)");
+        else if (!vals)     LOG_WARN("    row %u: right cells, wrong values", ry);
+    }
+    al_show(buf, AL_X, AL_Y, AL_W, AL_H, al_after);
+}
+
+/* 0 stop, 1 area <- pattern, 2 read it (baseline), then a read per case,
+ * then per case: area <- stone, write the case, read the area. Then start. */
+#define AL_READS   3u
+#define AL_WRITES  (AL_READS + AL_N)
+#define AL_START   (AL_WRITES + 3u * AL_N)
+
+static step_t align_step(unsigned i, fpga_cmd_t *c, uint32_t *ms)
+{
+    (void)ms;
+    uint16_t x, y, w, h;
+    const uint16_t area_bytes = (uint16_t)fpga_sim_bytes(AL_W * AL_H);
+    if (i == 0) {
+        al_reads_ok = al_writes_ok = 0;
+        if (grid_w() < AL_X + AL_W || grid_h() < AL_Y + AL_H) {
+            LOG_WARN("  the grid is too small for the test area");
+            return STEP_END;
+        }
+        *c = fpga_cmd_sim_run(false);
+        return STEP_CMD;
+    }
+    if (i == 1) {
+        *c = fpga_cmd_write_box(fpga_box(AL_X, AL_Y, AL_W, AL_H), tx,
+                                fill_tx(tx, AL_W * AL_H, AL_X, AL_Y, AL_W, al_pat));
+        return STEP_CMD;
+    }
+    if (i == 2) { *c = fpga_cmd_read_box(fpga_box(AL_X, AL_Y, AL_W, AL_H), rx, area_bytes); return STEP_CMD; }
+    if (i < AL_WRITES) {
+        al_geo(i - AL_READS, &x, &y, &w, &h);
+        *c = fpga_cmd_read_box(fpga_box(x, y, w, h), rx, (uint16_t)fpga_sim_bytes((uint32_t)w * h));
+        return STEP_CMD;
+    }
+    if (i < AL_START) {
+        unsigned k = (i - AL_WRITES) / 3u, op = (i - AL_WRITES) % 3u;
+        if (op == 0) {
+            *c = fpga_cmd_write_box(fpga_box(AL_X, AL_Y, AL_W, AL_H), tx,
+                                    fill_tx(tx, AL_W * AL_H, AL_X, AL_Y, AL_W, al_stone));
+        } else if (op == 1) {
+            al_geo(k, &x, &y, &w, &h);
+            *c = fpga_cmd_write_box(fpga_box(x, y, w, h), tx,
+                                    fill_tx(tx, (uint32_t)w * h, x, y, w, al_ink));
+        } else {
+            *c = fpga_cmd_read_box(fpga_box(AL_X, AL_Y, AL_W, AL_H), rx, area_bytes);
+        }
+        return STEP_CMD;
+    }
+    if (i == AL_START) { *c = fpga_cmd_sim_run(true); return STEP_CMD; }
+    return STEP_END;
+}
+
+static void align_check(unsigned i, const fpga_cmd_t *c)
+{
+    (void)c;
+    uint16_t x, y, w, h;
+    if (i == 2) {
+        LOG_INFO("  baseline: the %ux%u area at (%u,%u), written and read as one even box",
+                 AL_W, AL_H, AL_X, AL_Y);
+        unsigned bad = d.bad;
+        al_check_read("baseline", rx, AL_X, AL_Y, AL_W, AL_H, false);
+        if (d.bad != bad)
+            LOG_WARN("  even boxes are already wrong: the cases below can't be trusted");
+        LOG_INFO("  reads (letters: . air # stone s sand w water l lava a acid g life x explosive):");
+    } else if (i >= AL_READS && i < AL_WRITES) {
+        al_geo(i - AL_READS, &x, &y, &w, &h);
+        al_check_read("read ", rx, x, y, w, h, true);
+        if (i + 1u == AL_WRITES) LOG_INFO("  writes (into stone, read back as the whole area):");
+    } else if (i >= AL_WRITES && i < AL_START && (i - AL_WRITES) % 3u == 2u) {
+        al_box = (i - AL_WRITES) / 3u;
+        al_check_write(rx);
+    } else if (i == AL_START) {
+        if (al_reads_ok == AL_N && al_writes_ok == AL_N)
+            LOG_INFO("  reads %u/%u OK, writes %u/%u OK", al_reads_ok, (unsigned)AL_N,
+                     al_writes_ok, (unsigned)AL_N);
+        else
+            LOG_WARN("  reads %u/%u OK, writes %u/%u OK", al_reads_ok, (unsigned)AL_N,
+                     al_writes_ok, (unsigned)AL_N);
+    }
+}
+
+/* ======================================================================
  * The list, and the public functions
  * ====================================================================== */
 static const test_t t_echo   = { "echo",   "ECHO, 1 byte up to N-1, several bit patterns", true, echo_step, echo_check };
 static const test_t t_info   = { "info",   "INFO: screen and grid size, N, session", false, info_step, NULL };
 static const test_t t_cons   = { "cons",   "WRITE_CONS then READ_CONS: a row, over a row end, 1 byte", false, cons_step, cons_check };
 static const test_t t_box    = { "box",    "WRITE_BOX then READ_BOX: 1x1 to the biggest, + READ_CONS through one", false, box_step, box_check };
+static const test_t t_align  = { "align",  "WRITE_BOX / READ_BOX at odd and even X and widths, case by case", false, align_step, align_check };
 static const test_t t_sprite = { "sprite", "upload a smiley, place, move, hide, delete (uses a memID)", false, sprite_step, sprite_check };
 static const test_t t_scene  = { "scene",  "draw a world with every material, then run the simulation", false, scene_step, NULL };
 static const test_t t_clear  = { "clear",  "the whole grid air", false, clear_step, NULL };
 
-static const test_t *const tests[] = { &t_echo, &t_info, &t_cons, &t_box, &t_sprite, &t_scene, &t_clear };
-static const test_t *const all[]   = { &t_echo, &t_info, &t_cons, &t_box, &t_sprite };
+static const test_t *const tests[] = { &t_echo, &t_info, &t_cons, &t_box, &t_align, &t_sprite, &t_scene, &t_clear };
+static const test_t *const all[]   = { &t_echo, &t_info, &t_cons, &t_box, &t_align, &t_sprite };
 #define NTESTS (sizeof tests / sizeof tests[0])
 #define NALL   (sizeof all / sizeof all[0])
 
@@ -1099,7 +1352,7 @@ void demo_list(void)
     log_raw("demo <test>, the FPGA to itself while it runs:\r\n");
     for (unsigned k = 0; k < NTESTS; k++)
         log_raw("  %-8s %s\r\n", tests[k]->name, tests[k]->help);
-    log_raw("  %-8s %s\r\n", "all", "echo, info, cons, box, sprite");
+    log_raw("  %-8s %s\r\n", "all", "echo, info, cons, box, align, sprite");
     log_raw("  %-8s %s (now %s)\r\n", "swap", "switch: cell bytes with the material in the LOW nibble",
             swap_nibbles ? "on" : "off");
     log_raw("  %-8s %s (now %s)\r\n", "detailed", "switch: log every grid command's header and wire bytes",

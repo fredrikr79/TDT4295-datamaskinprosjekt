@@ -364,6 +364,7 @@ FAT32. Laid out like this:
 ```
 rom/x,y.dat        the rooms as shipped (x,y = room coordinates)
 save/x,y.dat       saved rooms; read before rom/ if they exist
+save/seed          the world seed for the texture (texture.md); a new one when save/ is deleted
 sprites/*.spr      images and animations (`tools/png2spr.py`)
 settings.toml      tuned values, kept between runs (written by "... save")
 ```
@@ -425,4 +426,5 @@ See [transport.md](transport.md) for what the fake FPGA does.
 - [transport.md](transport.md): OCTOSPI, READY/ACK, the fake FPGA
 - [sprite.md](sprite.md): images and sprites on the HUD
 - [storage.md](storage.md): the SD card
+- [texture.md](texture.md): noise in the cells' low bits, and what room saves keep
 - [usb.md](usb.md): keyboard, mouse and controllers

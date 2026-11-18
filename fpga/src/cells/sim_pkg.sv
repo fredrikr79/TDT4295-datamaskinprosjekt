@@ -1,51 +1,21 @@
 package sim_pkg;
-  localparam int unsigned CellGridWidth = config_pkg::ActiveWidth;
-  localparam int unsigned CellGridHeight = config_pkg::ActiveHeight;
+  localparam int unsigned GridScale = 4;
+  localparam int unsigned CellGridWidth = config_pkg::ActiveWidth / GridScale;
+  localparam int unsigned CellGridHeight = config_pkg::ActiveHeight / GridScale;
+
+  localparam int GridXBits = $clog2(CellGridWidth);
+  localparam int GridYBits = $clog2(CellGridHeight);
 
   localparam int unsigned MaterialBits = 4;  // support for 16 materials
   localparam int unsigned BitsPerPixel = 8;  // support for 16 materials
-  localparam int unsigned CellsPerWord = 4;  // 8x4 = 32 which fits cleanly in registers
-
-  // 32: a word contains 8 4-bit cells
-  localparam int unsigned WordBits = CellsPerWord * BitsPerPixel;
-  // 80: a row contains 640 pixels, we contain 8 pixels in one word, 640/8 = 80 which is our screen resolution
-  localparam int unsigned WordsPerRow = CellGridWidth / CellsPerWord;
-  // 28,800: To contain our whole screen of 640*360=230400, 230400/8=28800, so we need 28800 words to describe every pixel on screen
-  localparam int unsigned TotalWords = WordsPerRow * CellGridHeight;
-  // 15 = 32,768, enough to address all of TotalWords
-  localparam int unsigned AddrBits = $clog2(TotalWords);
 
   typedef logic [MaterialBits-1:0] material_t;
-  typedef material_t [CellsPerWord-1:0] cell_word_t;  // same as logic [7:0][3:0]
-
-  localparam int unsigned CellIndexBits = $clog2(CellsPerWord);  // 3: which cell inside a word
-  localparam int unsigned WordXBits = $clog2(WordsPerRow);  // 7: which word inside a row
-
-  localparam int unsigned GridXBits = $clog2(CellGridWidth);  // 10 needed to represent 640
-  localparam int unsigned GridYBits = $clog2(CellGridHeight);  // 9 needed to represent 360
-  typedef logic unsigned [GridXBits-1:0] grid_x_t;
-  typedef logic unsigned [GridYBits-1:0] grid_y_t;
 
   // Memory bound processing and wire complexity makes a wider set of cores overkill and infeasible in terms of system resources
   localparam int SimulationCoreCount = 4;
-  typedef logic [CellGridWidth * BitsPerPixel : 0] row_buffer_t;
+  typedef logic [CellGridWidth * BitsPerPixel - 1 : 0] row_buffer_t;
 
-  // Addressing convention. Everything that touches the grid -- world loader,
-  // simulation step, renderer -- has to agree on this:
-  //   addr                 = y * WordsPerRow + x / CellsPerWord
-  //   word[get_cell_index(x)]  = the cell at column x
-  // Cell index 0 is the LEFT-most of the eight pixels in a word
-
-  function automatic logic [AddrBits-1:0] get_word_addr(input grid_x_t x, input grid_y_t y);
-    automatic logic [WordXBits-1:0] word_x;
-    word_x = x[GridXBits-1:CellIndexBits];  // x / CellsPerWord
-    return AddrBits'(y * WordsPerRow + word_x);
-  endfunction
-
-  function automatic logic [CellIndexBits-1:0] get_cell_index(input grid_x_t x);
-    return x[CellIndexBits-1:0];
-  endfunction
-
+  // Addressing convention. Everything that touches the grid -- world loader
   // Material IDs
   typedef enum material_t {
     MatAir   = 4'd0,
@@ -69,23 +39,22 @@ package sim_pkg;
     logic              spreads;
     logic              solid;
     logic              displaceable;
-    int                delay;
     logic [3:0]        blast_resistance;
   } material_props_t;
 
-  localparam int GolRefreshDelay = 'd100;
+  localparam int GolRefreshDelay = 'd300;
+  localparam logic [2:0] IgneousStoneThickness = 'sb111;
 
   // Lookup table for materials
   function automatic material_props_t props(material_t m);
     material_props_t p;
     case (m)
       MatSand: begin
-        p.density          = 'd8;
+        p.density          = 'd12;
         p.falls            = 1'b1;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd2;
       end
       MatWater: begin
@@ -94,7 +63,6 @@ package sim_pkg;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd2;
       end
       MatStone: begin
@@ -103,7 +71,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b0;
-        p.delay            = 'd1;
         p.blast_resistance = 'd3;
       end
       MatGOL: begin
@@ -112,7 +79,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b1;
         p.displaceable     = 1'b0;
-        p.delay            = 'd1;
         p.blast_resistance = 'd3;
       end
       MatExplo: begin
@@ -121,7 +87,6 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b0;
         p.displaceable     = 1'b0;
-        p.delay            = 'd1;
         p.blast_resistance = 'd0;
       end
       MatLava: begin
@@ -130,7 +95,6 @@ package sim_pkg;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd3;
       end
       MatAcid: begin
@@ -139,7 +103,6 @@ package sim_pkg;
         p.spreads          = 1'b1;
         p.solid            = 1'b1;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd2;
       end
       default: begin  // MatAir, and every unassigned id
@@ -148,11 +111,48 @@ package sim_pkg;
         p.spreads          = 1'b0;
         p.solid            = 1'b0;
         p.displaceable     = 1'b1;
-        p.delay            = 'd1;
         p.blast_resistance = 'd0;
       end
     endcase
     return p;
+  endfunction
+
+  // One accessor per material property. Use these in synthesizable code instead of
+  // props(m).<field>: the result is held in a variable first, then the field is read.
+  function automatic logic mat_falls(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.falls;
+  endfunction
+
+  function automatic logic mat_spreads(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.spreads;
+  endfunction
+
+  function automatic logic mat_solid(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.solid;
+  endfunction
+
+  function automatic logic mat_displaceable(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.displaceable;
+  endfunction
+
+  function automatic logic [3:0] mat_density(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return 4'(p.density);
+  endfunction
+
+  function automatic logic [3:0] mat_blast_resistance(input material_t m);
+    material_props_t p;
+    p = props(m);
+    return p.blast_resistance;
   endfunction
 
   // Credits to https://nullprogram.com/blog/2018/07/31/
@@ -177,15 +177,29 @@ package sim_pkg;
   endfunction
 
   typedef struct packed {
-    logic [BitsPerPixel-1:0] topLeft;
-    logic [BitsPerPixel-1:0] top;
-    logic [BitsPerPixel-1:0] topRight;
-    logic [BitsPerPixel-1:0] left;
-    logic [BitsPerPixel-1:0] center;
-    logic [BitsPerPixel-1:0] right;
-    logic [BitsPerPixel-1:0] bottomLeft;
-    logic [BitsPerPixel-1:0] bottom;
-    logic [BitsPerPixel-1:0] bottomRight;
+    logic [MaterialBits-1:0] material;
+    logic [BitsPerPixel-MaterialBits-1:0] data;
+  } pixel_t;
+  typedef struct packed {
+    logic right;
+    logic center;
+    logic left;
+  } neighbourhood_row_en_t;
+  typedef struct packed {
+    pixel_t right;
+    pixel_t center;
+    pixel_t left;
+  } neighbourhood_row_t;
+  typedef struct packed {
+    pixel_t topLeft;
+    pixel_t top;
+    pixel_t topRight;
+    pixel_t left;
+    pixel_t center;
+    pixel_t right;
+    pixel_t bottomLeft;
+    pixel_t bottom;
+    pixel_t bottomRight;
   } neighbourhood_t;
 
   typedef enum {
@@ -204,4 +218,26 @@ package sim_pkg;
   function automatic logic no_movement(fluid_movement_t movement);
     return !movement.topRight && !movement.topLeft && !movement.centerRight && !movement.centerLeft;
   endfunction
+
+  // Liquid turbulence
+
+  function automatic pixel_t add_turbulence(input pixel_t pixel);
+    pixel_t result;
+    result = pixel;
+    if (sim_pkg::mat_spreads(pixel.material) && pixel.data != 4'd15) begin
+      result.data = pixel.data + 4'd1;
+    end
+    return result;
+  endfunction
+
+  function automatic sim_pkg::pixel_t remove_turbulence(input sim_pkg::pixel_t pixel);
+    pixel_t result;
+    result = pixel;
+    if (sim_pkg::mat_spreads(pixel.material) && pixel.data != 4'd0) begin
+      result.data = pixel.data - 4'd1;
+    end
+    return result;
+  endfunction
+
+
 endpackage

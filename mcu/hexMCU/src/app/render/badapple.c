@@ -120,7 +120,7 @@
  * keeps the scan ahead all the way down, so no half-written picture shows.
  * Outside ba: it's a setting, not part of a run. */
 #ifndef BA_SYNC_DELAY_US
-#define BA_SYNC_DELAY_US 14799u
+#define BA_SYNC_DELAY_US 0u
 #endif
 static uint32_t sync_delay_us;
 static bool     sync_delay_known;      /* read from settings.toml, or set */
@@ -427,13 +427,14 @@ void badapple_stop(void)
     finish("stopped");
 }
 
-/* A material's cell byte, with the state a new cell of it needs (fpga.h). */
+/* A material's cell byte for the video: all four low bits set. For sand
+ * and stone that's the lightest shade of their texture (texture.h), so the
+ * video stands out from a textured room behind it. It's still stone, not
+ * igneous rock (bit 3 set, fpga.h), live game of life and full-power
+ * explosive. */
 static uint8_t cell_of(material_t m)
 {
-    uint8_t b = SIM_CELL(m);
-    if (m == MAT_LIFE)      b |= SIM_LIFE_ALIVE;
-    if (m == MAT_EXPLOSIVE) b |= SIM_EXPLOSIVE_FULL;
-    return b;
+    return (uint8_t)(SIM_CELL(m) | 0x0Fu);
 }
 
 bool badapple_start(const char *path, bool loop, material_t dark, material_t light)

@@ -13,9 +13,10 @@
  *     and BOX counts cells; sprites stay in screen pixels.
  *   - The grid holds a byte per cell: the material (MAT_AIR, MAT_SAND...,
  *     fpga.h) in the high 4 bits, shown through a colour lookup table
- *     (sim_lut) like the real FPGA's. The low 4 bits are kept as written
- *     and read back unchanged (the real FPGA uses them for its own state;
- *     this one doesn't simulate). WRITE/READ_CONS move cells: N bytes from
+ *     (sim_rgb, cell_colour()) like the real FPGA's; the texture bits of
+ *     sand and stone shade it (texture.h). The low 4 bits are kept as
+ *     written and read back unchanged (the real FPGA uses some for its own
+ *     state; this one doesn't simulate). WRITE/READ_CONS move cells: N bytes from
  *     cell (X, Y) on, row after row, one or two per byte
  *     (FPGA_SIM_IDS_PER_BYTE; with two, only materials travel).
  *   - WRITE/READ_BOX move cells too: W x H cells from (X, Y), one stream
@@ -139,18 +140,38 @@ static bool param_count(uint16_t len, uint16_t n, uint8_t *status, const char *w
 /* ---- the grid: material IDs, and the colours they show as ------------- */
 #define LUT565(r, g, b) ((uint16_t)((((r) & 0xF8u) << 8) | (((g) & 0xFCu) << 3) | ((b) >> 3)))
 
-/* PROTOCOL: the FPGA team's colours aren't known; these are stand-ins. */
-static const uint16_t sim_lut[MAT_ID_MAX + 1] = {
-    [MAT_AIR]       = LUT565(  0,   0,   0),
-    [MAT_STONE]     = LUT565(125, 125, 135),
-    [MAT_SAND]      = LUT565(222, 190, 110),
-    [MAT_WATER]     = LUT565( 40, 110, 225),
-    [MAT_LAVA]      = LUT565(255,  90,  20),
-    [MAT_ACID]      = LUT565(170, 240,  30),
-    [MAT_LIFE]      = LUT565(235, 235, 235),
-    [MAT_EXPLOSIVE] = LUT565(200,  20,  40),
-    [MAT_COUNT ... MAT_ID_MAX] = LUT565(255, 0, 200),   /* not in use: shows up loud */
+/* PROTOCOL: the FPGA team's colours aren't known; these are stand-ins.
+ * The texture bits (texture.h) shade them, roughly as the FPGA might, so
+ * the texture can be judged here: sand and stone lighter or darker around
+ * their colour. Igneous rock (MAT_STONE with bit 3 clear) has a colour of
+ * its own. */
+typedef struct { uint8_t r, g, b; } rgb_t;
+static const rgb_t sim_rgb[MAT_ID_MAX + 1] = {
+    [MAT_AIR]       = {   0,   0,   0 },
+    [MAT_STONE]     = { 125, 125, 135 },
+    [MAT_SAND]      = { 222, 190, 110 },
+    [MAT_WATER]     = {  40, 110, 225 },
+    [MAT_LAVA]      = { 255,  90,  20 },
+    [MAT_ACID]      = { 170, 240,  30 },
+    [MAT_LIFE]      = { 235, 235, 235 },
+    [MAT_EXPLOSIVE] = { 200,  20,  40 },
+    [MAT_COUNT ... MAT_ID_MAX] = { 255, 0, 200 },   /* not in use: shows up loud */
 };
+static const rgb_t igneous_rgb = { 105, 60, 50 };
+
+static uint8_t clamp8(int v) { return (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v); }
+
+static uint16_t cell_colour(uint8_t v)
+{
+    rgb_t c = sim_is_igneous(v) ? igneous_rgb : sim_rgb[SIM_MAT(v)];
+    int pct = 100;                                  /* c * pct / 100 */
+    switch (SIM_MAT(v)) {
+    case MAT_SAND:  pct = 80 + (v & 0xF) * 3;                break;  /* 80 .. 125 % */
+    case MAT_STONE: if (v & SIM_STONE_BIT) pct = 75 + (v & 0x7) * 7; break;  /* 75 .. 124 % */
+    default:        break;
+    }
+    return LUT565(clamp8(c.r * pct / 100), clamp8(c.g * pct / 100), clamp8(c.b * pct / 100));
+}
 
 static uint8_t cells[GRID_W * GRID_H];      /* one cell byte each, row after row */
 
@@ -171,7 +192,7 @@ static uint16_t be16(const uint8_t *p) { return (uint16_t)(p[0] << 8 | p[1]); }
 static void cell_set(uint32_t i, uint8_t v)
 {
     cells[i] = v;
-    uint16_t c  = sim_lut[SIM_MAT(v)];
+    uint16_t c  = cell_colour(v);
     uint32_t px = (i % GRID_W) * FPGA_SIM_SCALE, py = (i / GRID_W) * FPGA_SIM_SCALE;
     for (uint32_t dy = 0; dy < FPGA_SIM_SCALE; dy++) {
         uint16_t *p = pixel(DISPLAY_SIM, px, py + dy);
@@ -221,6 +242,24 @@ static int32_t box_cell(uint16_t x, uint16_t y, uint16_t w, uint32_t k)
     return (int32_t)(cy * GRID_W + cx);
 }
 
+/* FAKE_FPGA_PAIRS=1 in the environment: act like the FPGA build that
+ * had the cell-pair bug, to try 'demo align' and workarounds on. Its grid
+ * memory is two cells wide: a box at odd X starts a cell to the left, and
+ * a write always fills whole pairs: when a row ends in the middle of one,
+ * the pad cell gets the next byte (the next row's first cell), or the last
+ * byte again on the last row (so 1x1 at even X writes 2 cells). Checked
+ * against 'demo align' on the board. */
+static bool pair_bug(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *e = getenv("FAKE_FPGA_PAIRS");
+        on = e && *e && *e != '0';
+        if (on) LOG_WARN("FAKE_FPGA_PAIRS: boxes act like the cell-pair bug");
+    }
+    return on;
+}
+
 /* WRITE_BOX: w x h IDs, row by row. */
 static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                       const uint8_t *data, uint16_t nbytes)
@@ -231,6 +270,18 @@ static void box_write(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                  (unsigned long)fpga_sim_bytes(n), nbytes);
         if ((uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE < n) n = (uint32_t)nbytes * FPGA_SIM_IDS_PER_BYTE;
     }
+    if (pair_bug()) {                       /* as the real FPGA did: see pair_bug() */
+        uint16_t x0 = (uint16_t)(x & ~1u), end = (uint16_t)(x0 + ((w + 1u) & ~1u));
+        for (uint32_t r = 0; r < h && r * w < n; r++)
+            for (uint16_t cx = x0; cx < end; cx++) {
+                /* the pad cell at a row's end takes the next byte of the stream
+                 * (the next row's first), or the last one again on the last row */
+                uint32_t k = r * w + (uint32_t)(cx - x0);
+                if (k >= n) k = n - 1u;
+                if (cx >= GRID_W || y + r >= GRID_H) { oob++; continue; }
+                cell_set((y + r) * GRID_W + cx, packed_cell(data, k));
+            }
+    } else
     for (uint32_t k = 0; k < n; k++) {
         int32_t c = box_cell(x, y, w, k);
         if (c < 0) { oob++; continue; }
@@ -250,6 +301,7 @@ static void box_read(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
         nbytes = OUT_FIFO;
     }
     memset(ff.out, 0, nbytes);
+    if (pair_bug()) x &= (uint16_t)~1u;     /* as the real FPGA did: starts a cell left */
     for (uint32_t k = 0; k < n && k / FPGA_SIM_IDS_PER_BYTE < nbytes; k++) {
         int32_t c = box_cell(x, y, w, k);
         pack_cell(ff.out, k, c < 0 ? SIM_CELL(MAT_AIR) : cells[c]);

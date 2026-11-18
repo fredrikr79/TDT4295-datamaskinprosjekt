@@ -25,6 +25,7 @@ set(APP_SOURCES
     ${APP_ROOT}/src/app/render/draw.c
     ${APP_ROOT}/src/app/render/hud.c
     ${APP_ROOT}/src/app/render/badapple.c
+    ${APP_ROOT}/src/app/render/texture.c
 )
 set(APP_INCLUDES
     ${APP_ROOT}/src/include

@@ -33,6 +33,7 @@ module memory #(
   typedef logic [ClientIdBits-1:0] client_id_t;
 
   logic initializer_finished, controller_busy, controller_data_on_cable;
+  logic controller_data_on_cable_comb;  // [STROBE] original strobe, initializer only
   logic [7:0] controller_read_data, initializer_write_data, controller_write_data;
   memory_pkg::transaction_e controller_next_transaction, initializer_next_transaction;
   memory_pkg::address_t controller_address, initializer_address;
@@ -110,15 +111,6 @@ module memory #(
     end
   end
 
-  // Before the initializer is finished it owns the controller
-  assign controller_toggle = initializer_finished ? arb_toggle : initializer_toggle;
-  assign controller_next_transaction = initializer_finished ? req_transaction[owner]
-                                                            : initializer_next_transaction;
-  assign controller_address = initializer_finished ? req_address[owner] : initializer_address;
-  assign controller_length = initializer_finished ? req_length[owner] : initializer_length;
-  assign controller_write_data = initializer_finished ? client_write_data[owner]
-                                                      : initializer_write_data;
-
   // Initializer may cause the initializer_toggle to be misaligned with controller_toggle.
   // This may cause an unexpected extra transaction. Check for odd number of transactions.
   // And compensate if necessary.
@@ -128,11 +120,18 @@ module memory #(
     else if (!initializer_finished) toggle_offset <= initializer_toggle ^ client_toggle;
   end
 
+  // Before the initializer is finished it owns the controller
   assign controller_toggle = initializer_finished
-    ? (client_toggle ^ toggle_offset)
+    ? (arb_toggle ^ toggle_offset)
     : initializer_toggle;
-
-  //assign read_data = controller_read_data;
+  assign controller_next_transaction = initializer_finished
+    ? req_transaction[owner]
+    : initializer_next_transaction;
+  assign controller_address = initializer_finished ? req_address[owner] : initializer_address;
+  assign controller_length = initializer_finished ? req_length[owner] : initializer_length;
+  assign controller_write_data = initializer_finished ? client_write_data[owner]
+                                                      : initializer_write_data;
+  assign read_data = controller_read_data;
 
   always_comb begin
     for (int unsigned i = 0; i < NumClients; i++) begin
@@ -154,6 +153,7 @@ module memory #(
       .busy(controller_busy),
       .run_clock(run_clock),
       .data_on_cable(controller_data_on_cable),
+      .data_on_cable_comb(controller_data_on_cable_comb),
       .read_data(controller_read_data),
       .reset_n,
       .dq,
@@ -167,7 +167,7 @@ module memory #(
       .reset,
       .enable,
       .controller_busy,
-      .controller_data_on_cable,
+      .controller_data_on_cable(controller_data_on_cable_comb),  // [STROBE]
       .finished(initializer_finished),
       .controller_toggle(initializer_toggle),
       .next_transaction(initializer_next_transaction),

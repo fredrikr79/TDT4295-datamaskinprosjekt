@@ -333,11 +333,6 @@ static void delete_listed_save(
   }
 }
 
-void delete_all_saves()
-{
-  storage_list("save", delete_listed_save, NULL);
-}
-
 /* ---- moving a room to / from the FPGA ------------------------------------
  *   load:  STOP_SIM -> WRITE_CONS row 0 .. ROOM_Y-1 -> START_SIM
  *   save:  STOP_SIM -> READ_CONS  row 0 .. ROOM_Y-1 -> write the file

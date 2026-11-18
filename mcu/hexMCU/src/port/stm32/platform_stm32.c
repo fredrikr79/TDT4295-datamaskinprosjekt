@@ -251,3 +251,22 @@ bool plat_exit(int code)
 }
 
 void plat_mcu_reset(void) { NVIC_SystemReset(); }
+
+/* The reset flags in RCC->CSR stay set through resets until RMVF clears
+ * them, so they're read once (the first call) and cleared straight away. */
+plat_reset_t plat_reset_cause(void)
+{
+    static bool read;
+    static plat_reset_t cause;
+    if (read) return cause;
+    read = true;
+    uint32_t csr = RCC->CSR;
+    RCC->CSR |= RCC_CSR_RMVF;
+    if      (csr & RCC_CSR_BORRSTF)                       cause = PLAT_RESET_POWER;
+    else if (csr & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF)) cause = PLAT_RESET_WATCHDOG;
+    else if (csr & RCC_CSR_SFTRSTF)                       cause = PLAT_RESET_SOFTWARE;
+    else if (csr & (RCC_CSR_LPWRRSTF | RCC_CSR_OBLRSTF))  cause = PLAT_RESET_OTHER;
+    else if (csr & RCC_CSR_PINRSTF)                       cause = PLAT_RESET_PIN;
+    else                                                  cause = PLAT_RESET_OTHER;
+    return cause;
+}

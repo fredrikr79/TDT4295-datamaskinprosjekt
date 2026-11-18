@@ -513,8 +513,45 @@ static void update_projectile_callback(const fpga_cmd_t *cmd, fpga_err_t err)
     if (state == S_RUN && run_state == RS_SIM) phys_read();
 }
 
-/* ---- function keys: shortcuts for testing and showing off ---------------------
+
+/* ---- the board's user button -------------------------------------------------
+ *   short press (let go before BUTTON_LONG_MS)  Bad Apple: start / stop, as F1
+ *   long press  (held BUTTON_LONG_MS)           a new game: every save deleted,
+ *                                               back to room FIRST_ROOM_X, _Y
+ * The long press happens as soon as it's been held long enough, without
+ * waiting for the release. Read every poll (button_poll()), acted on in RUN
+ * only, like the function keys: a press in any other state is dropped. */
+#define BUTTON_DEBOUNCE_MS  30u
+#define BUTTON_LONG_MS      1500u
+
+typedef enum { BTN_NONE, BTN_SHORT, BTN_LONG } button_event_t;
+static button_event_t button_event;     /* for hotkeys() */
+
+static void button_poll(void)
+{
+    static bool     raw, stable, long_done;
+    static uint32_t raw_at, down_at;
+    uint32_t now = plat_millis();
+    bool r = plat_button_down();
+    button_event_t ev = BTN_NONE;
+
+    if (r != raw) { raw = r; raw_at = now; }            /* bouncing: wait */
+    if (raw != stable && now - raw_at >= BUTTON_DEBOUNCE_MS) {
+        stable = raw;
+        if (stable) { down_at = now; long_done = false; }
+        else if (!long_done) ev = BTN_SHORT;            /* let go early */
+    }
+    if (stable && !long_done && now - down_at >= BUTTON_LONG_MS) {
+        long_done = true;
+        ev = BTN_LONG;
+    }
+    if (ev != BTN_NONE) button_event = state == S_RUN ? ev : BTN_NONE;
+    else if (state != S_RUN) button_event = BTN_NONE;
+}
+
+/* ---- function keys, the controller and the button: shortcuts -------------------
  *   F1  Bad Apple: start / stop (badapple.bin, Air and Stone, like the console)
+ *       also: Share on a controller, a short press of the board's button
  *   F5  restart this room: as designed, its save deleted (the menu's Restart room)
  *   F6  clear the room: the whole grid air, on the FPGA (the 'clear' demo); the
  *       room file only changes if the room is saved after
@@ -522,22 +559,75 @@ static void update_projectile_callback(const fpga_cmd_t *cmd, fpga_err_t err)
  *       place (saved rooms are kept: F9 first for a whole new game)
  *   F8  the player to the top of the screen, same x
  *   F9  delete every saved room (sd del save/)
+ *   a new game, F9 + F7 in one: Options on a controller, a long press of the
+ *       board's button
  * Only while the game runs (RUN). true: a room started loading, RUN is left. */
+
+/* Pressed on any connected controller since the last frame. */
+static bool any_pad_pressed(const input_t *in, uint32_t buttons)
+{
+    for (unsigned p = 0; p < INPUT_PADS; p++)
+        if (in->pad[p].connected && (in->pad[p].pressed & buttons)) return true;
+    return false;
+}
+
+static void badapple_toggle(const char *by)
+{
+    LOG_INFO("%s: Bad Apple %s", by, badapple_busy() ? "off" : "on");
+    if (badapple_busy()) badapple_stop();
+    else                 badapple_start("badapple.bin", false, MAT_AIR, MAT_STONE);
+}
+
+static void delete_saves(const char *by)
+{
+    uint32_t files = 0;
+    storage_status_t st = storage_delete_dir("save/", &files);
+    if (st == STORAGE_OK || st == STORAGE_NOT_FOUND) {
+        LOG_INFO("%s: saved rooms deleted (%lu file%s)", by, (unsigned long)files,
+                 files == 1 ? "" : "s");
+        led_flash(LED_SAVES_DELETED, LED_SAVES_DELETED_MS);   /* 3 quick white blinks */
+    } else
+        LOG_WARN("%s: deleting save/: %s", by, storage_status_str(st));
+}
+
+static void back_to_start(const char *by)
+{
+    LOG_INFO("%s: back to the start, room %d, %d", by, FIRST_ROOM_X, FIRST_ROOM_Y);
+    room_x = FIRST_ROOM_X;
+    room_y = FIRST_ROOM_Y;
+    player_set_default(&player);
+    velocity_box = create_velocity_box(player.x, player.y, PLAYER_SIZE_X, PLAYER_SIZE_Y,
+                                       player.velocity_x, player.velocity_y);
+    player_sprite_init((int16_t)(player.x * FPGA_SIM_SCALE),
+                       (int16_t)(player.y * FPGA_SIM_SCALE));
+    projectile_sprite_init(
+        player.projectile.x * FPGA_SIM_SCALE,
+        player.projectile.y * FPGA_SIM_SCALE
+    );
+    load_start();
+}
+
+/* Every save deleted, and from the first room: a whole new game. */
+static void new_game(const char *by)
+{
+    if (badapple_busy()) badapple_stop();   /* it would draw over the new room */
+    delete_saves(by);
+    back_to_start(by);
+}
+
 static bool hotkeys(const input_t *in)
 {
-    if (key_pressed(in, KEY_F1)) {
-        if (badapple_busy()) badapple_stop();
-        else                 badapple_start("badapple.bin", false, MAT_AIR, MAT_STONE);
-    }
-    if (key_pressed(in, KEY_F9)) {                  /* before F7: F9 + F7 is a new game */
-        uint32_t files = 0;
-        storage_status_t st = storage_delete_dir("save/", &files);
-        if (st == STORAGE_OK || st == STORAGE_NOT_FOUND)
-            LOG_INFO("F9: saved rooms deleted (%lu file%s)", (unsigned long)files,
-                     files == 1 ? "" : "s");
-        else
-            LOG_WARN("F9: deleting save/: %s", storage_status_str(st));
-    }
+    button_event_t btn = button_event;
+    button_event = BTN_NONE;
+
+    if (key_pressed(in, KEY_F1))               badapple_toggle("F1");
+    if (any_pad_pressed(in, PAD_SELECT))       badapple_toggle("Share");
+    if (btn == BTN_SHORT)                      badapple_toggle("button");
+
+    if (any_pad_pressed(in, PAD_START)) { new_game("Options"); return true; }
+    if (btn == BTN_LONG)                { new_game("button (long)"); return true; }
+
+    if (key_pressed(in, KEY_F9)) delete_saves("F9");   /* before F7: F9 + F7 is a new game */
     if (key_pressed(in, KEY_F6)) {
         LOG_INFO("F6: clearing the room");
         demo_start("clear");                        /* the game waits while it runs */
@@ -552,22 +642,8 @@ static bool hotkeys(const input_t *in)
         load_start();
         return true;
     }
-    if (key_pressed(in, KEY_F7)) {
-        LOG_INFO("F7: back to the start, room %d, %d", FIRST_ROOM_X, FIRST_ROOM_Y);
-        room_x = FIRST_ROOM_X;
-        room_y = FIRST_ROOM_Y;
-        player_set_default(&player);
-        velocity_box = create_velocity_box(player.x, player.y, PLAYER_SIZE_X, PLAYER_SIZE_Y,
-                                           player.velocity_x, player.velocity_y);
-        player_sprite_init((int16_t)(player.x * FPGA_SIM_SCALE),
-                           (int16_t)(player.y * FPGA_SIM_SCALE));
-        projectile_sprite_init(
-            player.projectile.x * FPGA_SIM_SCALE,
-            player.projectile.y * FPGA_SIM_SCALE
-        );
-        load_start();
-        return true;
-    }
+
+    if (key_pressed(in, KEY_F7)) { back_to_start("F7"); return true; }
     return false;
 }
 
@@ -707,7 +783,7 @@ void game_reset()
 {
     if (state != S_RUN) return;
     menu_reset();
-    delete_all_saves();
+    delete_saves("Death");
     room_x = FIRST_ROOM_X;
     room_y = FIRST_ROOM_Y;
     player_set_default(&player);
@@ -863,6 +939,7 @@ void game_poll(void)
     led_set(LED_RUNNING, state == S_RUN);
     if (state != S_RUN) led_set(LED_NO_INPUT, false);
     led_poll();
+    button_poll();                      /* the board's button: hotkeys() acts on it */
 
     if (state == S_FPGA_RESET) {        /* before anything else: nothing may be sent */
         if ((int32_t)(plat_millis() - fpga_reset_until) >= 0) fpga_reset_done();

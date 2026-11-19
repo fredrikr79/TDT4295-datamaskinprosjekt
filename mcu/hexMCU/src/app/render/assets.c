@@ -190,6 +190,26 @@ static void player_px(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
     }
 }
 
+static void explosive_proj_px(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
+{
+    (void)ctx;
+    for (uint32_t i = 0; i < len; i += PX_BYTES) {
+        uint16_t colour = RGB565(235, 70, 60);
+        buf[i]     = (uint8_t)(colour >> 8);
+        buf[i + 1] = (uint8_t)colour;
+    }
+}
+
+static void gol_proj_px(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
+{
+    (void)ctx;
+    for (uint32_t i = 0; i < len; i += PX_BYTES) {
+        uint16_t colour = RGB565(250, 250, 250);
+        buf[i]     = (uint8_t)(colour >> 8);
+        buf[i + 1] = (uint8_t)colour;
+    }
+}
+
 static sprite_img_t *text(const char *s)
 {
     return sprite_img_text(&ASSET_FONT, s, TEXT_COLOUR, TEXT_SCALE);
@@ -203,6 +223,14 @@ void assets_init(void)
 
     /* generated */
     assets.player = sprite_img_fill(4*PLAYER_SIZE_X, 4*PLAYER_SIZE_Y, player_px, NULL);
+    assets.explosive_proj = sprite_img_fill(
+        4*EXPLOSION_PROJ_SIZE_X, 4*EXPLOSION_PROJ_SIZE_Y,
+        explosive_proj_px, NULL
+    );
+    assets.gol_proj = sprite_img_fill(
+        4*GOL_PROJ_SIZE_X, 4*GOL_PROJ_SIZE_Y,
+        gol_proj_px, NULL
+    );
 
     /* texts: one image per text */
     assets.title     = text("Hei verden! Lagre spill? æøå ÆØÅ");

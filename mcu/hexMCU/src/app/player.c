@@ -9,6 +9,10 @@
 
 static float move_direction = 0;
 static bool jump_next_frame = false;
+static bool shoot_next_frame = false;
+
+static uint16_t shoot_target_x = 0;
+static uint16_t shoot_target_y = 0;
 
 static sprite_t *spr;                   /* the picture, at the player's top-left */
 
@@ -141,6 +145,38 @@ static bool take_damage(
     if (on_radiation && damage_player(player, 2)) return true;
     if (player->breath_meter == 0 && damage_player(player, 5)) return true;
     return false;
+}
+
+static void shoot_projectile(player_t *player)
+{
+    if (player->projectile.active) return;
+
+    // TODO: Check if there's room in the fpga command queue to not break more important functions
+
+    // Aim the projectile
+    float x = player->x + PLAYER_SIZE_X / 2;
+    float y = player->y + PLAYER_SIZE_Y / 2;
+    if (player->projectile.type == EXPLOSIVE)
+    {
+        x -= EXPLOSION_PROJ_SIZE_X / 2;
+        y -= EXPLOSION_PROJ_SIZE_Y / 2;
+    }
+    else if (player->projectile.type == GOL)
+    {
+        x -= GOL_PROJ_SIZE_X / 2;
+        y -= GOL_PROJ_SIZE_Y / 2;
+    }
+    float vel_x = shoot_target_x - x;
+    float vel_y = shoot_target_y - y;
+    float magnitude = sqrtf(vel_x*vel_x + vel_y*vel_y);
+    vel_x *= PROJECTILE_SPEED / magnitude;
+    vel_y *= PROJECTILE_SPEED / magnitude;
+
+    set_projectile(
+        &(player->projectile),
+        x, y, 
+        vel_x, vel_y
+    );
 }
 
 static void next_step(player_t *player)
@@ -300,6 +336,14 @@ void update_player(
     player->velocity_y += force_y / 2;
     //LOG_DBG("4 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
+    // Shoot new projectile
+    if (shoot_next_frame && !(player->projectile.active))
+    {
+        shoot_projectile(player);
+        projectile_show(player->projectile.type, true);
+    }
+    shoot_next_frame = false;
+
     // Heal
     if (ticks_since_last_damage) ticks_since_last_damage--;
     else if (ticks_since_last_heal) ticks_since_last_heal--;
@@ -403,10 +447,17 @@ void start_jump()
     jump_next_frame = true;
 }
 
+void queue_shot(int x, int y)
+{
+    shoot_next_frame = true;
+    shoot_target_x = (uint16_t) x / 4;
+    shoot_target_y = (uint16_t) y / 4;
+}
+
 void player_set_default(player_t *player)
 {
     player->x = 78;
-    player->y = 30;
+    player->y = 26;
 
     player->velocity_x = 0;
     player->velocity_y = 0;
@@ -421,6 +472,8 @@ void player_set_default(player_t *player)
 
     ticks_since_last_damage = 0;
     ticks_since_last_heal = 0;
+
+    player->projectile.active = false;
 }
 
 void player_init()
@@ -428,8 +481,17 @@ void player_init()
     // Init the player struct
     player_t player = (player_t) {};
     player_set_default(&player);
-    set_player(player);
     sprite_follow(&player);
+
+    // Create the player's projectile
+    player.projectile = get_new_projectile(
+        player.x + PLAYER_SIZE_X / 2, player.y + PLAYER_SIZE_Y / 2, 
+        4, 0,
+        EXPLOSIVE
+    );
+    (&(player.projectile))->active = false;
+
+    set_player(player);
 
     // Create the next velocity box
     velocity_box_t next_velocity_box = create_velocity_box(
@@ -438,6 +500,7 @@ void player_init()
         player.velocity_x, player.velocity_y
     );
     set_next_velocity_box(&next_velocity_box);
+
 }
 
 void player_sprite_init(int16_t x, int16_t y)

@@ -16,6 +16,8 @@ typedef struct {
     sprite_img_t *cursor;                   /* sprites/cursor.spr, or a white square */
     sprite_img_t *title;                    /* test sentence                         */
     sprite_img_t *player;                   /* the hitbox (player.h), 4 px a cell     */
+    sprite_img_t *explosive_proj;           /* explosive projectile */
+    sprite_img_t *gol_proj;                 /* game og life projectile */
     /* the pause menu (menu.c) */
     sprite_img_t *menu_title;               /* "Sim paused", not a button            */
     sprite_img_t *menu_save, *menu_load, *menu_restart, *menu_draw;

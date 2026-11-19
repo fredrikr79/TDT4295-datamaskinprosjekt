@@ -20,7 +20,6 @@
 #include "transport.h"
 #include "fpga.h"
 #include "demo.h"
-#include "led.h"
 #include "storage.h"
 #include "game.h"
 #include "badapple.h"
@@ -797,131 +796,6 @@ static void cmd_demo(int argc, char **argv)
     demo_list();
 }
 
-/* log_raw formats into a buffer of its own, so a long text is cut short:
- * print it a line at a time. */
-static void print_lines(const char *s)
-{
-    while (*s) {
-        const char *e = strchr(s, '\n');
-        int n = e ? (int)(e - s + 1) : (int)strlen(s);
-        log_raw("%.*s", n, s);
-        s += n;
-    }
-}
-
-static void cmd_led(int argc, char **argv)
-{
-    static const struct { const char *name; uint8_t rgb; } colours[] = {
-        { "off", LED_OFF }, { "r", LED_RED }, { "g", LED_GREEN }, { "b", LED_BLUE },
-        { "y", LED_YELLOW }, { "c", LED_CYAN }, { "m", LED_MAGENTA }, { "w", LED_WHITE },
-    };
-    if (argc == 2 && !strcmp(argv[1], "auto")) {
-        led_auto();
-    } else if (argc == 2 && !strcmp(argv[1], "list")) {
-        for (unsigned i = 0; i < LED_COUNT; i++)          /* in priority order */
-            log_raw("  %-9s %s\r\n", led_id((led_state_t)i), led_name((led_state_t)i));
-    } else if (argc == 2 && !strcmp(argv[1], "pins")) {
-        static char buf[320];
-        plat_led_pins(buf, sizeof buf);
-        print_lines(buf);
-        return;
-    } else if (argc == 2 && !strcmp(argv[1], "cycle")) {
-        led_cycle();
-    } else if (argc == 3 && !strcmp(argv[1], "show")) {
-        int s = led_find(argv[2]);
-        if (s < 0) {
-            log_raw("no state '%s' (led list)\r\n", argv[2]);
-            return;
-        }
-        led_show((led_state_t)s);
-    } else if (argc == 2) {
-        unsigned i;
-        for (i = 0; i < sizeof colours / sizeof colours[0]; i++)
-            if (!strcmp(argv[1], colours[i].name)) { led_test(colours[i].rgb); break; }
-        if (i == sizeof colours / sizeof colours[0]) {
-            log_raw("usage: led [r|g|b|y|c|m|w|off | list | show <state> | cycle | pins | auto]\r\n");
-            return;
-        }
-    }
-    log_raw("led: %s\r\n", led_now());
-}
-
-/* button             the board button now: up/down, presses so far
- * button watch       for BUTTON_WATCH_MS, every change of the pin and every
- *                    press the interrupt sees, then what that means
- * Reads the pin directly as well as counting interrupts, so it tells a
- * dead button from a button whose interrupt isn't set up. */
-#define BUTTON_WATCH_MS 15000u
-
-static struct {
-    bool     on;
-    uint32_t until;
-    bool     down;                  /* pin, last poll       */
-    uint32_t edges, presses;        /* at the last poll     */
-    uint32_t edges0, presses0;      /* when the watch began */
-    uint32_t changes;               /* pin changes seen     */
-} bw;
-
-static void button_watch_poll(void)
-{
-    if (!bw.on) return;
-    uint32_t now = plat_millis(), edges, presses;
-    bool down = plat_button_down();
-    plat_button_counts(&edges, &presses);
-
-    if (down != bw.down) {
-        bw.down = down;
-        bw.changes++;
-        log_raw("button: pin %s (%s) at %lu ms\r\n", down ? "DOWN" : "up",
-                down ? "pressed" : "released", (unsigned long)now);
-    }
-    if (presses != bw.presses || edges != bw.edges) {
-        log_raw("button: interrupt, press #%lu (%lu edges so far, bounces included)\r\n",
-                (unsigned long)(presses - bw.presses0), (unsigned long)(edges - bw.edges0));
-        bw.presses = presses;
-        bw.edges   = edges;
-    }
-    if ((int32_t)(now - bw.until) < 0) return;
-
-    bw.on = false;
-    uint32_t p = presses - bw.presses0, e = edges - bw.edges0;
-    log_raw("button watch done: pin changed %lu times, %lu presses through the interrupt (%lu edges)\r\n",
-            (unsigned long)bw.changes, (unsigned long)p, (unsigned long)e);
-    if (bw.changes == 0 && p == 0)
-        log_raw("  -> nothing at all: the pin never moved. The button, its wiring, or the "
-                "pull-up (USER_BUTTON: pull-up in CubeMX)\r\n");
-    else if (bw.changes > 0 && p == 0)
-        log_raw("  -> the pin works but no interrupt: check EXTI13 is enabled in CubeMX's NVIC "
-                "tab and that EXTI13_IRQHandler calls HAL_GPIO_EXTI_IRQHandler\r\n");
-    else if (bw.changes == 0 && p > 0)
-        log_raw("  -> interrupts but the pin looked still: presses shorter than a poll; fine\r\n");
-    else
-        log_raw("  -> the button works\r\n");
-}
-
-static void cmd_button(int argc, char **argv)
-{
-    uint32_t edges, presses;
-    plat_button_counts(&edges, &presses);
-    if (argc == 2 && !strcmp(argv[1], "watch")) {
-        bw.on       = true;
-        bw.until    = plat_millis() + BUTTON_WATCH_MS;
-        bw.down     = plat_button_down();
-        bw.edges    = bw.edges0   = edges;
-        bw.presses  = bw.presses0 = presses;
-        bw.changes  = 0;
-        log_raw("button watch: press the button a few times in the next %u s (now %s)\r\n",
-                BUTTON_WATCH_MS / 1000u, bw.down ? "DOWN" : "up");
-        return;
-    }
-    if (argc != 1) {
-        log_raw("usage: button [watch]\r\n");
-        return;
-    }
-    log_raw("button: %s now, %lu presses since start (%lu interrupt edges)\r\n",
-            plat_button_down() ? "DOWN" : "up", (unsigned long)presses, (unsigned long)edges);
-}
-
 /* sd                status: mounted?, size, free, the last thing that happened
  * sd ls [<folder>]  what's in a folder (the root if none)
  * sd del <file>     delete a file
@@ -1176,8 +1050,6 @@ static const cli_cmd_t cmds[] = {
     { "grid",    cmd_grid,     "grid <x> <y> [<w> <h>] | write <x> <y> <w> <h>  read the cells there / write a test pattern and read it back" },
     { "readrdy", cmd_readrdy,  "show ready pin, ACK, backend and fpga queue" },
     { "info",    cmd_info,     "info [query | clear | set <w> <h> <n> [<sid>]]  (w h: screen px)" },
-    { "led",     cmd_led,      "led [<colour> | list | show <state> | cycle | pins | auto]  test the LED, no FPGA needed" },
-    { "button",  cmd_button,   "button [watch]      the board button now / watch it for 15 s" },
     { "sd",      cmd_sd,       "sd [ls [<folder>] | del <file> | del <folder>/]  SD card status / list / delete" },
     { "reset",   cmd_reset,    "reset [-b] [fpga|mcu]  reset both / the FPGA (reset pin; -b: PROGRAM_B, reloads its design) / the MCU" },
     { "loading", cmd_loading,  "loading [on|off]    off: the game (and probing) stops, the FPGA is yours" },
@@ -1260,8 +1132,6 @@ void cli_init(void)
 
 void cli_poll(void)
 {
-    button_watch_poll();
-
     /* Results arrive through cli_done(), called from fpga_poll() just
      * before this. Here: retry a submit that found the queue full. */
     if (pend.waiting) {

@@ -6,7 +6,6 @@ fpga/vga-build
 fpga/vcd-build
 fpga/verible.filelist
 fpga/dump-data
-fpga/src/config_pkg.sv
 fpga/test/config.hpp
 *.jou
 *.log

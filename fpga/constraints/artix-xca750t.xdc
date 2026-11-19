@@ -85,10 +85,12 @@ set_clock_groups -asynchronous \
     -group [get_clocks -of_objects [get_ports clk_in]] \
     -group [get_clocks ck_sck]
 
+# Flash config
 set_property CFGBVS VCCO [current_design]
 set_property CONFIG_VOLTAGE 3.3 [current_design]
 set_property CONFIG_MODE SPIx4 [current_design]
 set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 4 [current_design]
 
+# Timing options
 set_max_delay -datapath_only -from [get_clocks ck_sck] -to [get_clocks -include_generated_clocks -of_objects [get_ports clk_in]] 10.000
 set_max_delay -datapath_only -from [get_clocks -include_generated_clocks -of_objects [get_ports clk_in]] -to [get_clocks ck_sck] 10.000

@@ -1,3 +1,5 @@
+// Simple hello world module useful for checking programming of any board.
+
 module example_blinking (
     input wire       clk,
     output logic     led_b_n = 1'b1,
@@ -23,12 +25,5 @@ always_ff @(posedge clk) begin
         // led_g <= ~led_g;
         led_g_n <= ~led_g_n;
     end
-    // end else if (count == 25'd19999999*2/3) begin
-    //     led_b <= 1'b0;
-    //     led_g <= ~led_g;
-    // end else if (count == 25'd19999999) begin
-    //     led_g <= 1'b0;
-    //     led_r <= ~led_r;
-    // end
 end
 endmodule

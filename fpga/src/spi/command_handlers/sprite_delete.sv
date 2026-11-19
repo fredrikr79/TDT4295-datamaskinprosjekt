@@ -2,15 +2,12 @@ module sprite_delete #(
 
 )(
     input wire clk, ck_rst, send_sprite_delete,
-    input logic in_empty,
-    mem_allow,
+    input logic mem_allow,
     input logic [7:0] in_fifo,
-    // input logic [hud_pkg::SpriteLutDepth-1:0] sprite_id_bitmap,
     output logic sprite_delete_done,
     sprite_delete_r_en,
     sprite_req_valid,
     error_valid,
-    output logic [7:0] error_code,
     output hud_pkg::sprite_inst_entry_t sprite_req_body
 );
 
@@ -55,10 +52,15 @@ always_ff @(posedge clk) begin
                 state <= EXECUTE;
             end
             EXECUTE: begin
+                // Should be error handling here
+                //
                 // if(!sprite_id_bitmap[param_id]) begin
                 //     error_valid <= 1'b1;
                 //     error_code <= UNKNOWN_IDENTIFIER_ERROR;
                 // end else begin
+                //
+                // But hardware limitations forbids us from doing id lookup without a.
+                // larger rewrite required that we can't afford before the deadline.
                 if (mem_allow) begin
                     sprite_req_body.id <= param_id;
                     sprite_req_valid <= 1'b1;

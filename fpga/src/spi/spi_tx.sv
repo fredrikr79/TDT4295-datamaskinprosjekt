@@ -3,20 +3,16 @@ module spi_tx #(
 ) (
     input wire clk,
     ck_sck,
-    reset,
     reset_s,
     ck_ss,
     ck_ss_s,
-    in_empty,
     out_w_en,
-    out_empty_s,
 
     input spi_pck::state_e state,
     input logic [7:0] out_fifo,
     inout wire [7:0] octo_spi,
 
-    output wire out_empty,
-    out_full,
+    output wire out_full,
     out_ready,
 
     output logic tx_r_en,

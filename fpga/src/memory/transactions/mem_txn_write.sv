@@ -1,7 +1,6 @@
 module mem_txn_write (
     input logic reset,
     input logic enable,
-    input logic [7:0] dq_in,
     input logic [31:0] address,
     input logic double_latency,
     input memory_pkg::state_e current_state,

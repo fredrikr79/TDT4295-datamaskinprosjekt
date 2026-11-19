@@ -179,27 +179,27 @@ package color_pkg;
 
   function automatic logic [15:0] igneous_colors (input logic [3:0] meta);
     unique case (3'(meta))
-      4'b0001: return 16'b10010_010010_00000;
-      4'b0011: return 16'b10011_010011_00000;
-      4'b0101: return 16'b10100_010100_00001;
-      4'b0111: return 16'b10101_010101_00001;
-      4'b1001: return 16'b10110_010110_00010;
-      4'b1011: return 16'b10111_010111_00010;
-      4'b1101: return 16'b11000_011000_00011;
-      4'b1111: return 16'b11001_011001_00011;
+      3'b000: return 16'b10010_010010_00000;
+      3'b001: return 16'b10011_010011_00000;
+      3'b010: return 16'b10100_010100_00001;
+      3'b011: return 16'b10101_010101_00001;
+      3'b100: return 16'b10110_010110_00010;
+      3'b101: return 16'b10111_010111_00010;
+      3'b110: return 16'b11000_011000_00011;
+      3'b111: return 16'b11001_011001_00011;
     endcase
   endfunction
 
   function automatic logic [15:0] stone_colors (input logic [3:0] meta);
     unique case (3'(meta))
-      4'b0001: return 16'b00011_000110_00011;
-      4'b0011: return 16'b00100_001000_00100;
-      4'b0101: return 16'b00101_001010_00101;
-      4'b0111: return 16'b00110_001100_00110;
-      4'b1001: return 16'b00111_001110_00111;
-      4'b1011: return 16'b01000_010000_01000;
-      4'b1101: return 16'b01001_010010_01001;
-      4'b1111: return 16'b01010_010100_01010;
+      3'b000: return 16'b00011_000110_00011;
+      3'b001: return 16'b00100_001000_00100;
+      3'b010: return 16'b00101_001010_00101;
+      3'b011: return 16'b00110_001100_00110;
+      3'b100: return 16'b00111_001110_00111;
+      3'b101: return 16'b01000_010000_01000;
+      3'b110: return 16'b01001_010010_01001;
+      3'b111: return 16'b01010_010100_01010;
     endcase
   endfunction
 endpackage

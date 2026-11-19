@@ -423,9 +423,7 @@ module main #(
       .led_b_n(led_b_n),
       .ready(ready),
 
-      .out_almost_empty(out_almost_empty),
       .out_empty(out_empty),
-      .in_almost_full(in_almost_full),
       .in_full(in_full),
 
       // Sim running

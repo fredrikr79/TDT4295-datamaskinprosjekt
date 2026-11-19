@@ -57,7 +57,7 @@ module fb_scanout #(
   logic [AddrBits-1:0] read_x;
   assign read_x = AddrBits'(coord_x);
 
-  logic [15:0] fb_line_pixel_data;
+  logic [7:0] fb_line_pixel_data;
 
   fb_line_buffer #(
       .LineBytes(LineBytes)

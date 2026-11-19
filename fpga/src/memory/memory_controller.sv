@@ -226,7 +226,6 @@ module memory_controller (
   mem_txn_reset_enable reset_enable_transaction (
       .reset(reset),
       .enable(enable),
-      .rwds_in(rwds_in),
       .current_state(current_state),
       .bytes_this_state(bytes_this_state),
       .out(reset_enable_out)
@@ -317,7 +316,6 @@ module memory_controller (
   mem_txn_write write_transaction (
       .reset(reset),
       .enable(enable),
-      .dq_in(dq_in),
       .address(current_address),
       .write_length(current_length),
       .double_latency,

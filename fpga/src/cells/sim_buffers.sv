@@ -49,7 +49,7 @@ module sim_buffers #(
     PRIME_FIRST,   // row 0 into buffers[2]
     PRIME_SECOND,  // row 1 into buffers[1]
     START_ROW,     // signal simulator to start processing the buffers
-    RUN_ROW,       // wait on pulse_row_done, and shift buffers when this happens, if pulse_transaction_pair_done, write to memory as well.
+    RUN_ROW,       // on row_done, shift input buffers, on transaction_pair_done, write to memory.
     COMMIT_FIRST,  // hold the first (or only) row until the compositor can take it
     WRITE_BACK,    // write one or two res_buffer rows to memory
     PREFETCH,      // start fetching of row_index + 1 or start over from beginning of a frame

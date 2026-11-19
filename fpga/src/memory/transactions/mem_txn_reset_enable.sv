@@ -2,7 +2,6 @@ module mem_txn_reset_enable #(
 ) (
     input logic reset,
     input logic enable,
-    input logic rwds_in,
     input memory_pkg::state_e current_state,
     input memory_pkg::message_length_t bytes_this_state,
     output memory_pkg::transaction_output_t out

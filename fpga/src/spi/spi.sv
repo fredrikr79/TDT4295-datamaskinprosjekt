@@ -1,3 +1,6 @@
+// SPI was originally tested through the Arty using a version of this module as top
+// using ILA waveforms. The ILA has later been removed.
+
 module spi #(
     parameter bit DEBUG = 1'd1
 ) (
@@ -16,9 +19,7 @@ module spi #(
     output wire       led_b_n,
     output wire       ready,
 
-    output wire out_almost_empty,
     output wire out_empty,
-    output wire in_almost_full,
     output wire in_full,
 
     output wire sim_running,
@@ -190,8 +191,6 @@ module spi #(
       .clk(clk),
       .ck_sck(ck_sck),
       .ck_ss(ck_ss),
-      .ck_ss_s(ck_ss_s),
-      .reset(reset),
       .reset_s(reset_s),
       .octo_spi(octo_spi),
       .in_r_en(in_r_en),
@@ -209,20 +208,16 @@ module spi #(
   spi_tx tx (
       .clk(clk),
       .ck_sck(ck_sck),
-      .reset(reset),
       .reset_s(reset_s),
       .ck_ss(ck_ss),
       .ck_ss_s(ck_ss_s),
       .tx_r_en(tx_r_en),
-      .in_empty(in_empty),
       .out_w_en(out_w_en),
       .state(state),
       .out_fifo(out_fifo),
       .octo_spi(octo_spi),
-      .out_empty(out_empty),
       .out_full(out_full),
       .out_ready(out_ready),
-      .out_empty_s(out_empty_s),
       .error_valid(tx_error_valid),
       .error_code(tx_error_code)
   );

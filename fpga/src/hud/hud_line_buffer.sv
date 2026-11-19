@@ -32,14 +32,14 @@ module hud_line_buffer #(
 );
 
   typedef enum logic [2:0] {
-    SCAN,      // Cycle all sprites in the LUT and check if active. Add to shortlist if so.
-    SCAN_DRAIN, // Wait for delayed RAM response for last LUT.
-    SCAN_DRAIN2, // [TIMING] LUT read latency is 2 cycles, so the drain takes two.
-    IDLE,      // Wait for row_commit from simulator.
-    ROW_CLEAR, // Blank all bits in px_opaque_store
-    ROW_PICK,  // Choose next row to check for HUD elements.
-    ROW_ADDR,  // [TIMING] Work out the sprite row's memory address from the registers set in ROW_PICK.
-    ROW_FETCH  // Burst pixels from chosen sprite and write to px_opaque_store and px_color_store.
+    SCAN,        // Cycle all sprites in the LUT and check if active. Add to shortlist if so.
+    SCAN_DRAIN,  // Wait for delayed RAM response for last LUT.
+    SCAN_DRAIN2, // LUT read latency is 2 cycles, so the drain takes two.
+    IDLE,        // Wait for row_commit from simulator.
+    ROW_CLEAR,   // Blank all bits in px_opaque_store
+    ROW_PICK,    // Choose next row to check for HUD elements.
+    ROW_ADDR,    // Work out the sprite row's memory address from the registers set in ROW_PICK.
+    ROW_FETCH    // Burst pixels from chosen sprite and write to px_opaque_store and px_color_store.
   } state_e;
 
   state_e state;
@@ -106,10 +106,6 @@ module hud_line_buffer #(
   logic high_byte_seen;
   logic [7:0] pixel_hi;
 
-  // [TIMING] ROW_PICK used to do BRAM read -> (line_y - y) -> 32x32 multiply -> + lookup_mem_addr
-  // in one cycle (-3.3 ns). ROW_PICK now only registers the operands; ROW_ADDR does the
-  // multiply-add from registers. The row inside the sprite is < h (16 bits) and w is 16 bits,
-  // so a 16x16 multiply (one DSP) gives the same 32-bit result as the old 32x32 one.
   logic [15:0] row_in_sprite_q, sprite_w_q;
   logic [31:0] base_addr_q;
 

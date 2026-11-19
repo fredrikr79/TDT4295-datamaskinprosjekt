@@ -1,17 +1,37 @@
+////////////////////////////////
+// IMPORTANT - AI DECLARATION
+////////////////////////////////
+//
+// This file is augmented by AI. The generated output has been thoroughly read, understood and altered to adapt to later changes.
+// The patches has a major impact on the structuring of the pipeline in terms of data views and timing,
+// but the core pipeline we developed along with all the same automata rules are the same. (rules lie in sim_rules.sv)
+// The only benefits of using this file above our own design is:
+//
+//   1. Timings are tighter, mitigating thousands of long-trace timing issues invoked by high LUT usage.
+//
+// None of us ever wanted to use AI. We saw it as a last ditch effort in order to get a fully functional system.
+// We we're only made aware of the need for this patch few days prior to the deadline as our integration testing timeline
+// was heavily thinned due to a weeks worth of delay in part deliveries alongside a lack of off-board testing
+// methods that would have highlighted the hardware resource oversubscribtion to us in time to make a proper
+// human written patch. We acknowledge AI is useful for producing code, and in this instance we don't feel
+// robbed of any knowledge. If anything it may have helped us realize limitations in our own understanding og synthesis.
+//
+// All AI patches are marked "[AI supported change]" followed by a message describing the change.
+// Additional patches may may have root in a generated solution in simulator.sv but is ultimately human-written.
+//
+// The patches either:
+//
+//   1. Adapts to the new simulator pipelines views.
+//   2. Splits up the pipeline into multiple cycles.
+//
+// For the old human written design, please see sim_rules_old.sv
+// Please note that the old file does not include all human-written patches and fixes this one includes.
+// But it serves as a reference for the main architecture.
+//
+// Kind regards team FPGA
+
 package sim_rules;
 
-  // [SYNTH FIX 3] Material properties are read through sim_pkg::mat_<property>(material)
-  // instead of sim_pkg::props(material).<property>. Selecting a field straight off a function
-  // call result was synthesized with undriven fields (Synth 8-3848), so "falls", "spreads",
-  // "displaceable" and "solid" all read as 0 in hardware and nothing moved.
-
-  // [TIMING 2] Explosion rule rewritten for speed. Same result as before, but:
-  //  - 6-bit signed arithmetic instead of 32-bit int (every compare was a 32-bit carry chain)
-  //  - the eight neighbour candidates are computed side by side and reduced with a max tree,
-  //    instead of eight compare-and-update steps one after another.
-  // The old form was ~38 ns of logic between nb_q and output_buffers on a 10 ns clock.
-  //   can_move_free : ~1/4 chance, makes diagonal steps lossless
-  //   diagonal_cheap: ~1/4 chance, diagonal cost 2 instead of 3
   typedef logic signed [5:0] force_t;  // range needed: -6 .. 15
 
   // Strength a neighbour hands to this cell; 0 (no effect) if it is not an explosion.
@@ -27,11 +47,13 @@ package sim_rules;
     return (a > b) ? a : b;
   endfunction
 
-  // [TIMING 3] The explosion rule is split over two clock cycles. In one cycle it was 13 logic
+  // [AI supported change] The explosion rule is split over two clock cycles. In one cycle it was 13 logic
   // levels (diagonal cost mux -> 3-operand subtract -> 3-level max tree -> compare -> mux) and
   // missed 100 MHz by ~3.7 ns. explosion_rules_a() runs the candidates and the first two max
   // levels; its result is registered; explosion_rules_b() finishes the max and picks the
   // result. explosion_rules() chains the two and gives exactly the old result.
+  // The logical and architectural change is limited to splitting the original
+  // ruleset into two functions executed at different cycles in simulator.
   typedef struct packed {
     force_t m_a;       // max of the straight neighbours
     force_t m_b;       // max of the diagonal neighbours
@@ -81,9 +103,6 @@ package sim_rules;
 
   function automatic sim_pkg::pixel_t explosion_rules_b(input explo_partial_t p);
     force_t full_force = force_max2(force_max2(p.m_a, p.m_b), p.c_center);
-    // [SYNTH FIX] One result variable and one return. The earlier form returned from inside
-    // nested ifs and fell through to a final return; the synthesized netlist did not match
-    // simulation for that pattern (every non-exploding cell came out as air).
     logic [7:0] result;
     result = 8'hFF;  // no change
     if (p.is_exploding && full_force > 6'sd0) result = {sim_pkg::MatExplo, full_force[3:0]};
@@ -97,6 +116,7 @@ package sim_rules;
                                                  input logic diagonal_cheap);
     return explosion_rules_b(explosion_rules_a(stencil, can_move_free, diagonal_cheap));
   endfunction
+  // END OF AI PATCH
 
   function automatic sim_pkg::pixel_t gol_rules(input sim_pkg::neighbourhood_t stencil,
                                            input int counter, input logic refresh,
@@ -114,7 +134,6 @@ package sim_rules;
 
     logic center_is_alive = stencil.center.material == sim_pkg::MatGOL && stencil.center.data[3];
 
-    // [SYNTH FIX] single result variable, single return
     logic can_live = sim_pkg::mat_solid(
         stencil.center.material
     ) && !sim_pkg::mat_spreads(
@@ -138,10 +157,6 @@ package sim_rules;
     return result;
   endfunction
 
-  // [SYNTH FIX 2] The output-row pixels are passed in as two plain 24-bit values,
-  // {right, centre, left}: out_upper from output buffer 1, out_lower from output buffer 0.
-  // Was: the whole buffer array passed by `ref` and indexed inside the function, which
-  // synthesis did not build the way simulation runs it (nothing ever moved).
   function automatic sim_pkg::gravity_movement_t gravity_rules(
       input sim_pkg::neighbourhood_row_t out_upper, input sim_pkg::neighbourhood_row_t out_middle,
       input sim_pkg::neighbourhood_t stencil, input logic r);
@@ -207,7 +222,6 @@ package sim_rules;
         d_1_n1 &&
         (!m_1_0 || d_topRight_lte_right);
 
-    // [SYNTH FIX] single result variable, single return
     sim_pkg::gravity_movement_t result;
     result = sim_pkg::DownNone;
     if (m_0_0) begin  // Center pixel decides movement timings
@@ -218,8 +232,6 @@ package sim_rules;
     return result;
   endfunction
 
-
-  // [SYNTH FIX 2] same change as gravity_rules: plain 24-bit {right, centre, left} inputs.
   function automatic sim_pkg::fluid_movement_t fluid_rules(
       input sim_pkg::neighbourhood_row_t out_upper, input sim_pkg::neighbourhood_row_t out_middle,
       input sim_pkg::neighbourhood_t stencil, input logic r, input logic is_sending_row,
@@ -301,10 +313,6 @@ package sim_rules;
 
       right_unchanged = stencil.right == out_middle.right;
     end
-
-    // If we're a not a sending row, we know our sending row can't
-    // issue a transaction. So we can evaluate both rows safely.
-    // [SYNTH FIX] was an early "return res;" for sending rows; now gated, single return.
 
     // Top row
     if (!is_sending_row && !top_can_fall && !a_0_n1 && s_0_n1) begin

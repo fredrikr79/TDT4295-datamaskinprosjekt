@@ -1,4 +1,36 @@
-// Changes for LUT reduction are tagged [CHANGED] / [REMOVED] / [NEW]. grep "\[CHANGED\]\|\[REMOVED\]\|\[NEW\]"
+////////////////////////////////
+// IMPORTANT - AI DECLARATION
+////////////////////////////////
+//
+// This file is augmented by AI. The generated output has been thoroughly read, understood and altered to adapt to later changes.
+// The patches has a major impact on the structuring of the pipeline in terms of data views and timing,
+// but the core pipeline we developed along with all the same automata rules are the same. (rules lie in sim_rules.sv)
+// The only benefits of using this file above our own design is:
+//
+//   1. LUT and FF usage is considerably lower making it fit on the boards XC7A50TFTG256 FPGA chip
+//   2. Timings are tighter, mitigating thousands of long-trace timing issues invoked by high LUT usage.
+//
+// None of us ever wanted to use AI. We saw it as a last ditch effort in order to get a fully functional system.
+// We we're only made aware of the need for this patch few days prior to the deadline as our integration testing timeline
+// was heavily thinned due to a weeks worth of delay in part deliveries alongside a lack of off-board testing
+// methods that would have highlighted the hardware resource oversubscribtion to us in time to make a proper
+// human written patch. We acknowledge AI is useful for producing code, and in this instance we don't feel
+// robbed of any knowledge. If anything it may have helped us realize limitations in our own understanding og synthesis.
+//
+// All AI patches are marked "[AI supported change]" followed by a message describing the change.
+//
+// The patches either:
+//
+//   1. Minimizes the simulation core's buffer views / MUX sizes.
+//   2. Splits up the pipeline into multiple cycles.
+//   3. supports 1 or 2.
+//
+// For the old human written design, please see simulator_old.sv
+// Please note that the old file does not include all human-written patches and fixes this one includes.
+// But it serves as a reference for the main architecture.
+//
+// Kind regards team FPGA
+
 module simulator #(
 ) (
     input wire clk,
@@ -10,7 +42,7 @@ module simulator #(
     pulse_row_done,
     output sim_pkg::row_buffer_t output_buffers[2]
 );
-  // [NEW] Constants and narrow types. Replaces "int simulation_stride".
+  // [AI supported change] Constants and narrow types. Replaces "int simulation_stride".
   localparam int Stride = sim_pkg::CellGridWidth / sim_pkg::SimulationCoreCount;
   localparam int BaseW = (Stride > 1) ? $clog2(Stride) : 1;  // 6
   localparam int RowW = (sim_pkg::CellGridHeight > 1) ? $clog2(sim_pkg::CellGridHeight) : 1;  // 7
@@ -23,7 +55,7 @@ module simulator #(
   typedef logic [RowW-1:0] row_t;
   typedef logic [WinBits-1:0] window_t;
 
-  // [CHANGED] was "int simulation_base". A 32-bit index makes every neighbour read a
+  // [AI supported change] was "int simulation_base". A 32-bit index makes every neighbour read a
   // full-row mux; 6 bits is all it ever needs (0..Stride-1).
   logic [BaseW-1:0] simulation_base = '0;
   // [REMOVED] int simulation_core_index  (loop variable is now declared in the for loop)
@@ -31,7 +63,7 @@ module simulator #(
   logic is_row_running = 1'b0;
   int simulation_counter = 0;
 
-  // [PIPELINE] Register stage between the neighbourhood read and the rules/writes.
+  // [AI supported change] Register stage between the neighbourhood read and the rules/writes.
   // Breaks the sim_buffers.buffers -> window mux -> rules -> output_buffers path in two.
   // Stage 1 (issue): reads the neighbourhood for simulation_base from input_buffers.
   // Stage 2: runs the rules and writes for base_q one cycle later.
@@ -45,7 +77,7 @@ module simulator #(
   } pipeline_stage_t;
   pipeline_stage_t setup_stage;
 
-  // [PIPELINE 3] Stage between setup and rule. The explosion rule did not fit in one 10 ns
+  // [AI supported change] Stage between setup and rule. The explosion rule did not fit in one 10 ns
   // cycle (noise_lfsr / setup_stage.nb -> explosion_r, -3.7 ns slack), so its first half
   // (candidates + first two max levels) is registered here in explo_p, and the second half
   // runs into explosion_r. pre_stage carries the neighbourhood along. A row takes Stride+3.
@@ -54,7 +86,7 @@ module simulator #(
   // GoL noise bit sampled in the same cycle as before the extra stage, so results are unchanged.
   logic gol_noise_p[sim_pkg::SimulationCoreCount];
 
-  // [PIPELINE 2] Second register stage. The explosion and GoL rules only look at the
+  // [AI supported change] Second register stage. The explosion and GoL rules only look at the
   // registered neighbourhood, never at output_buffers, so they are computed here and
   // registered. Gravity, fluid and the writes run one cycle later from the *_r copies.
   // Results are unchanged; a row takes Stride+2 cycles.
@@ -66,39 +98,39 @@ module simulator #(
   logic valid_r = 1'b0;
   logic last_r = 1'b0;
 
-  // [WRITE STAGE] write slots from the always_comb block near the end of the file:
+  // [AI supported change] write slots from the always_comb block near the end of the file:
   // [core][buffer][slot], slot 0 = column-1, 1 = this column, 2 = column+1.
   sim_pkg::neighbourhood_row_en_t write_staging_stage_en[sim_pkg::SimulationCoreCount][2];
   sim_pkg::neighbourhood_row_t write_staging_stage_val[sim_pkg::SimulationCoreCount][2];
 
-  // [LOOP CUT 1] New write stage: the rule stage's writes, registered, applied one cycle later.
+  // [AI supported change] New write stage: the rule stage's writes, registered, applied one cycle later.
   logic [BaseW-1:0] write_base = '0;
   logic write_valid = 1'b0;
   logic write_last = 1'b0;
   sim_pkg::neighbourhood_row_en_t write_en[sim_pkg::SimulationCoreCount][2];
   sim_pkg::neighbourhood_row_t write_val[sim_pkg::SimulationCoreCount][2];
 
-  // [LOOP CUT 1] The three output pixels around the rule stage's column, per core and output
+  // [AI supported change] The three output pixels around the rule stage's column, per core and output
   // row, held in registers. Read one stage early (see out_view_next near the end).
   sim_pkg::neighbourhood_row_t out_view[sim_pkg::SimulationCoreCount][2];
   sim_pkg::neighbourhood_row_t out_view_next[sim_pkg::SimulationCoreCount][2];
 
-  // [CHANGED] was "int gol_refresh_counter = 1" + "gol_refresh_counter % GolRefreshDelay == 0"
+  // [AI supported change] was "int gol_refresh_counter = 1" + "gol_refresh_counter % GolRefreshDelay == 0"
   // (a 32-bit modulo). Now a 7-bit counter wrapping at GolRefreshDelay. Starts at 1 like the
   // old counter, so refreshes land on the same frames.
   logic [GolW-1:0] gol_refresh_counter = GolW'(1);
   logic gol_refresh;
   assign gol_refresh = (gol_refresh_counter == '0);
 
-  // [CHANGED] was "int current_row_index"
+  // [AI supported change] was "int current_row_index"
   row_t current_row_index = '0;
   logic is_odd_major_evaluation = 1'b0;
 
   // Linear feedback shift register acting as a L/R decision selector.
-  // [CHANGED] was "int lfsr" (same value, now unsigned 32-bit)
+  // [AI supported change] was "int lfsr" (same value, now unsigned 32-bit)
   logic [31:0] lfsr = 32'hACE1_2345;
 
-  // [CHANGED] was "int lfsr_gol" + sim_pkg::lowbias32() per core (two 32x32 constant
+  // [AI supported change] was "int lfsr_gol" + sim_pkg::lowbias32() per core (two 32x32 constant
   // multiplies per core). Now one 16-bit LFSR per core, stepped every cycle a row runs.
   // NOTE: the GoL noise is still pseudo-random but the exact sequence differs from before.
   logic [15:0] noise_lfsr[sim_pkg::SimulationCoreCount];
@@ -112,7 +144,7 @@ module simulator #(
 
   logic is_unmatched_boundry_row;
   // calculation here only works for even CellGridHeights
-  // [CHANGED] comparisons typed for the narrow row_t
+  // [AI supported change] comparisons typed for the narrow row_t
   assign is_unmatched_boundry_row = is_odd_major_evaluation &&
     (current_row_index == '0 || current_row_index == row_t'(sim_pkg::CellGridHeight - 1));
 
@@ -121,7 +153,7 @@ module simulator #(
 
     // Drive signals (output buffers must be owned by this block)
 
-    // [PIPELINE] Stage 1: read each core's neighbourhood from input_buffers and register it,
+    // [AI supported change] Stage 1: read each core's neighbourhood from input_buffers and register it,
     // then advance the issue counter. Only the 40:1 window mux is in front of these registers.
     setup_stage.valid <= is_row_running;
     setup_stage.last  <= is_row_running && (simulation_base == BaseW'(Stride - 1));
@@ -136,7 +168,7 @@ module simulator #(
         noise_lfsr[c][15] ^ noise_lfsr[c][13] ^ noise_lfsr[c][12] ^ noise_lfsr[c][10]
       };
     end
-    // ---- [PIPELINE 3] Pre stage: first half of the explosion rule ----
+    // ---- [AI supported change] Pre stage: first half of the explosion rule ----
     pre_stage.valid <= setup_stage.valid;
     pre_stage.last <= setup_stage.last;
     pre_stage.base <= setup_stage.base;
@@ -151,7 +183,7 @@ module simulator #(
       gol_noise_p[core] <= noise_lfsr[core][0];
     end
 
-    // ---- [PIPELINE 2] Stage 2: explosion (second half) and GoL rules ----
+    // ---- [AI supported change] Stage 2: explosion (second half) and GoL rules ----
     rule_stage.valid <= pre_stage.valid;
     rule_stage.last <= pre_stage.last;
     rule_stage.base <= pre_stage.base;
@@ -163,11 +195,11 @@ module simulator #(
       );
     end
 
-    // [LOOP CUT 2] Output pixels for the column entering the rule stage (pre_stage.base).
+    // [AI supported change] Output pixels for the column entering the rule stage (pre_stage.base).
     for (int core = 0; core < sim_pkg::SimulationCoreCount; core++)
       for (int b = 0; b < 2; b++) out_view[core][b] <= out_view_next[core][b];
 
-    // [LOOP CUT 2] Register the rule stage's writes; they are applied one cycle later.
+    // [AI supported change] Register the rule stage's writes; they are applied one cycle later.
     write_valid <= rule_stage.valid;
     write_last  <= rule_stage.last;
     write_base  <= rule_stage.base;
@@ -178,12 +210,12 @@ module simulator #(
       end
 
 
-    // [WRITE STAGE] Apply the write slots worked out in the always_comb block below.
+    // [AI supported change] Apply the write slots worked out in the always_comb block below.
     // Each output pixel can only be written from three places: its own column (offset 0),
     // the column to its left writing +1, or the column to its right writing -1. Those are
     // fixed for each column, so this is three small compares per pixel instead of the
     // previous 16 write calls x 40 positions per core.
-    // [LOOP CUT 3] uses the write stage copies (write_*) instead of rule_stage / wr_*.
+    // [AI supported change] uses the write stage copies (write_*) instead of rule_stage / wr_*.
     if (write_valid && sim_running) begin
       for (int b = 0; b < 2; b++) begin
         for (int column = 0; column < sim_pkg::CellGridWidth; column++) begin
@@ -198,7 +230,7 @@ module simulator #(
     end
 
     // advancement logic
-    // [PIPELINE] end-of-row work now happens when stage 2 finishes the last pixel.
+    // [AI supported change] end-of-row work now happens when stage 2 finishes the last pixel.
     // simulation_base / is_row_running are advanced by stage 1 above.
     begin
       pulse_transaction_pair_done <= 1'b0;
@@ -212,12 +244,12 @@ module simulator #(
           lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
         end
 
-        // [CHANGED] compare typed for row_t
+        // [AI supported change] compare typed for row_t
         if (current_row_index == row_t'(sim_pkg::CellGridHeight - 1)) begin
           current_row_index <= '0;
           simulation_counter <= simulation_counter + 1;
 
-          // [CHANGED] was gol_refresh_counter <= gol_refresh_counter + 1
+          // [AI supported change] was gol_refresh_counter <= gol_refresh_counter + 1
           gol_refresh_counter <= (gol_refresh_counter == GolW'(sim_pkg::GolRefreshDelay - 1)) ? '0 : gol_refresh_counter + 1'b1;
           // [REMOVED] lfsr_gol step (lfsr_gol no longer exists)
 
@@ -252,7 +284,7 @@ module simulator #(
 
   end
 
-  // [WRITE STAGE] Per-core decision for the pixel in stage 3, as write slots.
+  // [AI supported change] Per-core decision for the pixel in stage 3, as write slots.
   //   write_staging_stage_en / write_staging_stage_val [core][buffer][slot], slot 0 = column-1, 1 = this column, 2 = column+1.
   // Priority is unchanged: explosion, GoL, gravity, fluid. The rows are named by role first
   // ("mine" = the row being processed, output buffer is_sending_row; "other" = the other
@@ -271,7 +303,7 @@ module simulator #(
       at_left_edge = (core == 0) && (rule_stage.base == '0);
       at_right_edge = (core == sim_pkg::SimulationCoreCount - 1) && (rule_stage.base == BaseW'(Stride - 1));
       nb = rule_stage.nb[core];
-      // [LOOP CUT 5] from registers instead of out_slice(output_buffers[...])
+      // [AI supported change] from registers instead of out_slice(output_buffers[...])
       out_upper = out_view[core][1];
       out_lower = out_view[core][0];
 
@@ -373,7 +405,7 @@ module simulator #(
     end
   end
 
-  // [NEW] Constant slice of one row for one core: window pixel p = grid column core*Stride-1+p.
+  // [AI supported change] Constant slice of one row for one core: window pixel p = grid column core*Stride-1+p.
   // Pixels off the grid edge read as 0 (MatAir).
   function automatic window_t window(input sim_pkg::row_buffer_t row, input int core);
     window_t w = '0;
@@ -386,17 +418,17 @@ module simulator #(
     return w;
   endfunction
 
-  // [TIMING] replaces mask_to_core. Left/centre/right pixels of `row` around this core's
+  // [AI supported change] replaces mask_to_core. Left/centre/right pixels of `row` around this core's
   // stage-2 pixel (base_r), as one 24-bit slice: {right, centre, left}.
   function automatic logic [3*sim_pkg::BitsPerPixel-1:0] out_slice(input sim_pkg::row_buffer_t row,
                                                                    input int core);
     window_t w = window(row, core);
-    // [LOOP CUT 6] was rule_stage.base: the read now happens one stage earlier
-    // [PIPELINE 3] pre_stage is now the stage right before the rule stage
+    // [AI supported change] was rule_stage.base: the read now happens one stage earlier
+    // [AI supported change] pre_stage is now the stage right before the rule stage
     return w[pre_stage.base*sim_pkg::BitsPerPixel+:3*sim_pkg::BitsPerPixel];
   endfunction
 
-  // [LOOP CUT 6] Output-row view for the column in the pre stage (about to enter the rule
+  // [AI supported change] Output-row view for the column in the pre stage (about to enter the rule
   // stage). output_buffers does not yet hold what the two columns before it wrote, so those
   // are patched in. With this file's slot naming (.left lands on column+1, .right on column-1):
   //   column-2 (write stage): its .left write lands on this view's left pixel
@@ -422,7 +454,7 @@ module simulator #(
     end
   end
 
-  // [CHANGED] Rewritten. Was: setup_neighbourhood(int column), nine separate
+  // [AI supported change] Rewritten. Was: setup_neighbourhood(int column), nine separate
   // input_buffers[k][bit_column +: 8] reads with 32-bit indexes (each a 160:1 mux) plus
   // column > 0 / column < sim_pkg::CellGridWidth-1 edge checks.
   // Now: cut the core's 42-pixel window out with constant indexes, then take

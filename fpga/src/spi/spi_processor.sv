@@ -26,7 +26,7 @@ module spi_processor #(
     output logic [7:0] out_fifo,
     mem_in,
     error_code,
-    output logic [15:0] mem_len,
+    output logic [6:0] mem_len,
     output logic [31:0] mem_addr,
     output spi_pck::opcode_e opcode,
     output memory_pkg::transaction_e mem_transaction,
@@ -614,7 +614,6 @@ module spi_processor #(
       .in_fifo(in_fifo),
       .sprite_req_valid(sprite_u_valid),
       .sprite_req_body(sprite_u_body),
-      // .sprite_id_bitmap(sprite_id_bitmap),
       .error_valid(sprite_update_error_valid),
       .error_code(sprite_update_error_code),
       .mem_allow(mem_allow)
@@ -623,16 +622,13 @@ module spi_processor #(
   sprite_delete sprite_delete_cmd_processor (
       .clk(clk),
       .ck_rst(cmd_handler_rst),
-      .in_empty(in_empty),
       .send_sprite_delete(send_sprite_delete),
       .sprite_delete_done(sprite_delete_done),
       .sprite_delete_r_en(sprite_delete_r_en),
       .in_fifo(in_fifo),
       .sprite_req_valid(sprite_d_valid),
       .sprite_req_body(sprite_d_body),
-      // .sprite_id_bitmap(sprite_id_bitmap),
       .error_valid(sprite_delete_error_valid),
-      .error_code(sprite_delete_error_code),
       .mem_allow(mem_allow)
   );
 

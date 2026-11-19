@@ -126,7 +126,7 @@ module fb_compositor #(
       reload_row_shift <= row_writing_active && !pulse_row_commit
         && 32'(bytes_moved) >= mem_map_pkg::ScreenWidth
         && !mem_busy
-        && rowStride < 2'd3; 
+        && rowStride < 2'd3;
       if(reload_row_shift) row_shift <= res_copy;
 
       if (pulse_row_commit) begin

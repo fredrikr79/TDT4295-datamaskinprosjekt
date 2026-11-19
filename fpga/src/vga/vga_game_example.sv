@@ -1,3 +1,6 @@
+// This file is not part of the overall design.
+// It simply serves as a test-module for checking our VGA driving modules.
+
 module vga_game_example (
     input wire clk,
     reset,

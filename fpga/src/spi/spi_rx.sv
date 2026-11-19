@@ -3,8 +3,6 @@ module spi_rx #(
     input wire clk,
     ck_sck,
     ck_ss,
-    ck_ss_s,
-    reset,
     reset_s,
     in_r_en,
     input wire [7:0] octo_spi,

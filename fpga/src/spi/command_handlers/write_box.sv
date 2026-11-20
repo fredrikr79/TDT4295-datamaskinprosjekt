@@ -132,9 +132,6 @@ module write_box #(
             end
           end
           DATA: begin
-
-            // If a transaction is started, the unit may read if there is data on the wire, we havent reached the maximum transaction size, and we're within limits of our transaction.
-
             // Once finished with a row, start a new row in a new transaction.
               // cycle as data is pushed
             if (mem_data_on_wire) begin

@@ -47,24 +47,6 @@ const char *material_name(material_t m)
  * cell is 4x4 screen pixels (FPGA_SIM_SCALE), so the picture covers it
  * exactly. Edit away; a row that is too long warns and is cut off, a short
  * one is see-through at the end. */
-// static const char player_art[PLAYER_SIZE_Y][PLAYER_SIZE_X + 1] = {
-//     "  KKKK  ",
-//     " KYYYYK ",
-//     "KYYYYYYK",
-//     "KYKYYKYK",     /* eyes   */
-//     "KPYYYYPK",     /* cheeks */
-//     "KYKKKKYK",     /* mouth  */
-//     " KYYYYK ",
-//     "  KKKK  ",
-//     " KBBBBK ",
-//     "KBBBBBBK",
-//     "KBKBBKBK",
-//     "KYKBBKYK",     /* hands  */
-//     " KDDDDK ",
-//     " KDKKDK ",
-//     " KDKKDK ",
-//     "KKK  KKK",     /* shoes  */
-// };
 static const char player_art[4*PLAYER_SIZE_Y][4*PLAYER_SIZE_X + 1] = {
     "    KKKKKKKK    ",
     "    KKKKKKKK    ",
@@ -99,72 +81,6 @@ static const char player_art[4*PLAYER_SIZE_Y][4*PLAYER_SIZE_X + 1] = {
     "KKKKKK    KKKKKK",     /* shoes  */
     "KKKKKK    KKKKKK",     /* shoes  */
 };
-// static const char player_art[PLAYER_SIZE_Y*4][PLAYER_SIZE_X*4 + 1] = {
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
-//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
-//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
-//     "KKKKYYYYYYYYYYYYYYYYYYYYYYYYKKKK",
-//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
-//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
-//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
-//     "KKKKYYYYKKKKYYYYYYYYKKKKYYYYKKKK",     /* eyes   */
-//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
-//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
-//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
-//     "KKKKPPPPYYYYYYYYYYYYYYYYPPPPKKKK",     /* cheeks */
-//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
-//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
-//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
-//     "KKKKYYYYKKKKKKKKKKKKKKKKYYYYKKKK",     /* mouth  */
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "    KKKKYYYYYYYYYYYYYYYYKKKK    ",
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "        KKKKKKKKKKKKKKKK        ",
-//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
-//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
-//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
-//     "    KKKKBBBBBBBBBBBBBBBBKKKK    ",
-//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
-//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
-//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
-//     "KKKKBBBBBBBBBBBBBBBBBBBBBBBBKKKK",
-//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
-//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
-//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
-//     "KKKKBBBBKKKKBBBBBBBBKKKKBBBBKKKK",
-//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
-//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
-//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
-//     "KKKKYYYYKKKKBBBBBBBBKKKKYYYYKKKK",     /* hands  */
-//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
-//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
-//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
-//     "    KKKKDDDDDDDDDDDDDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "    KKKKDDDDKKKKKKKKDDDDKKKK    ",
-//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
-//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
-//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
-//     "KKKKKKKKKKKK        KKKKKKKKKKKK",     /* shoes  */
-// };
 
 static uint16_t player_colour(char c)
 {

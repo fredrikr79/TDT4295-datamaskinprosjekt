@@ -24,19 +24,9 @@ static void sprite_follow(const player_t *player)
 static uint16_t ticks_since_last_damage = 0;
 static uint16_t ticks_since_last_heal = 0;
 
-static bool tile_has_damage(uint8_t id)
-{
-    return sim_is(id, MAT_LAVA) || sim_is(id, MAT_ACID) || sim_is(id, MAT_EXPLOSIVE);
-}
-
 static bool tile_has_raditation(uint8_t id)
 {
     return sim_is(id, MAT_LIFE);
-}
-
-static bool tile_is_swimmable(uint8_t id)
-{
-    return sim_is(id, MAT_WATER) || sim_is(id, MAT_LAVA) || sim_is(id, MAT_ACID);
 }
 
 static void perform_jump(
@@ -196,8 +186,6 @@ void update_player(
     velocity_box_t velocity_box
 )
 {
-    // LOG_DBG("1 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
-
     float force_x = 0;
     float force_y = 0;
 
@@ -223,14 +211,6 @@ void update_player(
             else if (sim_is(id, MAT_LIFE)) in_gol++;
             else if (sim_is(id, MAT_EXPLOSIVE)) in_explosion++;
         }
-    // LOG_DBG("in_air: %u", in_air);
-    // LOG_DBG("in_stone: %u", in_stone);
-    // LOG_DBG("in_sand: %u", in_sand);
-    // LOG_DBG("in_water: %u", in_water);
-    // LOG_DBG("in_lava: %u", in_lava);
-    // LOG_DBG("in_acid: %u", in_acid);
-    // LOG_DBG("in_gol: %u", in_gol);
-    // LOG_DBG("in_explosion: %u", in_explosion);
     uint16_t in_collision = in_stone + in_sand + in_gol;
     
     // Breathing
@@ -255,7 +235,6 @@ void update_player(
             if (tile_has_raditation(box[x + y*velocity_box.box.x2])) on_radiation = true;
         }
     }
-    // LOG_DBG("on_ground: %u", on_ground);
 
     // Apply friction
     if (on_ground || in_water || in_acid)
@@ -301,7 +280,6 @@ void update_player(
     if (gravity_force_from_max < 0) gravity_force_from_max = 0;
     if (gravity_force < gravity_force_from_max) force_y = gravity_force;
     else force_y = gravity_force_from_max;
-    // LOG_DBG("gravity_force: %f, force_y: %f", gravity_force, force_y);
 
     // Apply terminal velocity
     if (max_gravity < player->velocity_y) player->velocity_y = max_gravity;
@@ -319,7 +297,6 @@ void update_player(
     // Apply first half of acceleration
     player->velocity_x += force_x / 2;
     player->velocity_y += force_y / 2;
-    //LOG_DBG("2 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
     // Move the player
     perform_object_movement(
@@ -329,12 +306,10 @@ void update_player(
         PLAYER_STEP_ALLOWANCE, PLAYER_SAND_SLIDE,
         velocity_box, box
     );
-    //LOG_DBG("3 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
     // Apply second half of velocity
     player->velocity_x += force_x / 2;
     player->velocity_y += force_y / 2;
-    //LOG_DBG("4 vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 
     // Shoot new projectile
     if (shoot_next_frame && !(player->projectile.active))
@@ -424,7 +399,6 @@ void update_player(
 
     // Create the next velocity box, and update the player sprite
     next_step(player);
-    //LOG_DBG("end vel_x: %f, vel_y: %f", player->velocity_x, player->velocity_y);
 }
 
 void move_left()

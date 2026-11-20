@@ -18,7 +18,6 @@ bool read_room(int x, int y, uint8_t *tileIDs);
 bool save_room(int x, int y, uint8_t *tileIDs);
 
 bool delete_save(int x, int y);
-void delete_all_saves();
 
 /* ---- moving the current room to / from the FPGA ---------------------------
  *   room_load_start(x, y)   read the room's file; STOP_SIM, send it row by

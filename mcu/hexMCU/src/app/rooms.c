@@ -243,8 +243,6 @@ void encode_room(uint8_t *tileIDs, uint8_t *data, unsigned long *data_size)
     data[*data_size + 7] = portals[i].y2 & lower_mask;
 
     // Encode room
-    // Fix: was & 7, but decode_room() reads & 127: saving turned a portal to
-    // room 8 (or -8) and beyond into one to the wrong room
     data[*data_size + 8] = (portals[i].dest_room_x < 0) << 7;
     data[*data_size + 8] += abs(portals[i].dest_room_x) & 127;
     data[*data_size + 9] = (portals[i].dest_room_y < 0) << 7;
@@ -318,19 +316,6 @@ bool delete_save(int x, int y)
     return false;
   }
   return true;
-}
-
-static void delete_listed_save(
-  void *ctx, const char *name, uint32_t size, bool is_dir
-)
-{
-  char filename[NAME_LEN] = {0};
-  snprintf(filename, NAME_LEN, "save/%s", name);
-  storage_status_t status = storage_delete(filename);
-  if (status != STORAGE_OK && status != STORAGE_NOT_FOUND)
-  {
-    LOG_ERR("deleting listed save %s: %s", name, storage_status_str(status));
-  }
 }
 
 /* ---- moving a room to / from the FPGA ------------------------------------
